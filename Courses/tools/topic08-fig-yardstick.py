@@ -7,6 +7,7 @@ fig8-loo   回答：r 落在 1–2 之间，算不算出事？—— 先看纯�
            第三行：8 份尺子时被推过 2 倍的六个 TPU 改动，补到 16 份后全部回到 1–2 之间。
            数据：topic08_tpuself.json（导出自第二次迁移的对齐记录：TPU 自比的 GPU 留一法、长跑灰区表），全部实测。
 """
+import topic08_figfont  # noqa: F401  专题八局部字号地板 13.1（须在 topic03_draw 的 wpx 之前）
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
 Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N

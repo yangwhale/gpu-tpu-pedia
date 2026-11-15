@@ -13,6 +13,7 @@ fig8-baseline 回答：只对一份基线比，基线自己偏了怎么办？—
 """
 import statistics
 
+import topic08_figfont  # noqa: F401  专题八局部字号地板 13.1（须在 topic03_draw 的 wpx 之前）
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, wpx, MONO_K
 Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
@@ -37,6 +38,7 @@ assert IMAX + 1 == 380
 
 def _tbg(f, x, y, s, size, anchor=None):
     """字底下垫一块半透明白底，免得被曲线、参考线穿过（2026-11-15 版面检查）。"""
+    size = max(size, topic08_figfont.FLOOR)   # 跟图里实际渲染的字号一致（局部地板）
     w = sum(size if ord(ch) > 0x2000 else size * 0.6 for ch in s) + 8
     x0 = x - w if anchor == "end" else (x - w / 2 if anchor == "middle" else x - 4)
     f.p.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="#fff" fill-opacity="0.85" rx="3"/>' % (x0, y - size - 1, w, size + 6))
@@ -338,8 +340,8 @@ def fig_mtp32k():
         "7 条灰线只是把「跟同一份基线比」画出来、方便看方向；尺子不是用这 7 条算的，仍是 28 对两两、取绝对值的最大值，不会变窄。背景带同样只看不判。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：第三次迁移图文 32K、一种候选配置，TPU v5p 1000 步对 GPU 8 份里的基线那份；判定窗口第 2–1000 步。带符号均值 %s，GPU 两两 28 对里最大 %s；平均绝对差 %s 对 %s；最大单步第 %d 步 %s 对 %s。判定数取对齐记录这次运行的结果文件原值。"
-               % (N.M3_MTP32K_SM_T, N.M3_MTP32K_SM_N_T, N.M3_MTP32K_MARE_T, N.M3_MTP32K_MARE_N_T, N.M3_MTP32K_MAX_AT, N.M3_MTP32K_MAX_T, N.M3_MTP32K_MAX_N_T),
+               "📌 实测：第三次迁移图文 32K、一种候选配置，TPU v5p 1000 步对 GPU 8 份里的基线那份；判定窗口第 2–1000 步。带符号均值 %s，GPU 两两 28 对里最大 %s；平均绝对差 %s 对 %s；最大单步第 %d 步 %s 对 %s。判定数取对齐记录这次运行的结果文件原值；在带里的步数占比 %s 是从逐步记录重算的（对齐记录未收）。"
+               % (N.M3_MTP32K_SM_T, N.M3_MTP32K_SM_N_T, N.M3_MTP32K_MARE_T, N.M3_MTP32K_MARE_N_T, N.M3_MTP32K_MAX_AT, N.M3_MTP32K_MAX_T, N.M3_MTP32K_MAX_N_T, N.M3_MTP32K_IN_PCT),
                "📌 背景带：每一步取 28 对在这一步的 |dₜ| 最大值，正负各画一边（对齐记录逐步曲线工具的 pairdiff 包络同一口径）。灰线：GPU 另外 7 份各自对同一份基线，跟红线同一个口径（被测减基线，除以基线）；在零上面的步数 %s，50 步平均线在零上面的时间 %s（TPU %d%%）；带符号均值都略为正（%s，基线那份本身略低），最大那份正好就是尺子那一对。"
                % (N.M3_MTP32K_G7_POS_T, N.M3_MTP32K_G7_ROLLPOS_T, N.M3_MTP32K_ROLLPOS, N.M3_MTP32K_G7_SM_T),
                "⚠️ 粗线都是 50 步滑动平均，只为看方向；判定只看右边三个数。")

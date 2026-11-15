@@ -19,6 +19,7 @@ fig8-comm     回答：怎么从编译产物看通信？—— 一条集合通�
 """
 import math
 
+import topic08_figfont  # noqa: F401  专题八局部字号地板 13.1（须在 topic03_draw 的 wpx 之前）
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU, wpx, MONO_K
 Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
@@ -33,6 +34,7 @@ assert LOW_ROWS == 10872 and HOT[1] == 39
 
 def _tbg(f, x, y, s, size, anchor=None):
     """字底下垫一块半透明白底，免得被曲线、参考线穿过（2026-11-15 版面检查）。"""
+    size = max(size, topic08_figfont.FLOOR)   # 跟图里实际渲染的字号一致（局部地板）
     w = sum(size if ord(ch) > 0x2000 else size * 0.6 for ch in s) + 8
     x0 = x - w if anchor == "end" else (x - w / 2 if anchor == "middle" else x - 4)
     f.p.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="#fff" fill-opacity="0.85" rx="3"/>' % (x0, y - size - 1, w, size + 6))

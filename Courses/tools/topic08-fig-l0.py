@@ -7,6 +7,7 @@ fig8-replay  回答：怎么保证两边吃的是同一批数据？—— GPU �
              ⛔ 刻意没画：原生加载器到底怎么交错取行 —— 只画结果比例，不画我们没核过的映射。
 fig8-wd      回答：配置文件能直接照抄吗？—— 权重衰减写 0.1，每一步真正用的是 0.033。
 """
+import topic08_figfont  # noqa: F401  专题八局部字号地板 13.1（须在 topic03_draw 的 wpx 之前）
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
 Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N

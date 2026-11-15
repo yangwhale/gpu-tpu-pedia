@@ -31,6 +31,7 @@ fig8-captain   回答：一个小标量对不上，怎么分清是病态还是 b
 """
 import math
 
+import topic08_figfont  # noqa: F401  专题八局部字号地板 13.1（须在 topic03_draw 的 wpx 之前）
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU, wpx, MONO_K
 Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N

@@ -394,7 +394,7 @@ ACC_PN_X_07_T = "%.2e" % ACC_PN_X; _lock("ACC_PN_X_07_T", ACC_PN_X_07_T, "4.27e-
 XCHK_SELF_TAIL = XCHK_SELF["loss 尾段"]
 EP8_DELTA = ACC_PN_X - EP8_PN
 TPU_NOISE_PN_N = 8.5e-8                              # TPU 执行噪声 28 对的参数范数噪声上限。出处：日常回归的噪声标定记录（v5p，28 对）param_norm 带符号均值上限 8.49e-8
-assert EP8_DELTA < TPU_NOISE_PN_N and sci(EP8_DELTA) == "7.5e-8"
+assert EP8_DELTA < EXACT_SELF_PN and sci(EP8_DELTA) == "7.5e-8"   # 11-16：尺子改用 GPU 精确 5 份两两上限（参照一侧），不拿 TPU 执行噪声
 WINDOWED_OFF_PN_DROP_T = "3%"                        # 关掉 collective matmul 窗口化，参数范数差只少 3%。出处：案例记录「TPU 窗口化 collective matmul」行（8.74e-3 → 8.50e-3）
 # excess precision 那段：TPU 三种跑法彼此的散布（也就是只改片上内存上限那一臂挪的量）
 ARMS_SPREAD = max(TPU_ARMS) - min(TPU_ARMS)
@@ -478,6 +478,12 @@ _lock("REMOVE_LOSS_H1_T", REMOVE_LOSS_H1_T, "＋4.9e-5"); _lock("REMOVE_LOSS_H2_
 HEAD_BF16_S1_T, HEAD_TPU_S1_T, CE_BWD_S1_T = tx(HEAD_BF16_S1), tx(HEAD_TPU_S1, "%.1e"), tx(CE_BWD_S1, "%.1e", plus=True)
 HEAD_TF32_S1_T, HEAD_EXACT_S1_T = tx(HEAD_TF32_S1), tx(HEAD_EXACT_S1, "%.1e")
 HEAD_BF16_S100_T, HEAD_TPU_S100_T = tx(HEAD_BF16_S100), tx(HEAD_TPU_S100, "%.1e")
+# 11-16 fig-head 改用同一次测量（负责人定：一张图里只放同一次测量）：golden 第 1 步 rank0 第 0 个 microbatch，
+# 输出头反向沿 w̄ 的带符号相对误差，参照＝各自 logits 的 FP64 softmax 乘 BF16 权重。出处：对齐记录 case01-exact-head-dgrad.json
+HEADX_GPU, HEADX_TPU, HEADX_TPU_EXACT = -4.428e-4, -2.588e-5, -1.189e-6   # GPU BF16 生产 ／ TPU 生产回放 ／ TPU 精确档（highest）回放
+HEADX_RATIO = HEADX_GPU / HEADX_TPU
+assert round(HEADX_RATIO) == 17
+HEADX_GPU_T, HEADX_TPU_T, HEADX_TPU_EXACT_T = tx(HEADX_GPU, "%.1e"), tx(HEADX_TPU, "%.1e"), tx(HEADX_TPU_EXACT, "%.1e")
 _lock("HEAD_BF16_S1_T", HEAD_BF16_S1_T, "−6.51e-4"); _lock("HEAD_TPU_S1_T", HEAD_TPU_S1_T, "−2.4e-5"); _lock("CE_BWD_S1_T", CE_BWD_S1_T, "＋2.7e-6")
 _lock("HEAD_TF32_S1_T", HEAD_TF32_S1_T, "−8.08e-4"); _lock("HEAD_EXACT_S1_T", HEAD_EXACT_S1_T, "−1.7e-6")
 _lock("HEAD_BF16_S100_T", HEAD_BF16_S100_T, "−6.10e-4"); _lock("HEAD_TPU_S100_T", HEAD_TPU_S100_T, "−7.4e-5")

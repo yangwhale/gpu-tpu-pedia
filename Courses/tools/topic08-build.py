@@ -70,17 +70,20 @@ table.t9 th { color:var(--gray); font-weight:600 }
 p.bridge { color:var(--gray); border-left:3px solid var(--line); padding-left:12px }
 </style>"""
 head += """<style>
-.foundbox{border:2px solid var(--blue);border-radius:12px;padding:14px 18px 8px;margin:18px 0 6px;background:#fff}
+.foundbox{border:2px solid var(--blue);border-radius:12px;padding:10px 18px 6px;margin:18px 0 6px;background:#fff}
 .foundbox .ft{font-size:21px;font-weight:700;color:var(--blue)}
-.foundbox .fsub{color:var(--gray);margin:4px 0 6px}
-table.ftab{width:100%;font-size:14.5px}
-table.ftab td:first-child{width:38%}
+.foundbox .fsub{color:var(--gray);margin:2px 0 4px;font-size:14.5px;line-height:1.6}
+table.ftab{width:100%;font-size:14px;margin:2px 0 4px}
+table.ftab td{padding-top:1px;padding-bottom:1px;line-height:1.4}
+table.ftab th{padding-top:2px;padding-bottom:2px}
+table.ftab details.fimp summary{cursor:pointer;padding:1px 0;font-size:14px;line-height:1.45}
+table.ftab details.fimp div{color:var(--gray);font-size:13.5px;margin:2px 0 4px 18px}
 table.ftab td:last-child{white-space:nowrap}
-table.ftab tr.fgrp td{background:var(--blue-l);padding:5px 12px;border-bottom:none}
+table.ftab tr.fgrp td{background:var(--blue-l);padding:1px 12px;border-bottom:none;font-size:13.5px}
 table.ftab tr.fgrp span{color:var(--gray);font-size:13px}
 .newtag{margin-right:4px}
-.foundbox .fnote{font-size:13px;color:var(--gray)}
-.foundbox .fbridge{font-weight:600;margin-top:4px}
+.foundbox .fnote{font-size:13px;color:var(--gray);margin:2px 0;line-height:1.5}
+.foundbox .fbridge{font-weight:600;margin:2px 0 4px}
 </style>"""
 head += """<style>
 .trail{display:flex;align-items:stretch;margin:14px 0 22px}
@@ -196,38 +199,39 @@ HERO = '''
 #   每条一行：现象（大白话）＋ 影响（带数，e 记法）＋ 在哪一节展开。只列不解释；案例一、案例二只报现象，不点破答案（第五节、第八节的防剧透规矩照旧）。
 #   条目只取正文已经讲到的；🆕 两条是 2026-11-14 图文 32K 的新发现，正文放在 §4.3、§5.4 的折叠里（课上不讲）。数字都是正文里已有的（新两条走 topic08_numbers）。
 def _frow(what, effect, where, href, new=False):
-    return ('<tr><td>%s%s</td><td>%s</td><td><a href="#%s">%s</a></td></tr>\n'
+    # 11-16 版式（负责人定：整张表留在一屏上）：「影响多大」收进每行的折叠，点开看
+    return ('<tr><td><details class="fimp"><summary>%s%s</summary><div>%s</div></details></td><td><a href="#%s">%s</a></td></tr>\n'
             % ('<span class="newtag">🆕</span>' if new else "", what, effect, href, where))
 
 
 def _fgrp(title, n):
-    return '<tr class="fgrp"><td colspan="3"><b>%s</b>　<span>%d 处</span></td></tr>\n' % (title, n)
+    return '<tr class="fgrp"><td colspan="2"><b>%s</b>　<span>%d 处</span></td></tr>\n' % (title, n)
 
 
 _FOUND_ROWS = [
     ("写的，不是生效的", [
-        ("权重衰减：GPU 框架模板里两个默认值分了家，优化器写 0.1、调度器写 0.033，调度器每步覆盖", "0.1 一步都没用上，实际 0.033，差 3 倍", "§2.3", "s2-3"),
+        ("权重衰减：GPU 框架模板里两个默认值分了家，优化器写 0.1、调度器写 0.033，调度器每步覆盖", "0.1 一步都没用上，实际 0.033，差 3 倍；GPU↔TPU 曲线上看不出", "§2.3", "s2-3"),
         ("「存下路由、反向不重选」，配错一种重算策略就被悄悄忽略", "平均 «M3_REROUTE_PCT»% 的 token（最多 «M3_REROUTE_MAX»%）按另一套路由算梯度；参数范数 r «M3_REROUTE_PN0»，存下路由后 2.27", "§2.3 折叠", "s2-3"),
-        ("TF32 开关读回来是关，矩阵乘照样走 TF32", "FP32 矩阵乘离 FP64 仍有 2.94e-4，真关掉 1.15e-6", "§5.5", "s5-5"),
+        ("TF32 开关说的不算：只关 PyTorch 的，另一条路照样走 TF32；设环境变量全关了，开关读回来反倒是「开」", "FP32 矩阵乘离 FP64：只关 PyTorch 开关时那条仍是 «TF32_TE_ON_T»，设 <code>NVIDIA_TF32_OVERRIDE=0</code> 全关才到 «TF32_ALL_OFF_T»；GPU↔TPU 曲线上看不出", "§5.5", "s5-5"),
     ]),
     ("在哪儿舍、怎么舍", [
         ("GPU 张量核每 16 个乘积抹一次零", "同一次求和越长越偏：合成输入长 65,536 时朝零偏 3.1e-4（相对）", "§5.2", "s5-2"),
         ("4 个设备上验过的程序，换到 8 个设备，一次求和从舍 1 次变成舍 6 次", "那批投影离 FP64：TPU 2.35e-3，GPU 1.66e-3，R 1.41；代码一行没改", "§5.3", "s5-3"),
         ("名义 FP32 的输出头，在 TPU 默认精度下只算一遍 BF16；第 1 步看不出", "权重离开格点后 logits 误差是真 FP32 的约 5000 倍（推断：1.9e-3 对 3.7e-7，在模拟离格 10 步的权重上测）；前 300 步主 loss r 7.32，换 high 档 1.03", "§5.5", "s5-5"),
-        ("TPU 默认的 exp、log 图快不图准", "v5p 上 exp 最多差 105 格、log 62 格（GPU ≤ 2 格）；单算子离 FP64 最多是 GPU 的 8.68 倍", "§5.5", "s5-5"),
+        ("TPU 默认的 exp、log 图快不图准", "v5p 上 exp 最多差 105 格、log 62 格（GPU ≤ 2 格）；单算子离 FP64 最多是 GPU 的 8.68 倍；GPU↔TPU 曲线上看不出", "§5.5", "s5-5"),
         ("一个 Python 常数（log₂e）跟着 BF16 的 q 一起被舍", "注意力 logits 整体放大 1.8e-3", "§5.5 折叠", "s5-5"),
-        ("MTP 头的梯度舍成 BF16 之前，两边乘的系数不同（GPU ×0.1，TPU ×0.1 再除以 token 数）", "正确词那一项挤在一个 BF16 格距里，两边舍的方向相反；1000 步 MTP 偏到尺子的 3.02–4.28 倍，TPU 改在 GPU 的尺度上舍，回到 0.15–0.68 倍", "§5.5 折叠", "mtp-head", True),
+        ("MTP 头的梯度舍成 BF16 之前，两边乘的系数不同（GPU ×0.1，TPU ×0.1 再除以 token 数）", "正确词那一项挤在一个 BF16 格距里，两边舍的方向相反；1000 步 MTP 偏到尺子的 3.02–4.28 倍；诊断已定位（TPU 改在 GPU 的尺度上舍，回到 0.15–0.68 倍），修法待定", "§5.5 折叠", "mtp-head", True),
     ]),
     ("编译器替你省掉的舍入", [
-        ("RMSNorm scale 那次「舍成 BF16」：4K 程序里在，32K 程序里 8 个全被删", "没补时 1000 步主 loss r 6–8，不过；二分时只补这一处降到尺子的 0.54 倍，补别处的都还在 28 倍左右", "§5.4", "s5-4"),
-        ("三份梯度相加，两边舍的次数不一样", "主 loss 判待定（r 1.55）：第 551–1000 步对 GPU 16 份均值偏 ＋9.4e-6，照 GPU 写法补上 ＋1.9e-6", "§9.1", "s9-1"),
+        ("RMSNorm scale 那次「舍成 BF16」：4K 程序里在，32K 程序里 8 个全被删", "没补时 1000 步主 loss r 7.8，不过；二分时只补这一处降到尺子的 0.54 倍，补别处的都还在 28 倍左右", "§5.4", "s5-4"),
+        ("三份梯度相加，两边舍的次数不一样", "主 loss 判待定（r 1.55）：第 551–1000 步对 GPU 16 份均值偏 ＋9.4e-6，照 GPU 写法全补上还剩 «FC_C_MEAN_T»", "§9.1", "s9-1"),
     ]),
     ("路由一翻，梯度就换了一份", [
         ("输入只差一丝，近平局的 token 就换了专家", "第 1 步 TPU 对 GPU 的 rel_L2：比到的 50 个张量合起来 «STEP1_ALL_E»，一个专家的梯度 «STEP1_EXPERT»，是它的约 80 倍；对 FP64 这个专家 R 不超过 1.04，不是算错", "§4.3", "s4-3"),
         ("视觉塔自己不选专家，q、k 的梯度照样越线", "R «M3_VIT_R_1»；照 TPU 的路由重算 FP64，降到 «M3_VIT_RFLIP_1»：全是路由翻转", "§4.3 折叠", "vit-flip", True),
     ]),
     ("两个案例，一个编译器 bug", [
-        ("TPU 的主 loss 三百步以后平均比 GPU 低约 1.7e-4（相对，第 301–1000 步对一份 GPU 基线的带符号均值 −1.66e-4），第 1000 步参数范数多涨 2.1e-2（绝对差，参数范数约 3042）", "TPU 算错了吗？答案在一个谁都没怀疑的地方", "第七节", "s七"),
+        ("TPU 的主 loss 三百步以后平均比 GPU 低约 1.7e-4：TPU 算错了吗？", "第 301–1000 步对一份 GPU 基线的带符号均值 −1.66e-4（相对）；第 1000 步参数范数多涨 2.1e-2（绝对差，参数范数约 3042）。答案在一个谁都没怀疑的地方", "第七节", "s七"),
         ("DDP 和 FSDP 数学等价，曲线却超出噪声", "词嵌入梯度离 FP64：纯数据并行 1.51e-2，GPU 4.17e-3，R 3.62；全出在 39 个词上", "第八节", "s八"),
         ("一个 FP32 开关打开，一块梯度凭空没了", "r 冲到 611", "§8.2", "s8-2"),
     ]),
@@ -237,12 +241,12 @@ assert _FOUND_N == 16, _FOUND_N
 FOUND = ('''
 <div class="wrap" id="found">
 <div class="foundbox">
-  <div class="ft">开场：三次迁移，真改变结果的 ''' + str(_FOUND_N) + ''' 处差</div>
-  <p class="fsub">两边不一样的地方远不止这些：光后两次迁移，两边为对上而改的就有一百一十九处（TPU 一侧 69、GPU 一侧 50），编译器悄悄省掉的舍入，一份程序里就数出 272 处。绝大多数单独看影响很小，盖不过 GPU 自己的噪声；下面这 16 处，是真改变了结果的。这里只列现象和量级，<b>为什么、怎么查出来的，正文一节一节讲</b>（点右栏跳过去）。</p>
-  <table class="t9 ftab"><thead><tr><th>查出来的现象</th><th>影响多大</th><th>在哪讲</th></tr></thead><tbody>
+  <div class="ft">开场：三次迁移，真正查清的 ''' + str(_FOUND_N) + ''' 处</div>
+  <p class="fsub">后两次迁移，两边为对上改了七十来处（改动台账 119 行，去掉诊断开关、工具和只核对不改的），编译器省掉的舍入一份程序就有 272 处，多数盖不过 GPU 自己的噪声。下面 16 处是真正查清的，三处在 GPU↔TPU 曲线上看不出、可会让配置或参照不作数。<b>点一行看影响多大</b>。</p>
+  <table class="t9 ftab"><tbody>
 ''' + "".join(_fgrp(t, len(rows)) + "".join(_frow(*r) for r in rows) for t, rows in _FOUND_ROWS) + '''  </tbody></table>
-  <p class="fnote">R：离 FP64 的距离之比，1 是跟 GPU 一样准（§4.2）；r：曲线上的差 ÷ GPU 自己的噪声上限，过 2 判不过（§3.3）；格：末位差几格（§5.5）。🆕 是这两天刚查清的，正文在折叠里。</p>
-  <p class="fbridge">有的比 GPU 自己的噪声大几十倍，有的小到 GPU 重跑都盖得住。它们是怎么一处一处查出来的，就是这一讲。从最开头那件讲起 ↓</p>
+  <p class="fnote">R：离 FP64 的距离之比（§4.2）；r：曲线上的差 ÷ GPU 自己的噪声上限，过 2 判不过（§3.3）；格：末位差几格（§5.5）；🆕 新查到，正文在折叠里。</p>
+  <p class="fbridge">它们是怎么一处一处查出来的，就是这一讲。从最开头那件讲起 ↓</p>
 </div>
 </div>
 ''')
@@ -320,19 +324,22 @@ TRAIL2 = trail("三样输入，一个验法（只比结果、逐位比），第 
 ])
 
 # ── §7 开头「输出头的形状与三个公式」卡（11-15 试讲：十二万项求和是哪一步、两个矩阵共不共用，之前没讲明白）──
-HEAD_CARD = (
+HEAD_CARD = (   # 11-16 负责人定：主线只留形状和 dH 一行，①②③ 和两个说明框收进卡下折叠
     '\n  <div class="adamcard">\n'
-    '  <p class="asub"><b>先把输出头摆清楚</b>：混元 3，隐藏维 4096，词表 120,832，一个微批是一条 4096 个 token 的序列。输入词嵌入和输出矩阵<b>不共用</b>（配置写明不共享，输出层是单独一份权重）。</p>\n'
+    '  <p class="asub"><b>先把输出头摆清楚</b>：混元 3，隐藏维 4096，词表 120,832，一个微批是一条 4096 个 token 的序列。</p>\n'
     '  <div class="aw"><span class="k">形状</span>隐状态 H：4096 token × 4096 维　　输出矩阵 W：120,832 词 × 4096 维（每个词一行）</div>\n'
+    '  <div class="af long">dH ＝ dZ · W　　dH<sub>t,j</sub> ＝ Σ<sub>v＝1…120,832</sub> dZ<sub>t,v</sub> · W<sub>v,j</sub></div>\n'
+    '  <p class="asub">(4096 × 120,832) · (120,832 × 4096) → 4096 × 4096：中间收缩的那一维就是词表。<b>十二万项的求和只在这一步</b>：输出头反向，把梯度传回隐状态（dgrad）。</p>\n'
+    '  <details class="foldfig"><summary><b>前向、loss、求导三步，和为什么偏偏是这一次求和</b>（课上不讲）</summary>\n'
+    '  <p>输入词嵌入和输出矩阵<b>不共用</b>（配置写明不共享，输出层是单独一份权重）。</p>\n'
     '  <div class="aw"><span class="k">① 前向</span>logits Z ＝ H · Wᵀ　→　4096 token × 120,832 词　<em>（每个分数是 token 向量和一个词那一行的点积，沿 4096 维求和）</em></div>\n'
     '  <div class="aw"><span class="k">② loss</span>p ＝ softmax(Z) 逐 token；loss ＝ 对所有 token 平均的 −log p<sub>正确词</sub></div>\n'
     '  <div class="aw"><span class="k">③ 求导</span>dZ<sub>t,v</sub> ＝ (p<sub>t,v</sub> − [v 是正确词]) ÷ token 数　<em>（正确词一项接近 −1，其余十二万多项是很小的正数，整行加起来精确为 0）</em></div>\n'
-    '  <div class="af long">dH ＝ dZ · W　　dH<sub>t,j</sub> ＝ Σ<sub>v＝1…120,832</sub> dZ<sub>t,v</sub> · W<sub>v,j</sub></div>\n'
-    '  <p class="asub">(4096 × 120,832) · (120,832 × 4096) → 4096 × 4096：中间收缩的那一维就是词表。<b>十二万项的求和只在这一步</b>：输出头反向，把梯度传回隐状态（dgrad）。</p>\n'
     '  <div class="acases">\n'
     '    <div><b>为什么这次求和最容易出事</b><br>一项接近 −1，十二万项小正数，要加出一个很小的结果：大量抵消。每项截掉一点、小项整个被舍掉，相对结果都不小；五万八千多个从没出现过的词，概率越压越小，正是最容易被吞的那批。</div>\n'
     '    <div><b>另外两处没有十二万项</b><br>输出矩阵自己的梯度 dW ＝ dZᵀ · H，收缩的是 token 那一维（4096 项）。输入词嵌入是查表，反向按 token 编号把梯度加回对应行（第八节），不沿词表求和。</div>\n'
     '  </div>\n'
+    '  </details>\n'
     '  </div>\n')
 
 
@@ -1226,9 +1233,10 @@ __FIG_INTDRIFT__
   </details>
 
   <h3>7.4　谁推歪的：TPU 多推了，还是 GPU 少推了？</h3>
-  <p>💬 先押一下，再往下看。拿训练里实际用到的张量，在 FP64 里重算一遍，把输出头的误差拆到每一段：</p>
+  <div class="note"><span class="t">先想一想</span>是 TPU 多推了，还是 GPU 少推了？先押一下，再往下看。</div>
+  <p>拿训练里实际用到的张量，同一批数据，在 FP64 里重算一遍，看两边的输出头反向各离 FP64 多远：</p>
 __FIG_HEAD__
-  <p>红柱就是开头那张卡里的 dH：GPU 在张量核上沿 12 万的词表做这次求和，结果系统地朝零截了一点（§5.2 的抹零），落在「所有 logits 一起升降」这个方向上，第 1 步少推 <b class="kn">«HEAD_S1_E»</b>（相对）。TPU 这一步对 FP64 的误差小一个数量级以上（同一批数据上比，约十七分之一）。</p>
+  <p>红柱就是开头那张卡里的 dH：GPU 在张量核上沿 12 万的词表做这次求和，结果系统地朝零截了一点（§5.2 的抹零），落在「所有 logits 一起升降」这个方向上，第 1 步少推 <b class="kn">«HEAD_S1_E»</b>（相对；这是另一组抓下来的生产张量，图上这一批是 «HEADX_GPU_T»）。同一批数据上，TPU 对 FP64 的误差约是 GPU 的十七分之一。</p>
   <details class="foldfig"><summary><b>这一环哪部分是实测、哪部分是推断；一度判反的那一版</b>（图：求和越长偏得越多）</summary>
 __FIG_HEADK__
   <p>朝零、随求和长度增大，是实测；说它就是 §5.2 那个抹零模型在起作用，是推断 —— 那个模型在这么长的求和上没有单独验证过。第 100 步那个指标连真 FP32 都偏得不小，只作旁证。
@@ -1442,7 +1450,7 @@ __FIG_DDP2X2__
   <details class="foldfig"><summary><b>两个旁证的细节</b>：PyTorch 的两条路；关掉省舍入为什么走不通</summary>
   <p><b>GPU（推断）</b>：GPU 同设置的词嵌入梯度离 FP64 «C2_EMB_GPU_T»，跟 TPU FSDP 的 «C2_EMB_G_T» 接近。PyTorch 在 CUDA 上的词嵌入反向，下标超过 «C2_TORCH_GATE» 个时先排序、按段在 float 里累加，最后才转回 BF16；GPU 每卡每个微批 4096 个 token，推断走的是这条：切法跟纯数据并行一样，本卡累加却跟 TPU FSDP 排序后是同一种舍入结构。</p>
   <details class="foldfig"><summary><b>PyTorch 的两条路</b>：在哪段代码、哪里没核</summary>
-  <p><a href="https://github.com/pytorch/pytorch/blob/8b7ee4d69c74e7a1a140f6ea218928b9b8de1779/aten/src/ATen/native/cuda/Embedding.cu#L268-L282">Embedding.cu</a> 的 <code>embedding_dense_backward_cuda</code> 按下标数分两条路：不超过 «C2_TORCH_GATE» 个时，每批 32 个下标在共享内存里用 float 合并，批与批之间舍一次；超过时走排序、分段累加。读的是 PyTorch 主分支上的一个提交（链接钉在那个提交）；GPU 镜像里那个版本没有逐行核过，实际走了哪条也没有单独确认。</p></details>
+  <p><a href="https://github.com/pytorch/pytorch/blob/8b7ee4d69c74e7a1a140f6ea218928b9b8de1779/aten/src/ATen/native/cuda/Embedding.cu#L268-L282">Embedding.cu</a> 的 <code>embedding_dense_backward_cuda</code> 按下标数分两条路：不超过 «C2_TORCH_GATE» 个时，每批 32 个下标在共享内存里用 float 合并，批与批之间舍一次；超过时走排序、分段累加。读的是 PyTorch 主分支上的一个提交（链接钉在那个提交；对齐记录只链主分支、没记提交号，对齐记录未收）；GPU 镜像里那个版本没有逐行核过，实际走了哪条也没有单独确认。</p></details>
   <p><b>关掉 excess precision</b>：§5.4 开头那个「远 «EMB_NOEXC_X» 倍」就出在这里。有人建议关掉它让 FSDP 和 DDP 更像（另一个 6 层测试模型上差确实回到 0 附近，但那次主要是把一条梯度累积路径改成了 FP32）。</p>
   <p>放到这里看，这条路走不通：纯数据并行那次 scatter 本来就每次舍，开关管不着；FSDP 那次排好序的 scatter 却从只舍一次退回每次舍，而且一次要顺序加 «C2_FSDP_N» 个更新。结果 FSDP 比纯数据并行还差得多：第 1 步词嵌入梯度离 FP64 «C2_NOEXC_EMB_T»，300 步 r «C2_NOEXC_R_T»。<b>让两边一样，不等于让两边都对</b>：修法要看离精确值近不近，不能只看两边的差。</p>
   </details>
@@ -1521,7 +1529,7 @@ __FIG_FIXCMP__
   </details>
   <p>只补一边还不够，像医生判一种药的副作用：停药症状消失，换个人吃同样的药也长出同样的症状，两头都对上才算是它。这次两头各改一处，每格 4–5 份：</p>
 __FIG_TWOWAY__
-  <p>TPU 改成 GPU 的写法，偏高降下来；GPU 改成 TPU 的写法，GPU 自己长出同方向的尾巴。两个方向对上，主因定在这里（推断：两头方向一致，每格只有 4–5 份）。</p>
+  <p>TPU 改成 GPU 的写法，偏高降下来；GPU 改成 TPU 的写法，GPU 自己长出同方向的尾巴。两个方向对上，主因定在这里（两头验证，每格 4–5 份）。</p>
   <details class="foldfig"><summary><b>图里的 p 怎么读</b>：只当方向性的证据</summary>
   <p>图里的 p 是检验值：把这些运行随机重新分组，分出这么大差别的概率；4 份对 5 份一共只有 126 种分组，完全分开时 p 最小就是 0.016。这一节做了十几次这样的检验，没做多重比较校正，单个 p 0.02 上下只当方向性的证据。</p></details>
   <p>可把前面那个补丁（收拢处，最后四路收成一路那处）也加上，就是现行对齐配置，后段还剩 <b class="kn">«FC_C_MEAN_T»</b>，跟不修那组分不开。剩下那截一张张猜太慢。回头看抓到的两处：鼓包那处在芯片指令里核过，是代码写了舍、编译器省掉了；流梯度按同一规律推断也是。<b>两处是同一个毛病。</b>这个毛病到底是怎么回事？</p>
@@ -1982,7 +1990,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>冷门行梯度很小、失去 Adam 归一化保护：第 300 步 «RARE_EPS_FRAC_T» 的元素 √v̂ ＜ ε（中位数 «RARE_VHAT_MED»）；ε 区的弹性</td><td>第 300 步两侧输出层状态实测；弹性为本课推导（稳态近似）</td></tr>
   <tr><td>lse 差 «LSE25_T» ／ «LSE50_T» ／ «LSE100_T» ／ «LSE300_T»；第 1000 步约 «ORIG_LSE_T»</td><td>固定序列探针第 25 ／ 50 ／ 100 ／ 300 步（对第一份 GPU）；第 1000 步那个数取自训练批</td></tr>
   <tr><td>干预：去掉方向后 loss «REMOVE_LOSS_T»、参数范数 «REMOVE_PN_T»；GPU 加力 «FORCE_LOSS_T»、«FORCE_PN_T»</td><td>两边各 1000 步，同设置</td></tr>
-  <tr><td>输出头反向误差：GPU dgrad «HEAD_BF16_S1_T»，TPU «HEAD_TPU_S1_T»，交叉熵 «CE_BWD_S1_T»，TF32 版 «HEAD_TF32_S1_T»，真 FP32 «HEAD_EXACT_S1_T»</td><td>第 1 步，用训练里实际用到的张量离线对 FP64；第 100 步 GPU «HEAD_BF16_S100_T»、TPU «HEAD_TPU_S100_T»。机制是张量核抹零为推断</td></tr>
+  <tr><td>输出头反向误差：GPU dgrad «HEAD_BF16_S1_T»，TPU «HEAD_TPU_S1_T»，交叉熵 «CE_BWD_S1_T»，TF32 版 «HEAD_TF32_S1_T»，真 FP32 «HEAD_EXACT_S1_T»；同一批数据（fig-head）整个输出头反向 GPU «HEADX_GPU_T»、TPU «HEADX_TPU_T»（约 1/17）、TPU 精确配置 «HEADX_TPU_EXACT_T»</td><td>第 1 步，用训练里实际用到的张量离线对 FP64；第 100 步 GPU «HEAD_BF16_S100_T»、TPU «HEAD_TPU_S100_T»。机制是张量核抹零为推断</td></tr>
   <tr><td>同状态各算一步：TPU «SWAP_TPU_T»，GPU FP32 dgrad «SWAP_FIX_T»，GPU «SWAP_GPU_T»</td><td>GPU 第 99 步状态导入 TPU（«SWAP_STATE_TENSORS» 个张量核对指纹；按 GPU 框架布局数，q/k/v、gate/up 各合成一个，所以比 §2.2 按开源命名数的 «N_TENSORS_T» 少，元素一个不少），第 100 步数据，共同参照为 GPU 全程 FP32；4 个状态 12 个 batch 范围见图</td></tr>
   <tr><td>精确轨迹：参数范数 «EXACT_TRAJ_PN975_T»（TPU «EXACT_TPU_PN975_T»，FP32 dgrad «DGRADX_LO_T» – «DGRADX_HI_T»）</td><td>第 975 步，对 4 份默认 GPU 运行均值；GPU 自己 ±«EXACT_REF»</td></tr>
   <tr><td>旧版拆账 «DECOMP_HEAD_T» ／ «DECOMP_REST_T» ／ «DECOMP_TPU_T»（作废：把 ④ 当成了精确值）；loss «LOSS_FIXHEAD_SHARE_T»</td><td>TPU（开关打开前的配置）、生产 golden（5 份）、只修 dgrad 的 golden、精确轨迹，第 1000 步与第 301–1000 步</td></tr>
@@ -2001,11 +2009,11 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>去掉 w̄ 方向后 loss：前半 «REMOVE_LOSS_H1_T»、后半 «REMOVE_LOSS_H2_T»（尾段平均 «REMOVE_LOSS_T»）</td><td>两侧都去掉 dh 沿 w̄ 的分量，1000 步，对 GPU 第一份</td></tr>
   <tr><td>第 1 步换尺子：最差张量 TPU 只改片上内存上限 «STEP1_EXEC_T»、TPU 对 GPU «STEP1_TVG_T»；并集 «UNION_PAIRS» 对；隔离回放反向 R v5p «ISO_BWD_V5P_T»、v7x «ISO_BWD_V7X_T»；整步按能量 R «STEP_R_T»；逐处改掉 «ARM_R_T»；三个开关步时 v5p ＋«GRAD_FP32_COST_T»、v7x ＋«GF32_COST_V7X_T»，打开后 1000 步对 ⑤：v5p «GF32_V5P_T»，v7x 梯度范数«GF32_V7X_GN_T»、其余过；路由偏置 FP64 选中 «BIAS_TOKENS_FP64»（均值 «BIAS_MEAN_T»）</td><td>第 1 步；前两个数是最差张量的相对差；诊断改动的 R 只在 v5p 上测；FP64 真值是同一全局批在 FP64 里求的梯度；开关步时为 100 步对比</td></tr>
   <tr><td>（定案前）交叉核对：精确轨迹 5 份（基线＋4 份扰动版）两两 10 对 «XCHK_SELF_PN» ／ «XCHK_SELF_LOSS» ／ «XCHK_SELF_TAIL» ／ «XCHK_SELF_GN»；TPU 执行噪声 28 对 «XCHK_TPU_PN» ／ «XCHK_TPU_LOSS» ／ «XCHK_TPU_TAIL» ／ «XCHK_TPU_GN»</td><td>参数范数 ／ loss 全程 ／ loss 尾段 ／ 梯度范数，v5p 当前配置，只报不判</td></tr>
-  <tr><td>（定案前）EP＝8：参数范数带符号均值 «ACC_PN_X» → «EP8_PN»，«ACC_PN_R» 倍 → «EP8_R» 倍；变化 «EP8_DELTA» 小于 TPU 执行噪声上限 «TPU_NOISE_PN_N»（比较为本课推导）</td><td>v5p 当前配置，TPU 改成按专家切，对精确轨迹</td></tr>
+  <tr><td>（定案前）EP＝8：参数范数带符号均值 «ACC_PN_X» → «EP8_PN»，«ACC_PN_R» 倍 → «EP8_R» 倍；变化 «EP8_DELTA» 小于 GPU 精确轨迹 5 份两两的上限 «EXACT_SELF_PN»（尺子只取参照一侧；比较为本课推导）</td><td>v5p 当前配置，TPU 改成按专家切，对精确轨迹</td></tr>
   <tr><td>（第二次迁移）第 1 步逐张量比值中位数 «B2_RATIO_MED_T»、超 2 倍 «B2_OVER2_T»（共 «B2_TENSORS»）；四个开关 «B2_MED_4SW» ／ «B2_OVER_4SW»</td><td>更新的、带稀疏注意力的 MoE 模型，小尺寸、随机初始化；TPU 对 GPU 第 1 步三份，按开关逐一打开</td></tr>
   <tr><td>（第二次迁移）注意力打分改留 FP32：第 1 步 loss «ATTN_FIX_LOSS_T»、梯度范数 «ATTN_FIX_GN_T»；GPU 噪声 «ATTN_NOISE_LOSS_T» ／ «ATTN_NOISE_GN_T»；多路残差四路相加改成依次相加，第 1 步该处梯度对 CPU FP64 R ＞ 1.2 «MIX_OVER_T»（后一代没复现）</td><td>GPU 只改这一处的第 1 步对比、8 份两两 28 对；四路相加为第 1 步对 CPU FP64 定责</td></tr>
   <tr><td>（第二次迁移）病态：KL ≈ «KD_KL»、lse ≈ «KD_LSE»、一格 «KD_ULP_T» ＝ KL 的 «KD_ULP_OF_KL_T»；TPU lse «KD_LSE_TPU_ULP_T» 格；同一行对 FP64 «KD_DIFF_T»，全部运行对 GPU «KD_VS_GPU_T»；输入 R «KD_IN_R»、梯度 R «KD_GRAD_R»</td><td>第 1 步，存下一行 KD 的原始输入在 FP64 里逐项重算；船和船长的数为本课推导（按比例换算）</td></tr>
-  <tr><td>（第二次迁移）尺子撤回并集：梯度范数 r «UNION2_GN_T»；路由偏置均值 r «BIAS_ZM_R_T»；回放注入 R «INJ_R_T»（单独喂 «INJ_ALONE_R»）；参数范数测量偏低 «PN2_FP32_BIAS»，改精确值后第 1 步差 «PN2_STEP1_EXACT_T»</td><td>300 步比较，并集 «UNION2_PAIRS» 对 → GPU «GPU2_PAIRS» 对；偏置为 TPU 关零均值更新后重跑；回放为第 1 步前向的单算子回放</td></tr>
+  <tr><td>（第二次迁移）尺子撤回并集：梯度范数 r «UNION2_GN_T»；路由偏置均值 r «BIAS_ZM_R_T»；回放注入 R «INJ_R_T»（单独喂 «INJ_ALONE_R»；对齐记录未收）；参数范数测量偏低 «PN2_FP32_BIAS»，改精确值后第 1 步差 «PN2_STEP1_EXACT_T»</td><td>300 步比较，并集 «UNION2_PAIRS» 对 → GPU «GPU2_PAIRS» 对（梯度范数三组 r 与并集对数只在对齐记录的旧提交里，现行对齐记录未收）；偏置为 TPU 关零均值更新后重跑；回放为第 1 步前向的单算子回放</td></tr>
   <tr><td>（第二次迁移）优化器单测：三处写法都不对上 «OPT_ALL_OFF»、都对上 «OPT_ALL_ON_T»（另一用例 NAdam 对 Adam «OPT_NADAM»）；选 token 的 top-k 翻转：«SPARSE_Q_FLIP_T»的 query、槽位 «SPARSE_SLOT_FLIP»</td><td>对参照框架实现生成的固定参照逐步比每步更新的相对差；翻转为第 1 步 GPU 对 FP64</td></tr>
   <tr><td>（第二次迁移）编译器省掉舍入：五次 1000 步 loss 对 GPU 均值 «ELIDE_RANGE_T»，GPU 最大 ±«ELIDE_GPU_MAX_T»；强制舍入后 «ELIDE_FIX_T»（r «ELIDE_R_T»）；五次里 «ELIDE_OVER» 次超出 GPU 噪声</td><td>同一组 GPU 8 份；三次只改执行参数；「后端只省一半」在最小复现里看到；长跑偏高归到它为推断</td></tr>
   <tr><td>（第二次迁移）超越函数：默认 «TRANS_T» 格，高精度 «TRANS_HI_T» 格；exp 真实输入正好舍对 «EXP_CR_FRAC»、平均 «EXP_SIGNED_ULP_T» 格；lse «KD_FIX_LSE_T»、300 步 r «KD_FIX_R300_T»（同一代还开了一个优化器开关，没拆开）；sigmoid 开关前后 «SIG_FLAG_SAME_OPS» 个算子逐位相同，精确写法后 r «SIG_LOSS_R_T»；除法、开方、偏差修正 2／3／108 → 1／1／2 格，小张量 R «ADAM_R_T»</td><td>TPU v5p FP32 对 FP64 正确舍入数格；GPU 上限按 CUDA 文档（sigmoid、silu 为推断）；整网为 300 步比较</td></tr>
@@ -2146,7 +2154,7 @@ FIGS = {
     "__FIG_INTDRIFT__": ("fig-intdrift", "fig8-intdrift.svg", "topic08-fig-case2.py",
         '<b>蓝橙两条一路同涨，绿线长得慢得多。</b><br><em>灰线呈台阶状，是 GPU 一侧参数范数的记录精度有限（台阶约 1.6e-4）。</em>'),
     "__FIG_HEAD__": ("fig-head", "fig8-head.svg", "topic08-fig-case2.py",
-        '<b>红柱是 GPU 的张量核，误差比 TPU 那根大一个数量级以上（对数刻度，看着只长一截）。</b><br><em>参照是同一份输入在 FP64 里的结果。GPU 那根只算输出层 dgrad 一段，TPU 那根是整个输出头反向；GPU 交叉熵反向那段只有 «CE_BWD_S1_T»，所以两根量级可比。</em>'),
+        '<b>红柱是 GPU 的张量核，误差约是 TPU 那根的十七倍（对数刻度，看着只长一截）。</b><br><em>三根柱是同一批数据，参照是各自 logits 在 FP64 里重算的结果；绿柱是 TPU 精确配置，当「准」的刻度。</em>'),
     "__FIG_HEADK__": ("fig-headk", "fig8-headk.svg", "topic08-fig-case2.py",
         '<b>求和越长，红线越高。</b><br><em>横纵都是对数刻度；三个点都是实测。</em>'),
     "__FIG_SWAP__": ("fig-swap", "fig8-swap.svg", "topic08-fig-case2.py",
@@ -2363,7 +2371,7 @@ for _tag in ("h2", "h3", "section", "div", "details", "table"):
 # ⭐ 正文里手打的关键数，必须在对应的图里也出现（图是脚本现算的）—— 照专题五的 _NUM_LOCK。
 _NUM_LOCK = [("1,950", "fig8-replay.svg"), ("0.033", "fig8-wd.svg"), ("3.45", "fig8-judge.svg"), ("1.92", "fig8-judge.svg"), ("1.29", "fig8-judge.svg"), ("1.14", "fig8-judge.svg"),
              ("1.235", "fig8-rratio.svg"), ("1.41", "fig8-windowed.svg"), ("1.41", "fig8-inout.svg"), ("0.127", "fig8-drift.svg"),
-             ("17.1", "fig8-rows.svg"), ("6.5e-4", "fig8-gauge.svg"), ("6.5e-04", "fig8-head.svg"),
+             ("17.1", "fig8-rows.svg"), ("6.5e-4", "fig8-gauge.svg"), ("4.4e-04", "fig8-head.svg"),
              ("0.36%", "fig8-swap.svg"), ("+0.0182", "fig8-exact.svg"), ("0.0207", "fig8-decomp.svg"),
              ("28", "fig8-regress.svg"), ("4.3e-3", "fig8-captain.svg")]
 for _n, _svg in _NUM_LOCK:

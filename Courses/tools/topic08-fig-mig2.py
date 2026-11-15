@@ -9,6 +9,7 @@ fig8-mig2  回答：同一套方法换一个模型再走一遍，结果怎样？
           数据（全部实测）：对齐记录 小尺寸一节（1000 步现行比较的 8 份、16 份两份结果文件）、
                 GPU 扩展一节（各运行对单机的结果文件）、真实宽度一节（汇总页、第 1 步对 FP64、前 164 步中间判档），全部实测。
 """
+import topic08_figfont  # noqa: F401  专题八局部字号地板 13.1（须在 topic03_draw 的 wpx 之前）
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
 Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N

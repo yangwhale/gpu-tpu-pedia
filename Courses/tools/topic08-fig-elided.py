@@ -12,6 +12,7 @@ fig8-elided  回答：「该舍 BF16 没舍」的地方，整个训练步里到�
           ⛔ 刻意没画：41 颗 kernel「分三类」—— 注意力输入梯度合流、前向几处都落在同时含真舍入的混合 kernel 里，
              LLO 条数没法单独归给它们；它们的证据是 HLO 规则加最小复现确立的机制。别把右块的 41 个方块按三类重新上色。
 """
+import topic08_figfont  # noqa: F401  专题八局部字号地板 13.1（须在 topic03_draw 的 wpx 之前）
 from topic03_draw import Fig, BL, OR, GR, GY, INK, GY2, LINE, PU
 Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
