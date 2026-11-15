@@ -373,7 +373,7 @@ R4_CARD = (
     '    <div><b>R ＞ 1.2：这一步多舍了</b><br>丢了精度，去查被测那一边，找到多舍的那一步</div>\n'
     '  </div>\n'
     '  <table class="t9"><thead><tr><th>例子（实测）</th><th>被测离 FP64</th><th>参照离 FP64</th><th>R</th><th>记作</th></tr></thead><tbody>\n'
-    '  <tr class="epsrow"><td>qkv 投影，打开 FP32 累加之前（混元 3）</td><td>' + N.sci(N.QKV_ABS_BEFORE) + '</td><td>' + N.sci(N.QKV_ABS_GPU) + '</td><td>«R_QKV_BEFORE»</td><td>丢了精度</td></tr>\n'
+    '  <tr class="epsrow"><td>qkv 投影，打开 FP32 累加之前（混元 3，v5p）</td><td>' + N.sci(N.QKV_ABS_BEFORE) + '</td><td>' + N.sci(N.QKV_ABS_GPU) + '</td><td>«R_QKV_BEFORE»</td><td>丢了精度</td></tr>\n'
     '  <tr><td>同上，打开以后</td><td>' + N.sci(N.QKV_ABS_AFTER) + '</td><td>' + N.sci(N.QKV_ABS_GPU) + '</td><td>1.000</td><td>换了顺序</td></tr>\n'
     '  </tbody></table>\n'
     '  </div>\n'
@@ -1702,7 +1702,7 @@ __FIG_TEMPER__
   <p>图上分六堆，要记的是三堆：</p>
   <table class="t9"><thead><tr><th>堆</th><th>哪些改动</th><th>怎么办</th></tr></thead><tbody>
   <tr><td><b>逐位相同</b></td><td>重跑、换机器、换集群；起名字、拆函数这类不改程序的重构</td><td>不用管</td></tr>
-  <tr><td><b>不逐位，跟重跑分不开</b></td><td>只换顺序：换切分、专家并行、重算策略、升运行库</td><td>只换了加法顺序</td></tr>
+  <tr><td><b>不逐位，跟重跑分不开</b></td><td>只换顺序：换切分、专家并行、重算策略、升运行库（0.0.46 → 0.0.48 那次；换运行库不一定只换顺序，见 §10.2）</td><td>只换了加法顺序</td></tr>
   <tr><td><b>真有影响（七件）</b></td><td>运行库 0.0.46 上<b class="kn">不能忍的只有两件</b>：纯数据并行（第八节）、关掉省舍入</td><td>其余五件：四件能忍、一件待定</td></tr>
   </tbody></table>
   <details class="foldfig"><summary><b>七件里的细节</b>：另外五件、1000 步长跑那几个</summary><p>换到 v7x 原先放在「跟重跑分不开」那堆，后来查出它动了精度，只是被小参数单列不判的豁免盖住了（下一个折叠）。</p><p>另外五件曲线分不开，只在第 1 步对 FP64 抓到：关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行四件能忍，各有开关；第七件是输出头反向少舍一次（换 v7x、einsum 换广播乘、跨切片数据并行都碰上，输出头 3 个小参数 R 7.5–46），2026-11-12 单列加了倍数上限才显出来，是真实的数值缺陷，忍不忍待定。</p><p>其中 RMSNorm 那件只靠一个压线张量判出来：第 0 层归一化权重 R «RMS_EDGE3_T»，GPU 参照换成六份是 «RMS_EDGE6_T»，就落回线下 —— 贴着线的判定，份数一变就翻。换到 0.0.52，v5p 上 RMSNorm 多舍一次也不能忍了（§10.2）。</p><p>其中 «LONG_ARMS» 个改动又跑满 1000 步、用 GPU 16 份当尺子（运行库 0.0.46），有 3 个判「超」（多路残差不强制舍 BF16，和换 v7x、einsum 换广播乘这两次的 1000 步，后两次是 2026-11-12 单列加上限以后改判的），都是同一次比较里第 1 步对 FP64 判出来的；它们的 1000 步曲线 r 0.91–1.36，仍在 GPU 纯噪声能拿的 1.82 以内。</p></details>
@@ -1972,7 +1972,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>合成输入朝零偏差 «TC_BIAS1» ／ «TC_BIAS2_T» ／ «TC_BIAS3»（K ＝ «TC_K1» ／ «TC_K2» ／ «TC_K3_T»）</td><td>B200 BF16 张量核，正数输入；负数输入同样朝零（K ＝ «TC_K1» 时幅度约为正数的一半）；FP32 非张量核 ≤ «FP32_BIAS_MAX»</td></tr>
   <tr><td>TF32：只关 torch 开关 «TF32_TE_ON»，设环境变量 «TF32_ALL_OFF»，读回仍 True</td><td>官方训练容器里实测 FP32 GEMM 对 FP64</td></tr>
   <tr><td>路由打分对 FP64：TPU «ROUTER_TPU_FP64» – «ROUTER_TPU_FP64_HI»，GPU «ROUTER_GPU_FP64» – «ROUTER_GPU_FP64_HI_T»（三层）</td><td>第 1 步单算子回放，输入用 GPU 那一层的路由输入</td></tr>
-  <tr><td>反推梯度对直接抓的梯度 rel_L2 «MOMENTUM_INV_LO» – «MOMENTUM_INV_HI»</td><td>GPU 上，相邻两步一阶动量倒推</td></tr>
+  <tr><td>反推梯度只差 FP32 舍入：拿二阶动量独立核对，rel_L2 «MOMENTUM_INV_LO»（最大 «MOMENTUM_INV_HI»）</td><td>混元 3 第 1 步，从一阶动量反推，再用二阶动量独立核一遍</td></tr>
   <tr><td>参数范数多涨 «PN_TPU_EXTRA»（GPU 自己涨 «PN_GPU_GROWTH»）</td><td>逐步原值；GPU 第二份对基线最多 «PN_GPU_PAIR_MAX»，第三份对基线最多 9.9e-4</td></tr>
   <tr><td>第 300 步：输出层贡献 «GROUP_HEAD_300» ／ «GROUP_TOTAL_300»；没出现过的词 ＋«ROWS300_NEVER»</td><td>FP32 主权重的分组、逐行平方和，词频按前 300 步数据统计</td></tr>
   <tr><td>冷门行梯度很小、失去 Adam 归一化保护：第 300 步 «RARE_EPS_FRAC_T» 的元素 √v̂ ＜ ε（中位数 «RARE_VHAT_MED»）；ε 区的弹性</td><td>第 300 步两侧输出层状态实测；弹性为本课推导（稳态近似）</td></tr>

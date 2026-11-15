@@ -459,7 +459,7 @@ TC_K3, TC_BIAS3 = TC_BIAS_K[2]
 TC_BIAS2_T, TC_K3_T = tx(TC_BIAS2, "%.1e"), str(TC_K3); _lock("TC_BIAS2_T", TC_BIAS2_T, "7.0e-5"); _lock("TC_K3_T", TC_K3_T, "65536")
 ROUTER_TPU_FP64_HI, ROUTER_GPU_FP64_HI = 5.7e-8, 4.0e-6   # 路由打分对 FP64 三层的上沿（下沿是 ROUTER_*_FP64）。出处：逐层回放报告 L1 注 2（TPU 4.8e-8–5.7e-8、GPU 3.8e-6–4.0e-6）
 ROUTER_GPU_FP64_HI_T = tx(ROUTER_GPU_FP64_HI, "%.1e"); _lock("ROUTER_GPU_FP64_HI_T", ROUTER_GPU_FP64_HI_T, "4.0e-6")
-MOMENTUM_INV_LO, MOMENTUM_INV_HI = 2e-7, 4e-7        # 反推梯度对直接抓的梯度 rel_L2（GPU 上）。出处：案例记录「动量反推梯度」核对（GPU 上对直接抓的梯度）
+MOMENTUM_INV_LO, MOMENTUM_INV_HI = 6e-8, 2e-7        # 11-16 事实核查改：反推梯度的独立核对 —— 混元 3 第 1 步，v₁ 对 (1−β₂)·(m₁/(1−β₁))² 的 rel_L2 6e-8、最大 2e-7（案例 01「第 1 步整网梯度」）。原注「GPU 上对直接抓的梯度 2e-7–4e-7」在对齐记录里找不到（2e-7–4e-7 是输出层更新计算那一行的二阶动量核对）
 PN_GPU_PAIR_MAX = 6.6e-4                             # GPU 两次之间参数范数差的最大值（逐步序列现算，见下）
 assert abs(max(abs(x) for x in series()["pnorm_diff_gpu_b_minus_gpu_a"]) - PN_GPU_PAIR_MAX) < 0.05e-4
 PN_DIFF_300_T = tx(series()["pnorm_diff_tpu_minus_gpu_a"][299], "%.1e"); _lock("PN_DIFF_300_T", PN_DIFF_300_T, "4.6e-3")   # 第 300 步 TPU − GPU
