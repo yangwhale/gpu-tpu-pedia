@@ -1581,7 +1581,7 @@ M3_VOCAB = 120832
 M3_LMH_DEF300, M3_LMH_HIGH300 = "%.2f" % M3_LMH_LOSS4K["default"][1], "%.2f" % M3_LMH_LOSS4K["high"][1]
 M3_LMH_COST_HIGH_T, M3_LMH_COST_HIGHEST_T = "%.1f%%" % (M3_LMH_COST["high"] * 100), "%.1f%%" % (M3_LMH_COST["highest"] * 100)
 M3_VOCAB_T = format(M3_VOCAB, ",")
-# ── 第三次迁移 · 切法一变，编译器删不删舍入也跟着变（RMSNorm scale；出处：知识库「编译器删舍入」「RMSNorm 在 32K 被删」两页、现象记录一条）──
+# ── 第三次迁移 · 有没有梯度累积循环，决定编译器删不删舍入（11-15 离线编译对照推翻「切法」推断）（RMSNorm scale；出处：知识库「编译器删舍入」「RMSNorm 在 32K 被删」两页、现象记录一条）──
 #   4K 程序：8 个设备、FSDP 8，这次舍入保住；32K 程序：16 个设备、CP 8 × FSDP 2，8 个 norm 全部被删、保住 0 个（离线编译扫描）。
 M3_NORM_ELIDED = {"4K": 0, "32K": 8}
 # 二分（32K，第 2 级之上加开关，主 loss 偏差的平均，单位 σ ＝ GPU 8 份份间标准差）
