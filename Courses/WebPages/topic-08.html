@@ -7517,7 +7517,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>MXU 累加是不是就近舍入，没有直接证据，是推断。「BF16 乘、FP32 累加」有公开出处：Google Cloud TPU 的 bfloat16 文档（同页还写明 TPU 上转 BF16 是就近舍入、平局取偶，BF16 不支持非正规数），以及 ST-MoE 的脚注（arXiv:<a href="https://arxiv.org/abs/2202.08906" target="_blank" rel="noopener">2202.08906</a>）。JAX 里要 FP32 累加的写法是 <code>preferred_element_type=float32</code>；矩阵乘精度档 HIGH、HIGHEST 是用 3 遍、6 遍 BF16 去模拟 FP32，不是 IEEE FP32。</p></details>
   <p>设备＝软件看到的一个计算单元：v5p 一颗芯片一个，v7x 一颗芯片两个；所以混元 3 的 v5p 8 颗、v7x 4 颗都是 8 个设备。混元 3 那次就量到、也修好了（下面第二张图右下角：qkv R 1.235 → 1.000），可一直没弄清它舍在哪一步、为什么有的投影中招有的不中招。第三次迁移从生产代码原样起步，把它从头到尾查清了。</p>
   </details>
-  <p><b>现象。</b>第三次迁移从生产代码原样起步，8 个设备。曲线上看不出来，三条曲线都在噪声附近（单份运行）；是单算子回放先报了警。<b>反常：同样是投影，一批多舍，一批不多舍。</b>第三次迁移的单算子回放（8 个设备）里，q、kv 的四个低秩投影、注意力的输出门、MLP 的 gate 和 up，TPU 离 FP64 都是 GPU 的 <b class="kn">1.41 倍</b>（TPU 2.35e-3、GPU 1.66e-3），约 √2，像多舍了一次（<a href="#s4-2">§4.2</a>）；同样是投影的注意力输出投影 o_proj 和 MLP 的 down，却是 1.00。</p>
+  <p><b>现象。</b>第三次迁移从生产代码原样起步，8 个设备。曲线上看不出来，三条曲线都在噪声附近（单份运行）；是单算子回放（<a href="#s6-2">§6.2</a>）先报了警。<b>反常：同样是投影，一批多舍，一批不多舍。</b>第三次迁移的单算子回放（8 个设备）里，q、kv 的四个低秩投影、注意力的输出门、MLP 的 gate 和 up，TPU 离 FP64 都是 GPU 的 <b class="kn">1.41 倍</b>（TPU 2.35e-3、GPU 1.66e-3），约 √2，像多舍了一次（<a href="#s4-2">§4.2</a>）；同样是投影的注意力输出投影 o_proj 和 MLP 的 down，却是 1.00。</p>
   <div class="note"><span class="t">先想一想</span>同样是 BF16 矩阵乘、同样是投影，凭什么分成两拨？（答案在下面这张图的上半）</div>
 <figure class="fbox fwide" id="fig-inout"><svg viewBox="0 0 1400 634" width="100%" role="img" aria-label="左：往里投的矩阵（例如 q 的低秩下投影、MLP 的 gate 和 up），模型宽度是输入维，也就是矩阵乘里被加起来的求和维。FSDP 把它切成 8 片，每片权重只能算出整个输出的一份部分和，8 份必须加起来。右：往外投的矩阵（注意力输出投影 o_proj、MLP 的 down），模型宽度是输出维，每片权重算出输出里完整的几列，8 段只是拼起来，没有加法。下：第三次迁移单算子回放（8 个设备），往里投的 7 种投影 TPU 离 FP64 是 GPU 的 1.41 倍，往外投的 3 种是 1.00 倍。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一刀，落在求和维上要加，落在输出维上只拼</text>
@@ -11316,7 +11316,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 同一份权重上的前向：6 个状态、19 批，TPU 减 GPU 写法 ＋0.83e-6 ± 1.15e-6；偏差跟步数、参数范数同步（第 501 步起相关 0.96），跟梯度范数无关。关掉 MTP、KD 后幅度约为对照的六成，是它们放大了还是样本少，在查。</p>
 <p>📌 后段（第 551–1000 步，对 GPU 16 份均值）：修之前 4 份均值 ＋9.4e-6，补流梯度舍法（流的梯度逐个舍、分支输出也舍）5 份均值 ＋1.9e-6；把它拆成两半各跑 1 份：只补梯度累加 ＋0.6e-6、只补分支输出 ＋3.0e-6；两边都去掉多路残差，TPU 2 份 ＋1.9e-6、＋0.7e-6。延长到 2000 步：尾部在第 1000–1250 步到顶（＋2.9e-5）后回落到 GPU 两份的散布里。</p>
 <p>⚠️ 曲线是 50 步滑动平均，只为看方向，不是判档；那一代判档按第三节的三个统计和 GPU 16 份的尺子是主 loss 1.55、1.52 待定，现行对齐配置下主 loss 过。</p></details></figure>
-  <p>前面第 50–100 步那个小鼓包先破了：在多路残差收成一路那处照 GPU 强制舍一次，鼓包就没了；可后段一点没降。记住这个补丁，后面还会回来。</p>
+  <p>前面第 50–100 步那个小鼓包先破了：在多路残差（混元 4 把残差流复制成 4 路，最后再收成一路）收成一路那处照 GPU 强制舍一次，鼓包就没了；可后段一点没降。记住这个补丁，后面还会回来。</p>
   <details class="foldfig"><summary><b>跑到 2000 步，尾巴自己回落了</b>（课上不讲）</summary>
   <p>延长到 2000 步时，修之前的尾巴在第 1000–1250 步到顶（只跑了 1 份），之后回落到 GPU 的散布里 —— 它更像一段暂时的轨迹差，不是一直在长的系统偏差。</p></details>
   <details class="foldfig"><summary><b>地图与前段鼓包</b>：多路残差上写了「转 BF16」的三处；收拢处梯度那次被省，前段鼓包先破</summary>
