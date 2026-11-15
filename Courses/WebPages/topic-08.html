@@ -7514,7 +7514,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>TPU 的矩阵单元 MXU 同样吃 BF16、乘积精确、在 FP32 里累加。同一份输入算路由打分，TPU 对 FP64 的相对误差是 4.8e-8，GPU 是 3.8e-6；长求和上 TPU 也会偏，但小得多。</p>
   <details class="foldfig"><summary><b>MXU 怎么累加</b>：MXU 的累加怎么舍是推断；「BF16 乘、FP32 累加」的公开出处</summary>
   <p>MXU 累加是不是就近舍入，没有直接证据，是推断。「BF16 乘、FP32 累加」有公开出处：Google Cloud TPU 的 bfloat16 文档（同页还写明 TPU 上转 BF16 是就近舍入、平局取偶，BF16 不支持非正规数），以及 ST-MoE 的脚注（arXiv:<a href="https://arxiv.org/abs/2202.08906" target="_blank" rel="noopener">2202.08906</a>）。JAX 里要 FP32 累加的写法是 <code>preferred_element_type=float32</code>；矩阵乘精度档 HIGH、HIGHEST 是用 3 遍、6 遍 BF16 去模拟 FP32，不是 IEEE FP32。</p></details>
-  <p>TPU 自己多舍的地方在别处，而且带一个怪条件：<b>4 个设备上没有，8 个设备上才有</b>（设备＝软件看到的一个计算单元：v5p 一颗芯片一个，v7x 一颗芯片两个；所以混元 3 的 v5p 8 颗、v7x 4 颗都是 8 个设备）。混元 3 那次就量到、也修好了（下面第二张图右下角：qkv R 1.235 → 1.000），可一直没弄清它舍在哪一步、为什么有的投影中招有的不中招。第三次迁移从生产代码原样起步，把它从头到尾查清了。</p>
+  <p>TPU 自己多舍在哪？第三次迁移 8 个设备上的单算子回放先报了警（下图）（设备＝软件看到的一个计算单元：v5p 一颗芯片一个，v7x 一颗芯片两个；所以混元 3 的 v5p 8 颗、v7x 4 颗都是 8 个设备）。混元 3 那次就量到、也修好了（下面第二张图右下角：qkv R 1.235 → 1.000），可一直没弄清它舍在哪一步、为什么有的投影中招有的不中招。第三次迁移从生产代码原样起步，把它从头到尾查清了。</p>
   <p><b>现象：同样是投影，一批多舍，一批不多舍。</b>第三次迁移的单算子回放（8 个设备）里，q、kv 的四个低秩投影、注意力的输出门、MLP 的 gate 和 up，TPU 离 FP64 都是 GPU 的 1.41 倍，约 √2，像多舍了一次（<a href="#s4-2">§4.2</a>）；同样是投影的注意力输出投影 o_proj 和 MLP 的 down，却是 1.00。</p>
 <figure class="fbox fwide" id="fig-inout"><svg viewBox="0 0 1400 634" width="100%" role="img" aria-label="左：往里投的矩阵（例如 q 的低秩下投影、MLP 的 gate 和 up），模型宽度是输入维，也就是矩阵乘里被加起来的求和维。FSDP 把它切成 8 片，每片权重只能算出整个输出的一份部分和，8 份必须加起来。右：往外投的矩阵（注意力输出投影 o_proj、MLP 的 down），模型宽度是输出维，每片权重算出输出里完整的几列，8 段只是拼起来，没有加法。下：第三次迁移单算子回放（8 个设备），往里投的 7 种投影 TPU 离 FP64 是 GPU 的 1.41 倍，往外投的 3 种是 1.00 倍。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一刀，落在求和维上要加，落在输出维上只拼</text>
@@ -12235,6 +12235,110 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>GPU 舍不舍，要对照 GPU 代码。</b>清单只说 TPU 省掉了。dW 这一类算数，是因为 GPU 参照关了 Megatron 的 <code>gradient_accumulation_fusion</code>，每个微批的 dW 先出 BF16 再加进 FP32 的累加器；开着的话，这一类就不算差别。另外只有 dW 那一类整颗 kernel 只含往返，能在 LLO 里一颗颗数；另两类跟真舍混在一起，是按同一规则推断的。</li>
   </ul>
   </details>
+  <h4 id="s9-norm32k">再看一个真实案子：32K 上 RMSNorm 的 scale 被删</h4>
+  <p><b>第三次迁移，删不删还跟着切法变。</b>RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），代码写的是「转 BF16 再转回」。4K 序列的程序里这次舍入在；32K 的程序里，离线编译一扫，8 个 norm 全被删了，主 loss 一路偏低。逐个加开关二分，只补这一处就回到噪声里：同一窗口里，没补时主 loss 是 GPU 噪声尺子的约 54 倍，只补这一处是 0.54 倍（读数见图）。为什么换了切法就删，是推断。</p>
+<figure class="fbox fwide" id="fig-normscale"><svg viewBox="0 0 1400 580" width="100%" role="img" aria-label="左：RMSNorm 乘的那组缩放系数 scale，初值 1.0。GPU 乘的是舍成 BF16 的副本，头一两百步一直是 1.0；TPU 在 32K 的程序里这次舍入被编译器删了，乘的是 FP32 原值，每步偏开约 6.4e-6，第 50、100、150 步偏离中位数 3.2e-4、6.5e-4、9.5e-4；第 200 步起才开始有元素跨过 BF16 的舍入边界。右：32K 上在第 2 级之上逐个加开关，主 loss 窗口带符号均值是 GPU 噪声尺子 N 的几倍（对数横轴）：不加约 54 倍，加投影 FP32 累加、精确超越函数、精确 Adam 都还是 53–54 倍，四处舍入一起回到 1.97 倍；120 步短跑再拆，只加 RMSNorm scale 是 0.54 倍，加其余三处之一都约 28 倍。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一行代码，4K 的程序里舍，32K 的程序里被删　——　<tspan font-weight="700">删不删看起来跟着切法变（推断）</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第三次迁移：RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），用「转 BF16 再转回」写。离线编译：4K 程序里这次舍入在，32K 程序 8 个 norm 全删</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU：乘 BF16 的 scale</text>
+<rect x="225.08" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="246" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU 32K：乘 FP32 的 scale</text>
+<rect x="483.76" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="504" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">主 loss 偏差</text>
+<rect x="0" y="102" width="640" height="384" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="640" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="640" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="640" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">为什么到几十步以后才显出来：scale 离 1.0 多远</tspan></text>
+<text class="svgsm" x="626" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">实测 ＋ 外推虚线</text>
+<line x1="90.0" y1="446" x2="90.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="90" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="194.0" y1="446" x2="194.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="194" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">50</text>
+<line x1="298.0" y1="446" x2="298.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="298" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">100</text>
+<line x1="402.0" y1="446" x2="402.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="402" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">150</text>
+<line x1="506.0" y1="446" x2="506.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="506" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">200</text>
+<line x1="610.0" y1="446" x2="610.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="610" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">250</text>
+<text class="svgsm" x="350" y="480" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">训练步</text>
+<line x1="90" y1="446.0" x2="610" y2="446.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="82" y="450" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="90" y1="369.8888888888889" x2="610" y2="369.8888888888889" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="82" y="373" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">5.0e-04</text>
+<line x1="90" y1="293.77777777777777" x2="610" y2="293.77777777777777" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="82" y="297" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">1.0e-03</text>
+<line x1="90" y1="217.66666666666666" x2="610" y2="217.66666666666666" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="82" y="221" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">1.5e-03</text>
+<line x1="90.0" y1="444.0" x2="610.0" y2="444.0" stroke="#5f6368" stroke-width="3.2" stroke-linecap="round"/>
+<text class="svgsm" x="339" y="436" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU：BF16 副本一直是 1.0</tspan></text>
+<line x1="90.0" y1="446.0" x2="194.0" y2="397.2888888888889" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="194.0" y1="397.2888888888889" x2="298.0" y2="347.05555555555554" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="298.0" y1="347.05555555555554" x2="402.0" y2="301.3888888888889" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<rect x="189.0" y="392.2888888888889" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="186" y="387" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.2e-04</tspan></text>
+<rect x="293.0" y="342.05555555555554" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="290" y="337" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.5e-04</tspan></text>
+<rect x="397.0" y="296.3888888888889" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="394" y="291" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.5e-04</tspan></text>
+<line x1="402.0" y1="301.3888888888889" x2="610.0" y2="203.96666666666667" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4"/>
+<text class="svgsm" x="98" y="225" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU：乘 FP32 原值，每步偏开约 6.4e-6</tspan></text>
+<line x1="506.0" y1="202" x2="506.0" y2="446" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<text class="svgsm" x="512" y="392" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 200 步起</tspan></text>
+<text class="svgsm" x="512" y="410" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 才有元素跳格</tspan></text>
+<rect x="660" y="102" width="740" height="384" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="660" y="102" width="740" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="660" y="104" width="740" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="660" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="674" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">二分：32K，在已开的基础开关之上逐个加（主 loss，是尺子 N 的几倍）</tspan></text>
+<text class="svgsm" x="1386" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">实测</text>
+<rect x="910.0" y="142" width="96.9903000999368" height="286" rx="0" fill="#e6f4ea" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="958" y="442" fill="#0d652d" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≤ 1 在噪声内</tspan></text>
+<line x1="1006.9903000999368" y1="142" x2="1006.9903000999368" y2="428" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1006" y="458" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1</text>
+<line x1="1062.8292300279043" y1="142" x2="1062.8292300279043" y2="428" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1062" y="458" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">2</text>
+<line x1="1192.483210216098" y1="142" x2="1192.483210216098" y2="428" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1192" y="458" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">10</text>
+<line x1="1322.1371904042921" y1="142" x2="1322.1371904042921" y2="428" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1322" y="458" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">50</text>
+<text class="svgsm" x="676" y="160" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上组：300 步运行，看第 51–300 步（N ＝ 3.70e-6）</tspan></text>
+<text class="svgsm" x="686" y="182" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不加（第 2 级，1000 步运行）</tspan></text>
+<rect x="910.0" y="170" width="417.73810901044885" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1319" y="183" fill="#fff" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">53.6 倍（−1.98e-4）</tspan></text>
+<text class="svgsm" x="686" y="208" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">投影 FP32 累加</tspan></text>
+<rect x="910.0" y="196" width="418.3370600765775" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1320" y="209" fill="#fff" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">54.0 倍（−2.00e-4）</tspan></text>
+<text class="svgsm" x="686" y="234" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确超越函数</tspan></text>
+<rect x="910.0" y="222" width="418.4861046099263" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1320" y="235" fill="#fff" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">54.1 倍（−2.00e-4）</tspan></text>
+<text class="svgsm" x="686" y="260" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确 Adam ＋ 正交化迭代的舍入</tspan></text>
+<rect x="910.0" y="248" width="417.2859550790329" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1319" y="261" fill="#fff" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">53.3 倍（−1.97e-4）</tspan></text>
+<text class="svgsm" x="686" y="286" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">四处一起（见底注）</tspan></text>
+<rect x="910.0" y="274" width="151.6116973215744" height="16" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1069" y="287" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.97 倍（−7.27e-6）</tspan></text>
+<text class="svgsm" x="676" y="312" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">下组：120 步短跑，看第 51–120 步（N ＝ 7.19e-6；四处拆开）</tspan></text>
+<text class="svgsm" x="686" y="334" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只加其余三处之一（三条运行）</tspan></text>
+<rect x="910.0" y="322" width="366.28639089250623" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1268" y="335" fill="#fff" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 28.3 倍（−2.03e-4）</tspan></text>
+<rect x="672" y="344" width="716" height="24" rx="4" fill="#fff3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="686" y="360" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只加 RMSNorm scale</tspan></text>
+<rect x="910.0" y="348" width="47.351239844254906" height="16" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="965" y="361" fill="#0d652d" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.54 倍（−3.87e-6）</tspan></text>
+<text class="svgsm" x="676" y="478" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">四处 ＝ 主输出头反向、路由权重前移、RMSNorm scale、sigmoid 输出的舍入</text>
+<rect x="0" y="506" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="506" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="506" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="533" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在一种切法上验过「这个开关不用开」，换了切法要重验</tspan></text>
+</svg><figcaption><b>左边蓝线一路往上、灰线贴着零；右边只有两根短绿条在尺子以内（r ≤ 1）。</b><span class="capmore"><br><em>左边虚线是外推；右边两组窗口不同，组内比。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：对齐记录第三次迁移，32K（16 个设备，上下文并行 8 × FSDP 2）。偏差从第 20 步起系统性偏低，第 100 步 TPU 对第一份 GPU −2.69e-4（GPU 另 7 份 −1.64e-5 到 ＋1.13e-5），第 500 步前后翻正；MTP 第 51–300 步 −5.77e-4，是它的尺子的 23 倍。离线编译扫描：32K 程序里 RMSNorm 乘之前那次舍入 8 个 norm 全部被删、保住 0 个；4K 程序没有被删的记录。</p>
+<p>📌 二分取的是对齐爬梯第二级之上加开关的诊断运行；第 51–120 步那组是 120 步的短跑，四条运行各只加一处，没有不加开关的对照：N ＝ GPU 8 份两两 28 对、同一窗口主 loss 逐步相对差带符号均值的绝对值最大，被测和 GPU 都对第一份 GPU；两组窗口不同，N 不同，只在组内比（从原始运行重算）。scale 偏离每 50 步读一次（16 个 norm scale 的中位数）；舍成 BF16 后不等于 1.0 的元素比例第 200 步中位数 2.9%、最多 30%，第 250 步 7% ／ 55%。</p>
+<p>📌 4K 负对照：只开 RMSNorm scale 舍入，300 步除墙钟外 13800 个逐步量跟全关逐位相同，第 1 步梯度文件逐字节相同 —— 4K 程序里这次舍入本来就在。修法步时 32K 1.804 → 1.802 s（各一份）。</p>
+<p>⚠️ 推断：为什么切法一变就删（没有查到具体的融合决定）；虚线是按每步 6.4e-6 外推。</p></details></figure>
+  <p>为什么第 1 步看不见：scale 初值 1.0 正好在 BF16 格点上（这个盲区 <a href="#s6-4">§6.4</a> 专门讲），要等 FP32 原值偏开才显（跟 <a href="#s5-6">§5.6</a> 输出头那件同一个盲区）。4K 上验过「这个开关没效果」，是因为那里舍入本来就在 —— <b>换了切法，要重验</b>。</p>
   <p><b>收尾：上卡验证。</b>还是两头验证那一招：GPU 上把 A、B 拆成三处照 TPU 改，看 GPU 自己长不长出尾巴；TPU 上在对齐配置之上补上，看尾巴下不下去。</p>
 <figure class="fbox fwide" id="fig-verify"><svg viewBox="0 0 1400 616" width="100%" role="img" aria-label="上卡两头验证。左块 GPU 一头：在 GPU 上把候选照 TPU 改，看 GPU 自己长不长出尾巴。注意力输入那处单开 ＋3.0e-6，p 0.021；跟 MoE 输入那处一起开只剩 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73。右块 TPU 一头：在对齐配置之上补上，看尾巴下不下去。对齐配置 6 份 ＋6.9e-6；补注意力输入那处 ＋6.1e-6，p 0.67；注意力加 MoE 输入 ＋5.3e-6，p 0.37，都分不开。两头都排除了 A、B 两类；C 前向几处还没验。注意力输入那处单开 p 0.021 不算：两处合开就没了，TPU 一头补上也不动。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两头验证：A、B 两类两头都排除，C 前向几处还没验</text>
@@ -12356,110 +12460,6 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左边改了一处的格子都没稳稳长出尾巴；右边补上的两格跟对齐配置一样高。</b><span class="capmore"><br><em>每点一份运行；实测；判读来自对齐记录。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，1000 步，每格 4 份）：第 551–1000 步主 loss 的带符号均值。左块 B200×8，改了一处的格子对 GPU 16 份均值，GPU 自己那格是每份对其余 15 份，p 对 GPU 自己；右块 TPU v5p 8 设备，对 GPU 16 份均值，p 对对齐配置 6 份。「注意力输入」：q、kv 下投影和输出门三份梯度合流；「MoE 输入」：路由、共享专家、路由专家三份梯度合流；「每微批 dW」：每个微批的权重梯度。</p>
 <p>⚠️ 判读来自对齐记录。还没验：前向几处，以及扫描找不到的差（代码没写舍入、GPU 却舍了的地方；累加顺序）。</p></details></figure>
   <p>两头都没对上，A、B 两类排除，C 前向几处还没验，残余还在查（GPU 那头注意力输入单开 p 0.021 也不算：两处合开就没了，TPU 一头补上也不动）；下一批是 C 类前向几处，和扫描看不到的差。这就是<b>清单是候选，不是结论</b>：扫描告诉你先查哪儿，判它的只有上卡。</p>
-  <h4 id="s9-norm32k">再看一个真实案子：32K 上 RMSNorm 的 scale 被删</h4>
-  <p><b>第三次迁移，删不删还跟着切法变。</b>RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），代码写的是「转 BF16 再转回」。4K 序列的程序里这次舍入在；32K 的程序里，离线编译一扫，8 个 norm 全被删了，主 loss 一路偏低。逐个加开关二分，只补这一处就回到噪声里：同一窗口里，没补时主 loss 是 GPU 噪声尺子的约 54 倍，只补这一处是 0.54 倍（读数见图）。为什么换了切法就删，是推断。</p>
-<figure class="fbox fwide" id="fig-normscale"><svg viewBox="0 0 1400 580" width="100%" role="img" aria-label="左：RMSNorm 乘的那组缩放系数 scale，初值 1.0。GPU 乘的是舍成 BF16 的副本，头一两百步一直是 1.0；TPU 在 32K 的程序里这次舍入被编译器删了，乘的是 FP32 原值，每步偏开约 6.4e-6，第 50、100、150 步偏离中位数 3.2e-4、6.5e-4、9.5e-4；第 200 步起才开始有元素跨过 BF16 的舍入边界。右：32K 上在第 2 级之上逐个加开关，主 loss 窗口带符号均值是 GPU 噪声尺子 N 的几倍（对数横轴）：不加约 54 倍，加投影 FP32 累加、精确超越函数、精确 Adam 都还是 53–54 倍，四处舍入一起回到 1.97 倍；120 步短跑再拆，只加 RMSNorm scale 是 0.54 倍，加其余三处之一都约 28 倍。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一行代码，4K 的程序里舍，32K 的程序里被删　——　<tspan font-weight="700">删不删看起来跟着切法变（推断）</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第三次迁移：RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），用「转 BF16 再转回」写。离线编译：4K 程序里这次舍入在，32K 程序 8 个 norm 全删</text>
-<rect x="0" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU：乘 BF16 的 scale</text>
-<rect x="225.08" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="246" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU 32K：乘 FP32 的 scale</text>
-<rect x="483.76" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="504" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">主 loss 偏差</text>
-<rect x="0" y="102" width="640" height="384" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="102" width="640" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
-<rect x="0" y="104" width="640" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="132" x2="640" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">为什么到几十步以后才显出来：scale 离 1.0 多远</tspan></text>
-<text class="svgsm" x="626" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">实测 ＋ 外推虚线</text>
-<line x1="90.0" y1="446" x2="90.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="90" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">0</text>
-<line x1="194.0" y1="446" x2="194.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="194" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">50</text>
-<line x1="298.0" y1="446" x2="298.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="298" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">100</text>
-<line x1="402.0" y1="446" x2="402.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="402" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">150</text>
-<line x1="506.0" y1="446" x2="506.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="506" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">200</text>
-<line x1="610.0" y1="446" x2="610.0" y2="452" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="610" y="468" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">250</text>
-<text class="svgsm" x="350" y="480" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">训练步</text>
-<line x1="90" y1="446.0" x2="610" y2="446.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="82" y="450" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">0</text>
-<line x1="90" y1="369.8888888888889" x2="610" y2="369.8888888888889" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="82" y="373" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">5.0e-04</text>
-<line x1="90" y1="293.77777777777777" x2="610" y2="293.77777777777777" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="82" y="297" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">1.0e-03</text>
-<line x1="90" y1="217.66666666666666" x2="610" y2="217.66666666666666" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="82" y="221" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">1.5e-03</text>
-<line x1="90.0" y1="444.0" x2="610.0" y2="444.0" stroke="#5f6368" stroke-width="3.2" stroke-linecap="round"/>
-<text class="svgsm" x="339" y="436" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU：BF16 副本一直是 1.0</tspan></text>
-<line x1="90.0" y1="446.0" x2="194.0" y2="397.2888888888889" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
-<line x1="194.0" y1="397.2888888888889" x2="298.0" y2="347.05555555555554" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
-<line x1="298.0" y1="347.05555555555554" x2="402.0" y2="301.3888888888889" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
-<rect x="189.0" y="392.2888888888889" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="186" y="387" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.2e-04</tspan></text>
-<rect x="293.0" y="342.05555555555554" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="290" y="337" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.5e-04</tspan></text>
-<rect x="397.0" y="296.3888888888889" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="394" y="291" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.5e-04</tspan></text>
-<line x1="402.0" y1="301.3888888888889" x2="610.0" y2="203.96666666666667" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4"/>
-<text class="svgsm" x="98" y="225" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU：乘 FP32 原值，每步偏开约 6.4e-6</tspan></text>
-<line x1="506.0" y1="202" x2="506.0" y2="446" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
-<text class="svgsm" x="512" y="392" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 200 步起</tspan></text>
-<text class="svgsm" x="512" y="410" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 才有元素跳格</tspan></text>
-<rect x="660" y="102" width="740" height="384" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="660" y="102" width="740" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="660" y="104" width="740" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="660" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="674" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">二分：32K，在已开的基础开关之上逐个加（主 loss，是尺子 N 的几倍）</tspan></text>
-<text class="svgsm" x="1386" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">实测</text>
-<rect x="910.0" y="142" width="96.9903000999368" height="286" rx="0" fill="#e6f4ea" stroke="none" stroke-width="1.0"/>
-<text class="svgsm" x="958" y="442" fill="#0d652d" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≤ 1 在噪声内</tspan></text>
-<line x1="1006.9903000999368" y1="142" x2="1006.9903000999368" y2="428" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1006" y="458" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1</text>
-<line x1="1062.8292300279043" y1="142" x2="1062.8292300279043" y2="428" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1062" y="458" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">2</text>
-<line x1="1192.483210216098" y1="142" x2="1192.483210216098" y2="428" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1192" y="458" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">10</text>
-<line x1="1322.1371904042921" y1="142" x2="1322.1371904042921" y2="428" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1322" y="458" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">50</text>
-<text class="svgsm" x="676" y="160" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上组：300 步运行，看第 51–300 步（N ＝ 3.70e-6）</tspan></text>
-<text class="svgsm" x="686" y="182" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不加（第 2 级，1000 步运行）</tspan></text>
-<rect x="910.0" y="170" width="417.73810901044885" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1319" y="183" fill="#fff" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">53.6 倍（−1.98e-4）</tspan></text>
-<text class="svgsm" x="686" y="208" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">投影 FP32 累加</tspan></text>
-<rect x="910.0" y="196" width="418.3370600765775" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1320" y="209" fill="#fff" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">54.0 倍（−2.00e-4）</tspan></text>
-<text class="svgsm" x="686" y="234" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确超越函数</tspan></text>
-<rect x="910.0" y="222" width="418.4861046099263" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1320" y="235" fill="#fff" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">54.1 倍（−2.00e-4）</tspan></text>
-<text class="svgsm" x="686" y="260" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确 Adam ＋ 正交化迭代的舍入</tspan></text>
-<rect x="910.0" y="248" width="417.2859550790329" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1319" y="261" fill="#fff" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">53.3 倍（−1.97e-4）</tspan></text>
-<text class="svgsm" x="686" y="286" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">四处一起（见底注）</tspan></text>
-<rect x="910.0" y="274" width="151.6116973215744" height="16" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1069" y="287" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.97 倍（−7.27e-6）</tspan></text>
-<text class="svgsm" x="676" y="312" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">下组：120 步短跑，看第 51–120 步（N ＝ 7.19e-6；四处拆开）</tspan></text>
-<text class="svgsm" x="686" y="334" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只加其余三处之一（三条运行）</tspan></text>
-<rect x="910.0" y="322" width="366.28639089250623" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1268" y="335" fill="#fff" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 28.3 倍（−2.03e-4）</tspan></text>
-<rect x="672" y="344" width="716" height="24" rx="4" fill="#fff3e0" stroke="#e8710a" stroke-width="1.6"/>
-<text class="svgsm" x="686" y="360" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只加 RMSNorm scale</tspan></text>
-<rect x="910.0" y="348" width="47.351239844254906" height="16" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="965" y="361" fill="#0d652d" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.54 倍（−3.87e-6）</tspan></text>
-<text class="svgsm" x="676" y="478" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">四处 ＝ 主输出头反向、路由权重前移、RMSNorm scale、sigmoid 输出的舍入</text>
-<rect x="0" y="506" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="506" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="506" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="533" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在一种切法上验过「这个开关不用开」，换了切法要重验</tspan></text>
-</svg><figcaption><b>左边蓝线一路往上、灰线贴着零；右边只有两根短绿条在尺子以内（r ≤ 1）。</b><span class="capmore"><br><em>左边虚线是外推；右边两组窗口不同，组内比。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：对齐记录第三次迁移，32K（16 个设备，上下文并行 8 × FSDP 2）。偏差从第 20 步起系统性偏低，第 100 步 TPU 对第一份 GPU −2.69e-4（GPU 另 7 份 −1.64e-5 到 ＋1.13e-5），第 500 步前后翻正；MTP 第 51–300 步 −5.77e-4，是它的尺子的 23 倍。离线编译扫描：32K 程序里 RMSNorm 乘之前那次舍入 8 个 norm 全部被删、保住 0 个；4K 程序没有被删的记录。</p>
-<p>📌 二分取的是对齐爬梯第二级之上加开关的诊断运行；第 51–120 步那组是 120 步的短跑，四条运行各只加一处，没有不加开关的对照：N ＝ GPU 8 份两两 28 对、同一窗口主 loss 逐步相对差带符号均值的绝对值最大，被测和 GPU 都对第一份 GPU；两组窗口不同，N 不同，只在组内比（从原始运行重算）。scale 偏离每 50 步读一次（16 个 norm scale 的中位数）；舍成 BF16 后不等于 1.0 的元素比例第 200 步中位数 2.9%、最多 30%，第 250 步 7% ／ 55%。</p>
-<p>📌 4K 负对照：只开 RMSNorm scale 舍入，300 步除墙钟外 13800 个逐步量跟全关逐位相同，第 1 步梯度文件逐字节相同 —— 4K 程序里这次舍入本来就在。修法步时 32K 1.804 → 1.802 s（各一份）。</p>
-<p>⚠️ 推断：为什么切法一变就删（没有查到具体的融合决定）；虚线是按每步 6.4e-6 外推。</p></details></figure>
-  <p>为什么第 1 步看不见：scale 初值 1.0 正好在 BF16 格点上（这个盲区 <a href="#s6-4">§6.4</a> 专门讲），要等 FP32 原值偏开才显（跟 <a href="#s5-6">§5.6</a> 输出头那件同一个盲区）。4K 上验过「这个开关没效果」，是因为那里舍入本来就在 —— <b>换了切法，要重验</b>。</p>
   <div class="note ok" style="border-left:6px solid #e8710a"><span class="t">这一节最想让你带走的一招：编一次、扫一遍</span>
   <p>以后碰到这类差，别一处处猜：代码里的往返（FP32 → BF16 → FP32）不改数学，写它只有一个意思 —— <b>这里要舍</b>；把整个训练步离线编译一次（不用上卡），列出写了往返、芯片指令里却没舍的地方。<b>清单是候选，不是结论</b>：每一类还要两头验证（GPU 照 TPU 改看长不长出差，TPU 照 GPU 补看差下不下去）才算数；它也只找得到「写了舍、被省掉」这一类。</p>
   </div>
