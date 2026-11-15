@@ -17,7 +17,7 @@ FC_SD_ = N.FC_SD
 
 W = 1400
 MINI = [("主 loss（全程）", 0.98), ("主 loss（后段）", 0.97), ("MTP loss（全程）", 0.81), ("MTP loss（后段）", 0.80),
-        ("索引器蒸馏 loss", 0.75), ("梯度范数", 0.79), ("参数范数", 0.14), ("路由偏置均值", 1.31), ("路由偏置标准差", 0.85)]
+        ("索引器蒸馏 loss", 0.75), ("梯度范数", 0.79), ("参数范数", 0.14), ("路由偏置均值", 1.31), ("路由偏置散布", 0.85)]
 #   现行比较（2026-11-11 起 C 口径）：TPU 第一份对 GPU 基线，尺子 GPU 1000 步 16 份两两 120 对；每格三个统计里最差的 r（小尺寸现行比较的结果文件，逐项复算）
 assert sum(1 for _n, a in MINI if a <= 1) == N.C_NOW["pass"] and max(a for _n, a in MINI) == 1.31 and MINI[0][1] == N.C_NOW["loss_r"]
 GPUSCALE = [("1 台，原设置重跑", 0.93), ("1 台，EP 8", 0.95), ("2 台 DP16＋EP4（8 份）", [1.76, 0.90, 1.59, 0.95, 0.97, 1.17, 1.00, 0.81]),
@@ -116,7 +116,7 @@ def fig_mig2():
     ])
     yb = f.src(yb + 10,
                "📌 Ⓐ 小尺寸（约 4.3 亿参数，保留新模型全部结构、缩宽度和层数，随机初始化）TPU v5p 8 设备 ↔ B200×8，1000 步，现行比较：对齐配置关 base2、多路残差一带的舍入照 GPU 写法，被测是事先定的第一份，尺子 GPU 16 份两两 120 对；每格是三个统计里最差的 r。"
-               "主 loss 0.98（最差是平均绝对相对误差）、后段 0.97、MTP 0.81、后段 0.80、索引器蒸馏 0.75、梯度范数 0.79、参数范数 0.14、路由偏置均值 1.31、标准差 0.85；同配置 6 份都判，没有不过；另一份主 loss、MTP 略超（1.14、1.07），一份梯度范数略超（1.04）。"
+               "主 loss 0.98（最差是平均绝对相对误差）、后段 0.97、MTP 0.81、后段 0.80、索引器蒸馏 0.75、梯度范数 0.79、参数范数 0.14、路由偏置均值 1.31、散布 0.85；同配置 6 份都判，没有不过；另一份主 loss、MTP 略超（1.14、1.07），一份梯度范数略超（1.04）。"
                "上一代（现行对齐配置之前）主 loss 1.55、后段 1.52 待定：TPU 8 份主 loss 都偏高、平均 ＋4.3e-6，主因后来定到流梯度的舍法（§9.7）。",
                "📌 Ⓑ 对单机 GPU golden 的前 300 步，尺子是单机 8 份两两 28 对；8 项检查取最差倍数。2 台 DP16＋EP4 跑了 8 份（最大 1.76，参数范数）；多机自己的尺子在主 loss、梯度范数、参数范数上是单机的 1.0–1.3 倍；两组对单机基线的窗口带符号均值没有系统偏移（Welch |t| ≤ 1.3）。"
                "正对照：同 2 台设置、学习率大 10%，8 项里 7 项超出，最大 4149 倍。存档续跑：确定性模式下「跑 20 步」对「跑 10 步、存、续跑 10 步」，2 台 PP2＋DP8＋EP8 的 8760 个状态张量、真实宽度 2 台的 14512 个状态张量都逐位相同。",
@@ -129,7 +129,7 @@ def fig_mig2():
 
 def fig_minidrift():
     """fig8-minidrift 回答：小尺寸 TPU 主 loss 那截共同偏高，是从哪一步开始的、是不是前向的差？
-    上：主 loss，TPU 8 份对 GPU 16 份逐步均值的相对差，25 步一块（柱）；灰带 ＝ ± GPU 留一法标准差。
+    上：主 loss，TPU 8 份对 GPU 16 份逐步均值的相对差，25 步一块（柱）；灰带 ＝ GPU 留一法读数的范围。
     下：同一批运行的 MTP loss，同样画法（反着走）。数据：topic08_numbers 的 MD（实测）。"""
     MD = N.MD
     f = Fig(W, "上下两条。上：小尺寸 1000 步，TPU 8 份主 loss 对 GPU 16 份逐步均值的相对差，每份一条 50 步平均的细线，粗线是 8 份平均；灰线是 GPU 16 份各自对其余 15 份。"
@@ -355,7 +355,7 @@ def fig_twoway():
             f.t(X0 - 6, Y(v) + 4, ("%+.1e" % v).replace("e-0", "e-").replace(".0e", "e"), GY, size=11.5, anchor="end")
         f.line(X0, Y(0), X1, Y(0), GY, 1.2, arrow=False)
         f.t(X0 - 6, Y(0) + 4, "0", GY, size=11.5, anchor="end")
-        f.box(X0, Y(N.FC_SD), X1 - X0, Y(-N.FC_SD) - Y(N.FC_SD), "#eceff1", "none", 0)
+        f.box(X0, Y(N.FC_GPU_HI), X1 - X0, Y(N.FC_GPU_LO) - Y(N.FC_GPU_HI), "#eceff1", "none", 0)
         cw = (X1 - X0) / float(len(cells))
         for k, (key, lab, col) in enumerate(cells):   # 数据键沿用导出文件里的名字
             c = TW[side][key]
@@ -374,7 +374,7 @@ def fig_twoway():
         else:
             f.t(X0 + cw * 1.5, YT + 8, "4 份全为正，p %s" % N.TW_P_T["gpu"], OR, True, 13.5, "middle")
             f.t(X0 + cw * 2.5, YT + 8, "p %s，没变" % N.TW_P_T["head"], GY, True, 13, "middle")
-        f.t(x0 + 16, py + PH - 40, "灰带：GPU 留一法标准差 ± %s" % ("%.1e" % N.FC_SD).replace("e-0", "e-"), GY, size=12)
+        f.t(x0 + 16, py + PH - 40, "灰带：GPU 16 份每份对其余 15 份，%s（最小到最大）" % N.FC_GPU_RANGE_T, GY, size=12)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "两头对上，才说得上主因是它：流的几份梯度怎么相加、在哪儿舍", [
         "只在 TPU 一边补，补好了也可能是两处差别凑巧抵消（上一轮就是这样撤回的）；GPU 一边反着改、长出同样方向的偏，两个方向对上，才说得上是它。",
@@ -411,7 +411,7 @@ def fig_gatecmp():
         f.t(X0 - 6, Y(v) + 4, ("%+.1e" % v).replace("e-0", "e-").replace(".0e", "e"), GY, size=11.5, anchor="end")
     f.line(X0, Y(0), X1, Y(0), GY, 1.2, arrow=False)
     f.t(X0 - 6, Y(0) + 4, "0", GY, size=11.5, anchor="end")
-    f.box(X0, Y(N.FC_SD), X1 - X0, Y(-N.FC_SD) - Y(N.FC_SD), "#eceff1", "none", 0)
+    f.box(X0, Y(N.FC_GPU_HI), X1 - X0, Y(N.FC_GPU_LO) - Y(N.FC_GPU_HI), "#eceff1", "none", 0)
     cells = [("M52", "只开收拢处", OR), ("C", "＋全套", PU), ("C_stream", "＋只补梯度一半", PU), ("C_branch", "＋只补分支输出一半", PU)]
     cw = (X1 - X0) / 4.0
     for k, (key, lab, col) in enumerate(cells):   # 数据键沿用导出文件里的名字
@@ -424,7 +424,7 @@ def fig_gatecmp():
         f.t(cx, YB + 46, "4 份，均值 %s" % N.MG_MEAN_T[key], INK, False, 12.5, "middle")
         if key != "M52":
             f.t(cx, YT - 8, "p %s" % N.MG_P_T[key], GY, True, 13, "middle")
-    f.t(16, py + PH - 40, "p 是对「只开收拢处」那一格的置换检验；灰带：GPU 留一法标准差 ± %s" % ("%.1e" % N.FC_SD).replace("e-0", "e-"), GY, size=12)
+    f.t(16, py + PH - 40, "p：对「只开收拢处」那格的置换检验；灰带：GPU 16 份每份对其余 15 份，%s" % N.FC_GPU_RANGE_T, GY, size=12)
     f._pan = None
     RX = LW + GAP
     py2 = f.panel(RX, y0, W - RX, PH, "Ⓑ 主 loss 判档倍数：对齐配置 6 份 vs GPU 自己 15 份", PU)

@@ -570,8 +570,8 @@ def fig_excess():
 def fig_normscale():
     f = Fig(W, "左：RMSNorm 乘的那组缩放系数 scale，初值 1.0。GPU 乘的是舍成 BF16 的副本，头一两百步一直是 1.0；TPU 在 32K 的程序里这次舍入被编译器删了，乘的是 FP32 原值，"
                "每步偏开约 6.4e-6，第 50、100、150 步偏离中位数 3.2e-4、6.5e-4、9.5e-4；第 200 步起才开始有元素跨过 BF16 的舍入边界。"
-               "右：32K 上在第 2 级之上逐个加开关，主 loss 偏差的平均（单位是 GPU 8 份的份间标准差 σ）：对照约 −24σ，加投影 FP32 累加、精确超越函数、精确 Adam 都不动，"
-               "四处舍入一起回到 −0.6σ；再拆，只加 RMSNorm scale 舍入就回到 −0.2σ。")
+               "右：32K 上在第 2 级之上逐个加开关，主 loss 窗口带符号均值是 GPU 噪声尺子 N 的几倍（对数横轴）：不加约 54 倍，加投影 FP32 累加、精确超越函数、精确 Adam 都还是 53–54 倍，"
+               "四处舍入一起回到 1.97 倍；120 步短跑再拆，只加 RMSNorm scale 是 0.54 倍，加其余三处之一都约 28 倍。")
     y0 = f.header("同一行代码，4K 的程序里舍，32K 的程序里被删　——　<tspan font-weight=\"700\">删不删看起来跟着切法变（推断）</tspan>",
                   "第三次迁移：RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），用「转 BF16 再转回」写。离线编译：4K 程序里这次舍入在，32K 程序 8 个 norm 全删",
                   [(GY, "GPU：乘 BF16 的 scale"), (BL, "TPU 32K：乘 FP32 的 scale"), (RD, "主 loss 偏差")])
@@ -613,20 +613,22 @@ def fig_normscale():
     f.t(xc + 6, XY(0, 3.5e-4)[1] + 18, "GPU 才有元素跳格", OR, True, 13)
     f._pan = None
     px = LW + 20
-    py2 = f.panel(px, y0, W - px, PH, "二分：32K，在已开的基础开关之上逐个加（主 loss 偏差，σ）", RD, tag="实测")
+    py2 = f.panel(px, y0, W - px, PH, "二分：32K，在已开的基础开关之上逐个加（主 loss，是尺子 N 的几倍）", RD, tag="实测")
     BX0, BX1 = px + 250, W - 40
-    lo, hi = -34.0, 4.0
+    lg = lambda r: math.log10(max(r, 0.3))
+    lo, hi = lg(0.3), lg(80)
 
-    def X(v):
-        return BX0 + (v - lo) / (hi - lo) * (BX1 - BX0)
-    f.box(X(-3), py2 + 10, X(3) - X(-3), PH - 98, "#e6f4ea", "none", 0)
-    f.t(X(0), py2 + PH - 74, "±3σ", GR, True, 13, "middle")
-    for v in (-30, -20, -10, 0):
-        f.line(X(v), py2 + 10, X(v), py2 + PH - 88, LINE2, 1, arrow=False)
-        f.t(X(v), py2 + PH - 58, "%d" % v if v else "0", GY, size=13, anchor="middle")
-    rows = [("上组：300 步运行，看第 51–300 步", None)] + N.M3_BISECT_300 + [("下组：120 步短跑，看第 51–120 步（四处拆开）", None)] + N.M3_BISECT_120
+    def X(r):
+        return BX0 + (lg(r) - lo) / (hi - lo) * (BX1 - BX0)
+    f.box(X(0.3), py2 + 10, X(1) - X(0.3), PH - 98, "#e6f4ea", "none", 0)
+    f.t((X(0.3) + X(1)) / 2, py2 + PH - 74, "≤ 1 在噪声内", GR, True, 12, "middle")
+    for v in (1, 2, 10, 50):
+        f.line(X(v), py2 + 10, X(v), py2 + PH - 88, LINE2 if v not in (1, 2) else GY2, 1, arrow=False)
+        f.t(X(v), py2 + PH - 58, "%g" % v, GY, size=13, anchor="middle")
+    rows = ([("上组：300 步运行，看第 51–300 步（N ＝ %s）" % N.tx(N.M3_BIS_N["51:300"], "%.2e"), None, None)] + N.M3_BIS_R300
+            + [("下组：120 步短跑，看第 51–120 步（N ＝ %s；四处拆开）" % N.tx(N.M3_BIS_N["51:120"], "%.2e"), None, None)] + N.M3_BIS_R120)
     y = py2 + 14
-    for lab, v in rows:
+    for lab, v, r in rows:
         if v is None:
             f.t(px + 16, y + 14, lab, GY, True, 13)
             y += 22
@@ -634,11 +636,11 @@ def fig_normscale():
         if lab.startswith("只加 RMSNorm"):
             f.box(px + 12, y - 2, W - px - 24, 24, "#fff3e0", OR, 4, sw=1.6)
         f.t(px + 26, y + 14, lab, OR if lab.startswith("只加 RMSNorm") else INK, True, 13)
-        c = RD if v < -3 else GR
-        f.box(min(X(v), X(0)), y + 2, abs(X(v) - X(0)) or 3, 16, c, c, 2)
-        vt = ("%.1f" % v).replace("-", "−")
-        vt = {"只加其余三处之一（三条运行）": "约 " + vt}.get(lab, vt)
-        f.t(X(v) + 8 if v < -3 else X(0) + 8, y + 15, vt, "#fff" if v < -3 else GR, True, 13)
+        c = RD if r > 2 else (GR if r <= 1 else OR)
+        f.box(X(0.3), y + 2, max(X(r) - X(0.3), 3), 16, c, c, 2)
+        vt = "%s 倍（%s）" % (("%.1f" % r) if r >= 10 else ("%.2f" % r), N.tx(v, "%.2e"))
+        vt = ("约 " + vt) if lab.startswith("只加其余") else vt
+        f.t(X(r) + 8 if X(r) + 8 + 150 < W - 20 else X(r) - 8, y + 15, vt, c if X(r) + 158 < W - 20 else "#fff", True, 12.5, None if X(r) + 158 < W - 20 else "end")
         y += 26
     assert y < py2 + PH - 88, y
     f.t(px + 16, py2 + PH - 38, "四处 ＝ 主输出头反向、路由权重前移、RMSNorm scale、sigmoid 输出的舍入", GY, size=13)
@@ -648,8 +650,8 @@ def fig_normscale():
         "第 1 步看不见：scale 初值 1.0 在 BF16 格点上，两边相同；这个开关的反向是恒等，不碰梯度。要等 FP32 原值偏开、GPU 那边还停在 1.0 才显出来。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：对齐记录第三次迁移，32K（16 个设备，上下文并行 8 × FSDP 2）。偏差从第 20 步起系统性偏低，第 100 步约 −%dσ，第 500 步前后翻正；MTP 同向约 −40σ。离线编译扫描：32K 程序里 RMSNorm 乘之前那次舍入 8 个 norm 全部被删、保住 0 个；4K 程序没有被删的记录。" % -N.M3_DRIFT_PEAK,
-               "📌 二分取的是对齐爬梯第二级之上加开关的诊断运行；第 51–120 步那组是 120 步的短跑，四条运行各只加一处，没有不加开关的对照：另外三处单加分别 −30.84、−30.88、−30.88σ，只加 RMSNorm scale −0.22σ。scale 偏离每 50 步读一次（16 个 norm scale 的中位数）；舍成 BF16 后不等于 1.0 的元素比例第 200 步中位数 2.9%、最多 30%，第 250 步 7% ／ 55%。",
+               "📌 实测：对齐记录第三次迁移，32K（16 个设备，上下文并行 8 × FSDP 2）。偏差从第 20 步起系统性偏低，第 100 步 TPU 对第一份 GPU %s（GPU 另 7 份 %s 到 %s），第 500 步前后翻正；MTP 第 51–300 步 %s，是它的尺子的 %.0f 倍。离线编译扫描：32K 程序里 RMSNorm 乘之前那次舍入 8 个 norm 全部被删、保住 0 个；4K 程序没有被删的记录。" % (N.tx(N.M3_DRIFT_S100[0], "%.2e"), N.tx(N.M3_DRIFT_S100[1], "%.2e"), N.tx(N.M3_DRIFT_S100[2], "%.2e", plus=True), N.tx(N.M3_MTP_R300[0], "%.2e"), N.M3_MTP_R300[2]),
+               "📌 二分取的是对齐爬梯第二级之上加开关的诊断运行；第 51–120 步那组是 120 步的短跑，四条运行各只加一处，没有不加开关的对照：N ＝ GPU 8 份两两 28 对、同一窗口主 loss 逐步相对差带符号均值的绝对值最大，被测和 GPU 都对第一份 GPU；两组窗口不同，N 不同，只在组内比（从原始运行重算）。scale 偏离每 50 步读一次（16 个 norm scale 的中位数）；舍成 BF16 后不等于 1.0 的元素比例第 200 步中位数 2.9%、最多 30%，第 250 步 7% ／ 55%。",
                "📌 4K 负对照：只开 RMSNorm scale 舍入，300 步除墙钟外 13800 个逐步量跟全关逐位相同，第 1 步梯度文件逐字节相同 —— 4K 程序里这次舍入本来就在。修法步时 32K %.3f → %.3f s（各一份）。" % N.M3_NORM_STEP,
                "⚠️ 推断：为什么切法一变就删（没有查到具体的融合决定）；虚线是按每步 6.4e-6 外推。")
     f.save("fig8-normscale.svg", yb + 14)

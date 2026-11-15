@@ -77,49 +77,47 @@ ARM_SPREAD = max(N.TPU_ARMS) - min(N.TPU_ARMS)          # 6.3e-5
 RULER_SPREAD = N.GPU_RUNS10_HI - N.GPU_RUNS10_LO        # 6.7e-5
 assert 0.5 < ARM_SPREAD / RULER_SPREAD < 1.5, (ARM_SPREAD, RULER_SPREAD)
 def fig_ruler():
-    f = Fig(W, "横轴是第 301 到 1000 步 loss 的平均相对偏差，以第一份 GPU 运行为准。"
-               "灰色一段是 GPU 用同样设置再跑 10 次落下的范围，从 −6.5e-5 到 ＋2.4e-6。"
-               "TPU 三种跑法落在 −1.03e-4 到 −1.66e-4，全在尺子外面，最远偏出 5.3 个标准差。")
+    NN = N.RULER10_N
+    f = Fig(W, "横轴是第 301 到 1000 步 loss 逐步相对差的带符号均值，以第一份 GPU 运行为基线。"
+               "灰色带以 0 为中心、正负对称，宽度是噪声上限 N ＝ %s：10 份同设置的 GPU 运行两两配对 45 对，每对算同样的带符号均值，取绝对值最大的那个。"
+               "浅灰小点是 10 份各自对第一份的读数，只给人看。"
+               "TPU 三种跑法落在 −1.66e-4、−1.35e-4、−1.03e-4，全在带外，分别是 N 的 %s、%s、%s 倍。" % ((N.RULER10_N_T,) + N.TPU_ARMS_R_T))
     y0 = f.header("尺子：不问 TPU 跟 GPU 差多少，问它比 GPU 自己跟自己差得多不多",
-                  "横轴 ＝ 第 301–1000 步 loss 平均偏了多少（相对，以第一份 GPU 运行为准）；灰色一段 ＝ 同样设置的 GPU 运行一共 10 次落下的范围（含基线那一份）",
-                  [(GY2, "GPU 自己重跑（噪声）"), (BL, "TPU 三种跑法")])
+                  "横轴 ＝ 第 301–1000 步 loss 逐步相对差的带符号均值（对第一份 GPU）；灰带 ＝ ±N，N ＝ GPU 10 份两两 45 对里这个数的绝对值最大值",
+                  [(GY2, "GPU 自己重跑的噪声上限 ±N"), (BL, "TPU 三种跑法")])
     PH = 250
     py = f.panel(0, y0, W, PH, "混元 3 截 4 层，1000 步（实测）", BL)
-    LO, HI = -2.0e-4, 0.5e-4
+    LO, HI = -2.0e-4, 1.0e-4
     X0, XW = 90, 1220
 
     def X(v):
         return X0 + (v - LO) / (HI - LO) * XW
     yl = py + 140
+    f.box(X(-NN), yl - 24, X(NN) - X(-NN), 48, LINE2, GY2, 6)
     f.line(X0, yl, X0 + XW, yl, GY2, 1.3, arrow=False)
-    for i in range(6):
+    for i in range(7):
         v = LO + i * 0.5e-4
         f.line(X(v), yl - 6, X(v), yl + 6, GY2, 1.2, arrow=False)
         f.t(X(v), yl + 48, "0" if abs(v) < 1e-12 else "%+.1f×10⁻⁴" % (v * 1e4), GY, size=13, anchor="middle")
-    # 0 在哪、为什么灰段不以 0 为中心 —— 先把 0 是谁标出来（贴右沿的原因在 fig8-baseline）
     f.t(X(0), yl + 68, "基线 ＝ 第一份 GPU", INK, True, 13, "middle")
-    f.box(X(N.GPU_RUNS10_LO), yl - 22, X(N.GPU_RUNS10_HI) - X(N.GPU_RUNS10_LO), 44, LINE2, GY2, 6)
-    f.t((X(N.GPU_RUNS10_LO) + X(N.GPU_RUNS10_HI)) / 2, yl - 34, "10 次 GPU 重跑都在这儿", GY, True, 14, "middle")
-    xm = X(N.GPU_RUNS10_TAIL_MEAN)        # 标准差从均值量，不从基线 0 量
-    f.line(xm, yl - 22, xm, yl + 22, INK, 1.6, dash="4 3", arrow=False)
-    f.t(xm + 5, yl + 5, "均值 %s" % N.tx(N.GPU_RUNS10_TAIL_MEAN, "%.2e"), INK, size=12)
+    f.t(X(0), yl - 34, "±N ＝ ±%s（GPU 两两 45 对的最大）" % N.RULER10_N_T, GY, True, 14, "middle")
+    for v in N.GPU_RUNS10_TAIL:
+        f.box(X(v) - 3.5, yl - 3.5, 7, 7, "#bdc1c6", "#bdc1c6", 3.5)
     for k, v in enumerate(N.TPU_ARMS):
         f.box(X(v) - 8, yl - 8, 16, 16, BL, BL, 8)
-        z = (v - N.GPU_RUNS10_TAIL_MEAN) / N._sd10
-        f.t(X(v), yl - 26 - (k % 2) * 22, "%s · 偏 %.1f 个标准差" % ({0: "原样", 1: "不开重算", 2: "改片上内存上限"}.get(k, ""), abs(z)), BL, size=13, anchor="middle")
-    f.t(X(-1.35e-4), py + 44, "TPU：三种跑法都落在尺子外，方向一致", BL, True, 15, "middle")
+        f.t(X(v), yl - 26 - (k % 2) * 22, "%s · N 的 %s 倍" % ({0: "原样", 1: "不开重算", 2: "改片上内存上限"}[k], N.TPU_ARMS_R_T[k]), BL, size=13, anchor="middle")
+    f.t(X(-1.35e-4), py + 44, "TPU：三种跑法都落在带外，方向一致", BL, True, 15, "middle")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "尺子一立，「1e-4 出头」就有了大小", [
-        "TPU 的偏移离 GPU 重跑的均值 2.9 到 5.3 个标准差，而且三种跑法都朝同一边：不是噪声，值得查。",
-        "标准差在这里只用来描述有多远；正式的判法后面讲。",
+        "TPU 的偏移是 GPU 自己重跑最大差的 1.5 到 2.5 倍，而且三种跑法都朝同一边：不是噪声，值得查。",
+        "这个倍数就是后面的 r（被测 ÷ N）；怎么按它判过不过，第三节讲。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：10 次同设置 GPU 运行（含最早跑的 3 份）的带符号均值 %s ± %s（均值 ± 样本标准差），范围 −6.5e-5 至 +2.4e-6。" % (N.tx(N.GPU_RUNS10_TAIL_MEAN, "%.2e"), N.tx(N._sd10, "%.2e")),
-               "📌 实测：TPU 原样 −1.66e-4、不开重算 −1.35e-4、改编译器片上内存上限 −1.03e-4；标准差个数 ＝ (TPU − GPU 10 份均值) ÷ GPU 样本标准差（本课推导），从图上那条虚线量，不从基线 0 量。",
-               "📌 实测：第一份 GPU 运行几乎贴着 10 次的最上沿（排第三高）；扣掉 10 次的均值以后，TPU 三种跑法仍偏 −0.8e-4 到 −1.4e-4。",
-               "📌 实测：三个蓝点彼此也散开约 %.0fe-5，跟灰段（约 %.0fe-5）差不多宽：是整团挪了，不是哪一种跑法单独跑偏。" % (ARM_SPREAD * 1e5, RULER_SPREAD * 1e5),
+               "📌 实测（从原始逐步记录重算）：10 份同设置 GPU 运行（含最早跑的 3 份）两两 45 对，每对算第 301–1000 步主 loss 逐步相对差的带符号均值；绝对值最大的一对是 %s，就是 N。浅灰小点是各份对第一份的读数（−6.5e-5 至 ＋2.4e-6），只是画给人看，不参与算 N。" % N.RULER10_N_T,
+               "📌 实测：TPU 原样 −1.66e-4、不开重算 −1.35e-4、改编译器片上内存上限 −1.03e-4，都是对第一份 GPU；除以 N 是 %s、%s、%s 倍。" % N.TPU_ARMS_R_T,
+               "📌 实测：三个蓝点彼此也散开约 %.0fe-5，跟 N 差不多大：是整团挪了，不是哪一种跑法单独跑偏。" % (ARM_SPREAD * 1e5),
                "📌 实测：最左是原样跑：第 301–1000 步平均 −1.66e-4，开头说的「约 1.7e-4」就是它。",
-               "注：落在尺子外 ≠ 判不过；正式判法见判定那张图（r ＝ 被测 ÷ 噪声上限 N）。")
+               "注：判过不过还要看纯噪声自己能拿几分（第三节）；这里只立尺子。")
     f.save("fig8-ruler.svg", yb + 14)
 
 

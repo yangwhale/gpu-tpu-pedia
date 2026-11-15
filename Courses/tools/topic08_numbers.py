@@ -289,7 +289,7 @@ RMSNORM_BITWISE_EXC, RMSNORM_BITWISE_NOEXC = "99.9987%", "74.1%"   # 默认写�
 # L3（11-06）：「离 10 份 GPU 均值几个标准差」只用原始 10 个值算一次，fig-ruler、fig-baseline、正文、讲义共用
 SIGMAS_10 = tuple((x - GPU_RUNS10_TAIL_MEAN) / _sd10 for x in TPU_ARMS)
 assert [round(abs(z), 1) for z in SIGMAS_10] == [5.3, 4.1, 2.9], SIGMAS_10
-SIGMA_RANGE = "2.9 到 5.3"
+SIGMA_RANGE = "2.9 到 5.3"   # ⛔ 2026-11-15 起课件不用（尺子改用正式定义 N，见 RULER10_N）
 
 # ── 2026-11-05 · 图修订：交叉核对二（TPU 执行噪声 28 对）其余三项、干预臂 loss 前后半（实测）──────────────
 # 出处：对齐实践的 golden 总表「第一层结果」表，交叉核对行（噪声 ＝ TPU 当前配置重标的 28 对，被测 v5p 当前配置）。
@@ -1756,3 +1756,35 @@ assert ["%.2f" % (abs(v) / M3_MH_NOISE) for v in M3_MH_ON] == ["0.15", "0.55", "
 assert max(abs(v) for v in M3_MH_ON) < min(M3_MH_OFF)                                  # 两组不重叠
 M3_MTPIN_1K = {"off": (3.02, 4.28, 4.06), "on": (4.50, 3.31, 5.16)}                     # MTP 输入那处开关 1000 步 3 对 3（倍尺子）：范围重叠
 assert min(M3_MTPIN_1K["on"]) < max(M3_MTPIN_1K["off"])
+
+# ── 2026-11-15 · 第一节的尺子改用正式定义（负责人试讲第一节后定）──
+# 10 份同设置 GPU 运行两两配对 45 对，每对算第 301–1000 步主 loss 逐步相对差的带符号均值，取绝对值的最大值 ＝ N（正负对称）。
+# 从原始运行逐步记录重算（私有脚本，只记数）：最大那一对是两份「同设置再跑」的 GPU 运行，6.757e-5。
+RULER10_N = 6.757e-5
+RULER10_PAIRS = 45
+assert abs((max(GPU_RUNS10_TAIL) - min(GPU_RUNS10_TAIL)) - RULER10_N) < 0.01e-5      # 一阶近似：各份对第一份的极差
+TPU_ARMS_R = tuple(abs(v) / RULER10_N for v in TPU_ARMS)                            # 原样／不开重算／改片上内存上限
+assert all(abs(a - float(b)) < 0.02 for a, b in zip(TPU_ARMS_R, ("2.45", "2.00", "1.53"))), TPU_ARMS_R   # 原始运行直接算 2.45／2.00／1.53（这里的 TPU 读数只取三位有效数字）
+TPU_ARMS_R_T = ("2.45", "2.00", "1.53")                                             # 原始运行直接算的倍数（课件写这个）
+RULER10_N_T = "6.76e-5"
+
+# ── 2026-11-15 · 32K RMSNorm 二分改用正式尺子（负责人：全课不提标准差）──
+# GPU 8 份两两 28 对，主 loss 窗口内逐步相对差的带符号均值（对第一份 GPU），取 |·| 最大 ＝ N；被测同样对第一份 GPU。私有脚本从原始运行重算。
+M3_BIS_N = {"51:300": 3.70e-6, "51:120": 7.19e-6}
+M3_BIS_R300 = [("不加（第 2 级，1000 步运行）", -1.983e-4, 53.6), ("投影 FP32 累加", -1.997e-4, 54.0), ("精确超越函数", -2.000e-4, 54.1),
+               ("精确 Adam ＋ 正交化迭代的舍入", -1.971e-4, 53.3), ("四处一起（见底注）", -7.27e-6, 1.97)]
+M3_BIS_R120 = [("只加其余三处之一（三条运行）", -2.03e-4, 28.3), ("只加 RMSNorm scale", -3.87e-6, 0.54)]
+for _lab, _v, _r in M3_BIS_R300:
+    assert abs(abs(_v) / M3_BIS_N["51:300"] - _r) < 0.15, (_lab, _v, _r)
+for _lab, _v, _r in M3_BIS_R120:
+    assert abs(abs(_v) / M3_BIS_N["51:120"] - _r) < 0.15, (_lab, _v, _r)
+M3_DRIFT_S100 = (-2.69e-4, -1.64e-5, 1.13e-5)   # 第 100 步：TPU 对第一份 GPU ／ GPU 另 7 份对第一份的最小、最大
+M3_MTP_R300 = (-5.77e-4, 2.47e-5, 23.3)         # MTP 第 51–300 步：TPU ／ N ／ r
+
+# 2026-11-15 · 全课不提标准差：GPU 16 份留一法（每份对其余 15 份均值）第 551–1000 步窗口均值的范围，替代原来的 ± 留一法 sd
+with open(os.path.join(HERE, "topic08_minidrift.json"), encoding="utf-8") as _fh:
+    _MDJ = json.load(_fh)
+_loo_w = [sum(r[550:1000]) / 450.0 for r in _MDJ["主loss"]["GPU留一"]]
+FC_GPU_LO, FC_GPU_HI = min(_loo_w), max(_loo_w)
+assert abs(FC_GPU_LO - (-4.52e-6)) < 0.01e-6 and abs(FC_GPU_HI - 3.16e-6) < 0.01e-6
+FC_GPU_RANGE_T = "%s 到 %s" % (tx(FC_GPU_LO, "%.1e"), tx(FC_GPU_HI, "%.1e", plus=True))
