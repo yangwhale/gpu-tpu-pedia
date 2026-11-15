@@ -1142,7 +1142,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </details>
 
   <h3 id="s1-4">1.4　这一讲跟着走的那一次</h3>
-  <p>混元 3 截前 4 层，GPU B200×8 搬到 TPU v5p（8 颗芯片）。地基全部逐位，第 1 步 loss 只差2.5e-6；可是三百步以后，TPU 的 loss 平均比 GPU 低约 1.7e-4，参数范数也多涨一截。方法是通用的；具体的数只对这个设置（截 4 层、1000 步、学习率 1e-5 不变）成立。</p>
+  <p>混元 3 截前 4 层，GPU B200×8 搬到 TPU v5p（8 颗芯片）。地基全部逐位，第 1 步 loss 只差 2.5e-6；可是三百步以后，TPU 的 loss 平均比 GPU 低约 1.7e-4，参数范数也多涨一截。方法是通用的；具体的数只对这个设置（截 4 层、1000 步、学习率 1e-5 不变）成立。</p>
   <details class="foldfig"><summary><b>这一讲用到的几组运行</b>：① 到 ⑥ 是哪几份 GPU 运行、各用在哪，用到时回这儿查</summary>
   <table class="t9"><thead><tr><th>这一讲用到的几组运行</th><th>多少</th><th>用在哪</th></tr></thead><tbody>
   <tr><td>① GPU 默认设置</td><td>10 份</td><td>第 1 步那几级（L0–L3）的参照；第一节的尺子、<a href="#s3-4">§3.4</a> 的基线贴边；<a href="#s7-5">§7.5</a> 的零点是另跑的同设置 4 份（带探针）的均值</td></tr>
@@ -1154,9 +1154,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>⑥ 真精确（精确轨迹再改一处，第九节）</td><td>1 份</td><td><a href="#s9-3">§9.3</a> 的真精确参照</td></tr>
   <tr><td>TPU</td><td>3 种跑法；扰动臂 7 个＋基线，28 对</td><td>第一节的三个点；TPU 自己的执行噪声（<a href="#s10-3">§10.3</a> 的回归）</td></tr>
   <tr><td>TPU 扰动组（定案后）</td><td>9 份（v5p 5、v7x 4），只改执行参数</td><td><a href="#s9-4">§9.4</a> 只报：TPU 不是挑出来的好样本</td></tr>
-  </tbody></table></details>
-  <p>编号先不用记，只记最后定下来的标准答案叫「修好的 golden」（表里标 ⑤，第九节讲它怎么来的）；用到别的那几份时会说名字。下文的「第一关」＝对修好的 golden 判过不过；「第二关」＝对 GPU 生产 golden 写清差在哪、差多少，记「已解释差异」（<a href="#s9-3">§9.3</a>）。</p>
-  <p>开头说的「第二次迁移」（混元 4 的缩小版）和「第三次迁移」（混元 4 的另一个尺寸），用到时再介绍。</p>
+  </tbody></table>
+  <p>编号不用记，只记最后定下来的标准答案叫「修好的 golden」（表里标 ⑤，第九节讲它怎么来的）；用到别的那几份时会说名字。下文的「第一关」＝对修好的 golden 判过不过；「第二关」＝对 GPU 生产 golden 写清差在哪、差多少，记「已解释差异」（<a href="#s9-3">§9.3</a>）。</p>
+  </details>
+  <p>前五节备工具，后五节回来查它。另外两次迁移当旁证，用到时都先报名字：</p>
+  <table class="t9"><tbody>
+  <tr><td style="white-space:nowrap"><b>第二次迁移</b></td><td>混元 4 的缩小版（一个更新的、带稀疏注意力的 MoE 模型），同一套方法在它身上又走了一遍</td></tr>
+  <tr><td style="white-space:nowrap"><b>第三次迁移</b></td><td>混元 4 的另一个尺寸，不先对齐代码，从生产代码原样起步、一个开关一个开关地打开；它的几个发现，都是「换了一个条件，之前的验证就不作数」</td></tr>
+  </tbody></table>
 
   <div class="note"><span class="t">后面常出现的三个词，先认个脸</span>
   <b>TPU 自比</b>：在 TPU 上只改一样东西（换并行、关一个编译开关、升版本……），跟一次确认过的 TPU 运行比。尺子仍借 GPU 重跑，因为 TPU 自己重跑逐位相同、量不出宽度。第二次迁移的很多例子来自它（<a href="#s10-1">§10.1</a> 汇总）。<br>
@@ -1222,7 +1227,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </div></section>
 
 <section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>地基 L0：输入必须一位不差</h2></div>
-  <p class="lead">L0 只有一条要求：两边的输入一位不差。这一级不过，后面所有比较都没有意义。</p>
+  <p class="lead">L0 只有一条要求：两边的输入一位不差。这一级不过，后面量到的任何差，都说不清是算出来的还是喂出来的。喂进去的有三样：数据、权重、配置；验法只有一个：不信过程，只比结果，把两边真正吃进去的东西拿出来逐位比。</p>
+
+  <p class="trail-t">三样输入，一个验法（只比结果、逐位比），第 1 步 loss 收口</p>
+  <div class="trail"><div class="st"><div class="tq">① 数据（2.1）</div><div class="tk">16,000</div><div class="tw">个单元（步 × 卡 × 微批）各比指纹，全部相同</div></div><div class="ar">→</div><div class="st"><div class="tq">② 权重（2.2）</div><div class="tk">1,781</div><div class="tw">个张量转过去再转回来，逐字节全部相同</div></div><div class="ar">→</div><div class="st"><div class="tq">③ 配置（2.3）</div><div class="tk">0.033</div><div class="tw">实际生效的权重衰减（配置文件写 0.1）</div></div><div class="ar">→</div><div class="st end"><div class="tq">④ 收口（2.4）</div><div class="tk">2.5e-6</div><div class="tw">第 1 步 loss 两边的相对差：地基平了</div></div></div>
+
 
   <h3 id="s2-1">2.1　数据：原样回放，不重读</h3>
 <figure class="fbox fwide" id="fig-replay"><svg viewBox="0 0 1400 606" width="100%" role="img" aria-label="上面一排是 GPU 的 8 张卡，每张卡这一步吃两小份数据 m0 和 m1，一共 16 个单元，每个单元记一个指纹。中间一排是 TPU 的 8 个设备按同样顺序回放：设备 d 的第 m 份就是 GPU 第 d 张卡的第 m 份，16 个单元逐个比指纹，1000 步共 16,000 个全部相同。下面一条：如果改用 TPU 自己的数据加载器、不重排，内容虽然一样，只有八分之一的单元落到同号设备上。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -1391,7 +1400,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="479" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">对照表要写「实际生效的值」和证据，不写「配置里的值」</tspan></text>
 </svg><figcaption><b>虚线是写的，实线是用的。</b><span class="capmore"><br><em>证据是每一步从优化器参数组读出来的值，不是配置文件。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：每一步从 GPU 优化器参数组读出的权重衰减，1000 步全是 0.033（一维参数和 bias 是 0）。两个默认值都来自框架预训练模板：优化器 weight_decay 0.1；调度器 start_weight_decay = end_weight_decay = 0.033、constant，构造时就覆盖一次、之后每步覆盖。TPU 侧配 adam_weight_decay: 0.033。0.033 的来历框架没写，没查到。</p>
 <p>⚠️ 本课推导：0.1 ÷ 0.033 ≈ 3。</p></details></figure>
-  <p><b>两个默认值分了家。</b>这不是谁写错了：我们用的 GPU 训练框架（Megatron-Bridge），预训练模板里优化器写 <code>weight_decay = 0.1</code>，学习率调度器里另写了一对 <code>start_weight_decay = end_weight_decay = 0.033</code>、constant。调度器在第一次参数更新之前就把优化器参数组的权重衰减改成自己的值，之后每一步都改，所以 0.1 一步都没用上（一维参数和 bias 是 0）。这是上游的默认行为，用这个模板、只改优化器那一项的人都会碰上；要改，得改调度器那两项。直接用 Megatron 自己的命令行入口不会碰上：那里调度器的起止值默认就取 <code>--weight-decay</code>。0.033 这个常数为什么是它，框架的提交记录里没写，我们没查到出处。</p>
+  <p><b>两个默认值分了家。</b>GPU 训练框架（Megatron-Bridge）的预训练模板里，优化器写 <code>weight_decay = 0.1</code>，学习率调度器里另写了一对起止值 0.033。调度器在第一次更新之前就把优化器的值改成 0.033、之后每一步都改，<b>0.1 一步都没用上</b>。TPU 照抄配置文件，每一步就多衰减三倍，而且不报任何错。</p>
+  <details class="foldfig"><summary><b>机制细节</b>：哪两项、谁会碰上、怎么改</summary>
+  <p>这不是谁写错了：预训练模板里优化器写 <code>weight_decay = 0.1</code>，学习率调度器里另写了一对 <code>start_weight_decay = end_weight_decay = 0.033</code>、constant。调度器在第一次参数更新之前就把优化器参数组的权重衰减改成自己的值，之后每一步都改（一维参数和 bias 是 0）。这是上游的默认行为，用这个模板、只改优化器那一项的人都会碰上；要改，得改调度器那两项。直接用 Megatron 自己的命令行入口不会碰上：那里调度器的起止值默认就取 <code>--weight-decay</code>。0.033 这个常数为什么是它，框架的提交记录里没写，我们没查到出处。</p>
+  </details>
   <details class="foldfig"><summary><b>怎么发现的、证据是什么</b></summary>
   <p>在 GPU 上用 FP64 重放优化器时对不上：不衰减的一维参数对到 FP32 舍入，二维参数的更新量差 1e-3 量级（rel_L2），最小二乘拟合出来正好是 0.033。再看每一步从优化器参数组里读出来的权重衰减，1000 步全是 0.033。改用每步读出的值以后，FP64 重放全部张量都在门槛内。TPU 那边从第一次起就配 0.033、一维参数按名字排除；配置检查和日常回归都钉死这个值。</p>
   </details>
@@ -1418,11 +1430,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul>
   <p>办法只有一条：对照表逐行对<em>写法</em>，不只对名字；参照框架里找不到实现的，协议写了也不算。</p></details>
 
-  <h3 id="s2-4">2.4　续训，和一个最便宜的自检</h3>
-  <p>第 10 步存档、恢复后跑第 11–20 步，跟一口气跑下来逐位相同：数据位置、逐步的数、FP32 状态都一样。</p>
+  <h3 id="s2-4">2.4　收口：第 1 步 loss，最便宜的自检</h3>
   <div class="note ok"><span class="t">第 1 步 loss：地基铺平了没有，一眼就看出来</span>
     第 1 步还没有任何更新，两边 loss 只差前向的舍入。混元 3（v5p）：TPU 11.465785，GPU 11.465756，相对差 ＋2.5e-6。
     <b>第 1 步就差得离谱，先回头查 L0，别去查数值。</b></div>
+  <details class="foldfig"><summary><b>续训也要逐位</b>（课上不讲）</summary>
+  <p>第 10 步存档、恢复后跑第 11–20 步，跟一口气跑下来逐位相同：数据位置、逐步的数、FP32 状态都一样。</p></details>
 <details class="foldfig"><summary><b>考考自己</b>：权重转换后抽 100 个张量比，全对，能说转换没问题吗？</summary><p>不能。没抽到的那 1,681 个可能就有一个转置错了；而且 FP32 主权重上小于 BF16 半格的错，第 1 步前向根本看不见。要全量逐位比，加载以后再从设备上读一遍。</p></details>
   <p class="bridge">这一节留下的问题：一千步的差，怎么压成几个能判的数？</p>
 </div></section>
