@@ -482,7 +482,7 @@ __FIG_REPLAY__
   <ul>
     <li><b>不抽样</b>：抽样比，没抽到的那个坏了查不出来。</li>
     <li><b>加载以后再读一遍</b>：训练开始前从设备上读出来，跟 GPU 第 0 步逐位比。主权重上小于 BF16 半格的错，舍成 BF16 后第 1 步前向看不见，第 2 步才分叉。</li>
-    <li><b>参照那一侧也要自检</b>：转换往返逐位，不等于训练时真载入了。同期另一次迁移里，GPU 训练入口没设载入路径，框架按初始化方法随机建了权重，第一轮 golden 整轮作废。训练入口在第 1 步之前逐参数对检查点比一遍，不过就退出。</li>
+    <li><b>参照那一侧也要自检</b>：转换往返逐位，不等于训练时真载入了。训练入口在第 1 步之前逐参数对检查点比一遍，不过就退出。</li>
   </ul>
   <details class="foldfig"><summary><b>张量个数怎么数</b>：两种命名下的计数对得上</summary>
   <p>这里按开源权重的命名数，一个矩阵一个张量：3 个 MoE 层 × «EXPERTS» 个专家 × 3 个矩阵（gate、up、down；Megatron 里 fc1 ＝ gate 和 up 拼在一起，fc2 ＝ down）＝ «HF_EXPERT_TENSORS_T»，加其余 «HF_OTHER_TENSORS» 个（norm、投影、路由、共享专家、词嵌入、输出层）。§7.5 状态互换的文件按 GPU 框架的布局存，q/k/v 合成一个、gate/up 合成一个，每个专家只剩 2 个矩阵：«MG_EXPERT_TENSORS_T» 加其余 «MG_OTHER_TENSORS» 个，同样的元素数出 «SWAP_STATE_TENSORS» 个。</p></details>
