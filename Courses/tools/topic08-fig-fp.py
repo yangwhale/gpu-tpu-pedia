@@ -230,7 +230,7 @@ def fig_tf32():
         f.t(24, y + 20, lab, INK, True, 15)
         f.t(24, y + 44, sub, GY, size=13)
         f.box(bx, y + 4, LX(v) - bx, 32, c, c, 4)
-        f.t(LX(v) + 10, y + 27, "%.2e" % v, c, True, 15)
+        f.t(LX(v) + 10, y + 27, ("%.2e" % v).replace("e-0", "e-"), c, True, 15)
     xc = LX(N.TF32_PROBE_OK)
     f.line(xc, py + 20, xc, py + 270, GY2, 2, dash="6 5", arrow=False)
     f.t(xc + 8, py + 280, "判据：启动时实测 ≤ 1e-5 才算真关", GY, True, 14)
