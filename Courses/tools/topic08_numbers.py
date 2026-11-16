@@ -375,10 +375,7 @@ ALL_MARGIN_LO, ALL_MARGIN_HI = 3.1e-4, 8.0e-4                         # 全部 t
 ALL_MARGIN_HI_T = tx(ALL_MARGIN_HI, "%.1e"); _lock("ALL_MARGIN_HI_T", ALL_MARGIN_HI_T, "8.0e-4")
 ROUTE_SAME_IN_DIFF = 4e-6                                             # 喂相同路由输入时两边 logits 仍差（3.8e-6–4.0e-6 取上沿）
 FP32_FLIP_MARGIN = 1.6e-6                                             # 两边全程 FP32 时第 1 层翻的那个 token 的分差
-# 参考档
-REF_LOSS_GATE, REF_RELL2_GATE = 2e-4, 0.01           # 另一个已上线迁移项目的固定线（首步与窗口 loss；逐层 rel_L2）
-LAYER_RELL2_FAIL = (0.016, 0.020, 0.028)             # v5p 第 1 步逐层回放，MoE 第 1–3 层的 rel_L2（实测）；这几层参考档「不适用」（受路由翻转影响），严格档 R 比过
-assert all(x > REF_RELL2_GATE for x in LAYER_RELL2_FAIL)
+LAYER_RELL2_FAIL = (0.016, 0.020, 0.028)             # v5p 第 1 步逐层回放，MoE 第 1–3 层的 rel_L2（实测）；R 比过
 L_RELL2_1_T, L_RELL2_2_T, L_RELL2_3_T = ("%.3f" % x for x in LAYER_RELL2_FAIL)
 _lock("L_RELL2_2_T", L_RELL2_2_T, "0.020")
 # 窗口化开关、golden 一步步（出处：fig8-golden 的同一组实测：v5p 开关前配置对 ②③④ 的参数范数带符号均值）
@@ -674,10 +671,7 @@ ABL_FP32_ONESHOT_300_T = tx(ABL_FP32_ONESHOT[2], "%.1e"); _lock("ABL_FP32_ONESHO
 ABL_CHUNK4096_T = tx(ABL_CHUNK4096_MAX, "%.1e"); _lock("ABL_CHUNK4096_T", ABL_CHUNK4096_T, "−5.6e-6")
 ABL_MS_T = "%.1f ms 对 %.1f ms" % (ABL_MS_BF16_CHUNK, ABL_MS_FP32_CHUNK); _lock("ABL_MS_T", ABL_MS_T, "7.2 ms 对 71.7 ms")
 ABL_MS_PROD_T = "%.2f ms" % ABL_MS_PROD
-# 参考档逐层线的来历（出处：对齐实践的方法文档「两档门槛 · 参考值」）：同类项目注意力层输出逐层前向实测 rel_L2，线取 1%
-REF_LAYER_MEAS_T = "3e-3 到 5.4e-3"
-REF_LAYER0_FWD, REF_LAYER0_BWD = 0.0040, 0.0021     # 本例只在第 0 层稠密层用这条线：前向 ／ 反向（两平台相同）
-assert REF_LAYER0_FWD < REF_RELL2_GATE and REF_LAYER0_BWD < REF_RELL2_GATE
+REF_LAYER0_FWD, REF_LAYER0_BWD = 0.0040, 0.0021     # 第 1 步逐层回放，第 0 层稠密层 rel_L2：前向 ／ 反向（两平台相同）
 # 张量核在真实矩阵乘里也偏一点：合成正数、K ＝ 4096 → 7.0e-5（TC_BIAS_K 第二项）
 _j3 = lambda xs, specs: " ／ ".join(tx(x, sp, plus=True) for x, sp in zip(xs, specs))
 ABL_BF16_ONESHOT_T = _j3(ABL_BF16_ONESHOT, ("%.2e",) * 3); _lock("ABL_BF16_ONESHOT_T", ABL_BF16_ONESHOT_T, "−6.51e-4 ／ −6.10e-4 ／ −4.60e-4")
