@@ -231,15 +231,15 @@ def fig_twoaxis():
                "左块换到 v7x：画出的 160 个点里 148 个超出噪声，可全部贴着纵轴 1，一个都没变远；没画的多路残差小参数里，另有 3 个离 FP64 远 18–46 倍，见图下。"
                "中块改成纯数据并行：只有词嵌入梯度一个红点冲到 R 3.62。右块关掉编译器的省舍入：词嵌入梯度冲到 R 26.1（离 FP64 是 golden 的 27 倍），另有一个路由门控权重 1.20 倍刚过线。")
     y0 = f.header("第 1 步逐张量：一把尺子量差多少，另一把量离真值多远",
-                  "一个点 ＝ 一个参数张量的梯度　横：对 TPU 基线的差 ÷ GPU 重跑的差（＞ 1 超出噪声）　纵：离 CPU FP64 的距离 ÷ 原 TPU 基线和 GPU 里离得远的那个（＞ 1.2 丢了精度）",
-                  [("#e6f4ea", "在噪声里"), ("#eceff3", "换了顺序：差变大，离真值没变远"), ("#fce8e6", "丢了精度"), (RD, "词嵌入梯度")])
+                  "每个蓝点 ＝ 一个参数张量第 1 步的梯度（每块 160 个）　横轴 r：跟 TPU 基线差多少 ÷ GPU 自己重跑差多少（＞ 1 超出噪声）　纵轴 R：离 FP64 真值多远 ÷ 原来离真值多远（＞ 1.2 丢了精度）　两轴都是对数刻度",
+                  [(BL, "一个参数张量"), (RD, "词嵌入梯度"), ("#e6f4ea", "在噪声里"), ("#eceff3", "超出噪声但只换了顺序"), ("#fce8e6", "丢了精度")])
     PW, GAP, PH = 448, 28, 400
     XL, XH, YL, YH = 0.1, 1e4, 0.15, 40.0
 
     for k, a in enumerate(S1):
         px = k * (PW + GAP)
         py = f.panel(px, y0, PW, PH, a["label"], BL if k == 0 else RD)
-        ax0, ax1, ay0, ay1 = px + 58, px + PW - 18, py + 20, py + PH - 92
+        ax0, ax1, ay0, ay1 = px + 58, px + PW - 18, py + 36, py + PH - 92
 
         def X(v):
             return ax0 + (math.log10(max(min(v, XH), XL)) - math.log10(XL)) / (math.log10(XH) - math.log10(XL)) * (ax1 - ax0)
@@ -258,7 +258,12 @@ def fig_twoaxis():
             f.t(ax0 - 8, Y(v) + 5, lab, GY, size=13, anchor="end")
         # ⭐ 通宵第六棒：1.2 原来也写在纵轴左边，跟 1 叠成一团；挪到红虚线左端上方
         f.t(ax0 + 6, Y(1.2) - 6, "1.2", RD, True, 13)
-        f.t((ax0 + ax1) / 2, ay1 + 42, "对基线的差 ÷ GPU 噪声", GY, size=13, anchor="middle")
+        f.t((ax0 + ax1) / 2, ay1 + 42, "横轴 r：对基线的差 ÷ GPU 噪声（对数）", GY, size=13, anchor="middle")
+        f.t(ax0 - 50, ay0 - 10, "纵轴 R：离真值 ÷ 原来（对数）", GY, size=12)
+        # 11-16 负责人：三块底色就地写名字，不用回头查图例
+        f.t(X(0.32), Y(0.25), "在噪声里", GR, True, 12, "middle")
+        f.t(X(40), Y(0.45), "超出噪声，只换了顺序", GY, True, 12, "middle")
+        f.t(X(1500), Y(12), "丢了精度", RD, True, 13, "middle")
         nover = sum(1 for x, _y, _e in a["points"] if x > 1)
         nfar = sum(1 for x, y, _e in a["points"] if y > 1.2)
         for x, y, e in a["points"]:
