@@ -491,5 +491,7 @@ fig_loo()
 fig_integrator()
 fig_twoaxis()
 fig_rpipe()
-fig_step1()
-fig_quad()
+# 2026-11-16 负责人审图：主线上换成课件里的小表（topic08-build.py 的 mini），这张图停画；函数留着备查，旧 svg 不删。
+# fig_step1()   # 弃用
+# 2026-11-16 负责人审图：主线上换成课件里的小表（topic08-build.py 的 mini），这张图停画；函数留着备查，旧 svg 不删。
+# fig_quad()   # 弃用

@@ -94,5 +94,7 @@ def fig_wd():
     f.save("fig8-wd.svg", yb + 14)
 
 
-fig_replay()
-fig_wd()
+# 2026-11-16 负责人审图：主线上换成课件里的小表（topic08-build.py 的 mini），这张图停画；函数留着备查，旧 svg 不删。
+# fig_replay()   # 弃用
+# 2026-11-16 负责人审图：主线上换成课件里的小表（topic08-build.py 的 mini），这张图停画；函数留着备查，旧 svg 不删。
+# fig_wd()   # 弃用

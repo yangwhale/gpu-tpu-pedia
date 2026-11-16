@@ -289,4 +289,5 @@ def fig_rR():
 fig_cos()
 fig_rratio()
 fig_flip()
-fig_rR()
+# 2026-11-16 负责人审图：主线上换成课件里的小表（topic08-build.py 的 mini），这张图停画；函数留着备查，旧 svg 不删。
+# fig_rR()   # 弃用

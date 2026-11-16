@@ -67,6 +67,10 @@ head += """
 table.t9 { border-collapse:collapse; margin:12px 0; font-size:15px }
 table.t9 td, table.t9 th { padding:6px 12px; border-bottom:1px solid #e8eaed; text-align:left; vertical-align:top }
 table.t9 th { color:var(--gray); font-weight:600 }
+table.t9.mini { font-size:16.5px }
+table.t9.mini th { text-transform:none; letter-spacing:0 }
+table.t9.mini caption { caption-side:top; text-align:left; font-weight:700; color:var(--ink); padding:0 0 6px }
+table.t9.mini tr.epsrow td { background:#e6f4ea }
 p.bridge { color:var(--gray); border-left:3px solid var(--line); padding-left:12px }
 </style>"""
 head += """<style>
@@ -367,6 +371,56 @@ R_CARD = (
     '  </div>\n')
 
 
+# ── 2026-11-16 负责人：「只写了两个数的图还有必要画吗」—— 主线上只承载一两个数、一句话或纯示意的图，换成小表。
+#   表在默认折叠（投屏）时照样显示；原图的出处与口径原样搬进表下折叠。图脚本里那几张已停画。
+def mini(tid, cap, head, rows, srcs):
+    th = "".join("<th>%s</th>" % h for h in head)
+    tr = "".join("<tr%s>%s</tr>" % ((' class="%s"' % r[0]) if r[0] else "", "".join("<td>%s</td>" % c for c in r[1:])) for r in rows)
+    src = "".join("<p>%s</p>" % x for x in srcs)
+    return ('\n  <table class="t9 mini" id="%s"><caption>%s</caption><thead><tr>%s</tr></thead><tbody>%s</tbody></table>\n'
+            '  <details class="figsrc"><summary>出处与口径</summary>%s</details>\n' % (tid, cap, th, tr, src))
+
+
+MINI_REPLAY = mini("tab-replay", "数据不重读，原样回放：每一步、每张卡、每一小份都对指纹",
+    ["", "怎么做"],
+    [("", "回放", "TPU 设备 d 的第 m 份 ＝ GPU 第 d 张卡的第 m 份微批（每步 8 卡 × 2 份 ＝ 16 个单元）"),
+     ("", "比什么", "每个单元的 tokens、labels、loss_mask、position_ids 各一个 sha256，另比每步非 padding 的 token 总数"),
+     ("", "结果", "<b>前 «FP_STEPS» 步 «FP_UNITS_T» 项对 GPU 全部相同</b>；之后按步号回放同一份批文件")],
+    ["📌 实测：每个单元记 tokens、labels、loss_mask、position_ids 各一个 sha256，另比每步非 padding 的 token 总数；对 GPU 比了前 30 步共 1,950 项，0 不同，之后按步号回放同一份批文件。",
+     "📌 实测：TPU 原生加载器读同一份数据，索引表逐字节相同、样本流逐位相同；按原样布局只有 2,000 / 16,000 个单元落到同号设备（两边梯度累积切分的方式不同），重排后全部逐位。"])
+
+MINI_WD = mini("tab-wd", "配置文件写的，不一定是实际用的：权重衰减写着 0.1，用的是 0.033",
+    ["权重衰减", "值"],
+    [("", "配置里写的（优化器 <code>weight_decay</code>）", "«WD_CONFIG»，一步都没用上"),
+     ("epsrow", "实际生效的（调度器 <code>start = end</code>，每一步覆盖）", "<b>«WD_EFFECTIVE»</b>"),
+     ("", "证据", "每一步从优化器参数组读出来的值，1000 步全是 «WD_EFFECTIVE»（一维参数和 bias 是 0）")],
+    ["📌 实测：每一步从 GPU 优化器参数组读出的权重衰减，1000 步全是 0.033（一维参数和 bias 是 0）。两个默认值都来自框架预训练模板：优化器 weight_decay 0.1；调度器 start_weight_decay = end_weight_decay = 0.033、constant，构造时就覆盖一次、之后每步覆盖。TPU 侧配 adam_weight_decay: 0.033。0.033 的来历框架没写，没查到。",
+     "⚠️ 本课推导：0.1 ÷ 0.033 ≈ 3。"])
+
+MINI_RR = mini("tab-rR", "小写 r 只说差多少，大写 R 才说谁错",
+    ["", "小写 r", "大写 R"],
+    [("", "怎么算", "两边的差 ÷ GPU 自己的噪声", "TPU 离 FP64 真值 ÷ GPU 离 FP64 真值"),
+     ("", "TPU、GPU 换个位置", "不变：说不出谁错", "变：能定责"),
+     ("", "怎么读", "≤ 1：在 GPU 自己的抖动以内", "≤ 1.2：只是换了顺序；＞ 1.2：TPU 更远，要查")],
+    ["📌 课上不讲的例子（备答）。实测（第二次迁移，优化器 8 步回放）：照 GPU 把那段迭代改到 BF16 之前，TPU 对 GPU 的更新差最多 12.8%、之后 1.6%；改之前 97% 的张量步 TPU 比 GPU 更接近 FP64，更新对 FP64 的相对误差中位数 3.0e-3 对 3.95e-2。GPU 那段迭代离 FP64 1.2%–13%（同一 8 步回放，范围）；两个中位数同一口径（约 13 倍）：TPU 原来 3.0e-3，TPU 照 GPU 写法改成 BF16 迭代后 3.95e-2。",
+     "📌 FP64 参照是同系数、同样 5 步的 Newton–Schulz 迭代，全程 FP64（结果文件写明），不是 SVD 的精确极分解，所以离 FP64 的距离只是精度差、不含算法差。",
+     "📌 落点带里那个例子是另一处：Adam 管的一个小张量，TPU 的除法、开方、偏差修正不够精确，R 3.82 → 1.00（§5.5 折叠）。⚠️ 两边都小于一个 BF16 格时，R 只是两种舍入之比，会来回摆；这时看绝对值。"])
+
+MINI_STEP1 = mini("tab-step1", "算例：词嵌入梯度（第二次迁移，TPU 自比；基线离 FP64 «C2_EMB_G_T»，GPU 三份中位数 «C2_EMB_GPU_T»，尺子 2.48e-3）。修好以后照样超出尺子：③ 之后一定要走 ④",
+    ["", "离 FP64", "对基线 d", "③ d ÷ 尺子", "④ R", "记作"],
+    [("", "纯数据并行", "«C2_EMB_DP_T»", "1.46e-2", "5.89（超出尺子）", "<b>«C2_EMB_R_T»</b>", '<b style="color:#c5221f">丢了精度</b>'),
+     ("", "修复后（FP32 累加）", "«C2_FIX1_EMB_T»", "3.37e-3", "1.36（超出尺子）", "<b>0.91</b>", "换了顺序")],
+    ["📌 实测（第二次迁移，TPU v5p 自比，运行库 0.0.46，对 TPU golden）：词嵌入梯度离 FP64 的 rel_L2，golden 4.00e-3、GPU 三份中位数 4.17e-3；纯数据并行 1.51e-2，对 golden 的 d 1.46e-2，尺子 2.48e-3，d ÷ 尺子 5.89，R 3.62；修复后 3.79e-3、d 3.37e-3、1.36、R 0.91。205 个张量的尺子中位数 2.68e-3。",
+     "📌 梯度：TPU 两侧都从第一动量倒推（Adam 参数 m ÷ (1 − β₁)，Muon 参数 buf ÷ (1 − β)），再除以第 1 步的裁剪系数得到裁剪前的梯度；倒推本身带进几个 2⁻²⁴ 量级的相对舍入，所以尺子不低于 2⁻²⁰（GPU 三份逐位相同的张量尺子是 0，205 个里 10 个）。",
+     "⚠️ 门槛 1.2 的来历（推断）：只差加法顺序时 R ≈ 1；多一次同量级的独立舍入，误差方差约翻倍，R ≈ √2 ≈ 1.41；1.2 取在两者之间。FP64 参照是用参照一侧（GPU）的同一套模型代码，在 CPU 上把第 1 步整网改成 FP64 重算的。GPU↔TPU 对齐时 R 的分母只用 GPU 几份的中位数（2026-11-11 起 6 份），另有「两边离 FP64 都小于一次 BF16 舍入（2⁻⁸）就按下限判过」一条。"])
+
+MINI_QUAD = mini("tab-quad", "两类尺子怎么配合：两样都过，才是只换了顺序",
+    ["", "第 1 步：没有丢精度的张量", "第 1 步：有丢精度的张量"],
+    [("", "<b>曲线：分不开</b>", "只是换了顺序，不是 bug", "多是曲线没灵敏到那一处"),
+     ("", "<b>曲线：超出</b>", "多半是第 1 步之后的事", '<b style="color:#c5221f">按 bug 查</b>')],
+    ["📌 四格各一个例子（第二次迁移，TPU 自比）。左上：换切分、升运行库 0.0.46→0.0.48（基准配置下），大多落在这一格。左下：比如只作用在权重一侧的开关，第 1 步权重还在 BF16 格点上，测不到。右上：比如关小矩阵乘改写：300 步曲线 r 0.94，第 1 步一个归一化权重离 FP64 远 1.40 倍（同一次运行输出头另有三个小参数远 18–46 倍，2026-11-12 加倍数上限后整次判超）。右下：纯数据并行、关省舍入：曲线 2.62、13.3，第 1 步词嵌入梯度 R 3.62、26.1（运行库 0.0.46 上的读数）。"])
+
+
 # ── §4.2「第 1 步逐张量定责」公式卡（夜间第二轮：公式散在 §4.1–4.3 和 fig-step1，收成一张；表里的数都是课件已有的实测）──
 R4_CARD = (
     '\n  <div class="adamcard">\n'
@@ -555,8 +609,7 @@ __FIG_FUNNEL__
 ''' + TRAIL2 + '''
 
   <h3>2.1　数据：原样回放，不重读</h3>
-__FIG_REPLAY__
-  <p>两边各读各的数据集，顺序、切分、分到哪张卡，任何一处不同，比的就不是同一个训练。所以 TPU 不读数据集，只回放 GPU 存下来的那一份。</p>
+''' + MINI_REPLAY + '''  <p>两边各读各的数据集，顺序、切分、分到哪张卡，任何一处不同，比的就不是同一个训练。所以 TPU 不读数据集，只回放 GPU 存下来的那一份。</p>
   <details class="foldfig"><summary><b>「设备 d」怎么对上「GPU 第 d 张卡」</b>：在 TPU 上照做时的定义和核对办法</summary>
   <p>框架建设备网格时会按物理拓扑重排设备，网格上的第 d 片不一定是设备列表里的第 d 个；梯度累积拆微批又发生在编译后的程序里面。所以按「全局批的第几行」来排：GPU 第 d 张卡的第 m 份放在全局批第 d·G＋m 行（G 是每卡的微批数。这是本例框架的拆法，别的框架、甚至同一框架的别的训练器可能不同，按自己的代码核对）。排错了不报错，编译器会悄悄搬数据，分组照样错。核对办法：组好全局批以后遍历每个设备上那一片，用它的索引去对指纹。</p></details>
 
@@ -575,8 +628,7 @@ __FIG_REPLAY__
   <p>参数全部比；FP32 主权重比的是 GPU 那边抓下来的 «MASTER_CMP_TENSORS» 个张量。</p></details>
 
   <h3>2.3　配置：对「实际生效的值」</h3>
-__FIG_WD__
-  <p><b>两个默认值分了家。</b>GPU 训练框架（Megatron-Bridge）的预训练模板里，优化器写 <code>weight_decay = 0.1</code>，学习率调度器里另写了一对起止值 0.033。调度器在第一次更新之前就把优化器的值改成 0.033、之后每一步都改，<b>0.1 一步都没用上</b>。TPU 照抄配置文件，每一步就多衰减三倍，而且不报任何错。</p>
+''' + MINI_WD + '''  <p><b>两个默认值分了家。</b>GPU 训练框架（Megatron-Bridge）的预训练模板里，优化器写 <code>weight_decay = 0.1</code>，学习率调度器里另写了一对起止值 0.033。调度器在第一次更新之前就把优化器的值改成 0.033、之后每一步都改，<b>0.1 一步都没用上</b>。TPU 照抄配置文件，每一步就多衰减三倍，而且不报任何错。</p>
   <details class="foldfig"><summary><b>机制细节</b>：哪两项、谁会碰上、怎么改</summary>
   <p>这不是谁写错了：预训练模板里优化器写 <code>weight_decay = 0.1</code>，学习率调度器里另写了一对 <code>start_weight_decay = end_weight_decay = 0.033</code>、constant。调度器在第一次参数更新之前就把优化器参数组的权重衰减改成自己的值，之后每一步都改（一维参数和 bias 是 0）。这是上游的默认行为，用这个模板、只改优化器那一项的人都会碰上；要改，得改调度器那两项。直接用 Megatron 自己的命令行入口不会碰上：那里调度器的起止值默认就取 <code>--weight-decay</code>。0.033 这个常数为什么是它，框架的提交记录里没写，我们没查到出处。</p>
   </details>
@@ -775,9 +827,8 @@ __FIG_COS__
 __FIG_RRATIO__
   <p><b>R ＝ TPU 离 FP64 的误差 ÷ GPU 离 FP64 的误差</b>：≈ 1 是两边一样远、只差加法顺序；明显大于 1，是 TPU 多出一份同量级的误差（约 √2 ≈ 1.41；不一定只是一次舍入，§5.3 就是多舍了好几次小的）。</p>
   <p>但<b>对齐的目标仍然是 GPU</b>（参照自己偏了怎么办，第七节会碰上）。</p>
-  <p>R 和 §3.3 的 r 别混：小写 r 只说两边差多少，TPU 和 GPU 换个位置它不变，说不出谁错；大写 R 对的是真值，才能定责。同一处可以 r 很大、R 却说 TPU 更准：</p>
-__FIG_RR__
-  <details class="foldfig"><summary><b>R 为什么通常在 1 附近，什么时候不能这么读</b>：分母接近 0；两边的精度路径本来就不同</summary>
+  <p>R 和 §3.3 的 r 别混：小写 r 只说两边差多少，TPU 和 GPU 换个位置它不变，说不出谁错；大写 R 对的是真值，才能定责。同一处可以 r 很大、R 却说 TPU 更准（例子在下表的出处里）。</p>
+''' + MINI_RR + '''  <details class="foldfig"><summary><b>R 为什么通常在 1 附近，什么时候不能这么读</b>：分母接近 0；两边的精度路径本来就不同</summary>
   <ul>
     <li><b>通常 ≈ 1</b>：两边走同一条精度路径（BF16 输入、乘积精确、FP32 累加、出口舍一次），每一步舍入的大小同量级，只是先后顺序不同，离真值的距离也就差不多。</li>
     <li><b>分母接近 0</b>：GPU 那一份碰巧几乎正好（比如结果恰好落在格点上、或那一处根本没有舍入），R 会被除得很大，说明不了 TPU 错。看 R 之前先看分母本身有多大。</li>
@@ -787,8 +838,7 @@ __FIG_RR__
   </ul></details>
   <p><b>两把参照一起用</b>：第 1 步每个张量既跟基线比（超没超出 GPU 重跑的噪声），又跟 FP64 比（离真值远了没有）。超出噪声、离真值没变远，是<b>换了顺序</b>；远了 1.2 倍以上，才是<b>丢了精度</b>。一个张量走一遍：</p>
   <p class="codeline">''' + code("models/hunyuan4/frameworks/megatron/step1_ref.py", "FP64 参照（GPU 一侧代码在 CPU 上整网 FP64）") + "　" + code("models/hunyuan4/analysis/tpu_self_compare.py", "从动量反推梯度、逐张量定责、程序指纹") + '''</p>
-__FIG_STEP1__
-  <details class="foldfig"><summary><b>照着算第 1 步</b>：梯度从哪来、尺子为什么有下限、1.2 是怎么定的、R 的两种写法、FP64 由谁来算</summary>
+''' + MINI_STEP1 + '''  <details class="foldfig"><summary><b>照着算第 1 步</b>：梯度从哪来、尺子为什么有下限、1.2 是怎么定的、R 的两种写法、FP64 由谁来算</summary>
   <ul>
     <li><b>梯度从哪来</b>：TPU 上不挂钩子（§6），从第 1 步更新后的一阶动量倒推：m₁ ＝ (1 − β₁)·g，所以 g ＝ m₁ ÷ (1 − β₁)（用 Muon 的参数同理，动量缓冲 ÷ (1 − β)）；裁剪触发过的，再除以裁剪系数 ＝ 阈值 ÷ 裁剪前范数（混元 3 第 1 步裁剪前范数 «GRADNORM1_T»，系数约 «CLIP1_T»）。用二阶动量独立核一遍，混元 3 第 1 步相对差约 6e-8。</li>
     <li><b>尺子</b>：每个张量各自一个，等于 GPU 第 1 步三份两两的最大 rel_L2；倒推本身会带进几个 2⁻²⁴ 量级的相对舍入，所以尺子不低于 2⁻²⁰，GPU 三份逐位相同的张量也按这个下限算。</li>
@@ -797,8 +847,7 @@ __FIG_STEP1__
     <li><b>FP64 由谁来算</b>：一律用 GPU golden 那一侧的同一套模型代码（TPU 自比时也一样），在 CPU 上把第 1 步整网改成 FP64 重算；被测一侧的代码一行不用。裁判不能来自被测。</li>
   </ul></details>
   <p>顺带记一句：逐步曲线和第 1 步<b class="kn">两样都过</b>，才敢说这个改动只是换了求和顺序。</p>
-__FIG_QUAD__
-__FIG_TWOAXIS__
+''' + MINI_QUAD + '''__FIG_TWOAXIS__
   <p>左块是常态：九成张量超出 GPU 的噪声，<b class="kn">一个都没远过 1.2 倍</b>，只是换了顺序。中、右两块飞得远的都是词嵌入梯度 —— 为什么偏偏是它，第八节整节讲。</p>
   <details class="foldfig"><summary><b>这张图的口径</b>（课上不讲）：没画的 45 个小参数、换 v7x 为什么仍判「超」、换运行库后的读数</summary>
   <p>九成张量超出 GPU 的噪声，一个都没远过 1.2 倍（最远 1.11）。但这只对画出的 160 个成立：45 个多路残差混合的小参数单列没画（多路残差是混元 4 把残差流复制成 4 路、每层按权混合的结构），其中输出头的 3 个在 v7x 上离 FP64 远 18–46 倍，2026-11-12 单列加了倍数上限 5.22 以后，换 v7x 这次改判「超」。所以左块只说明大张量是换了顺序，换 v7x 本身不能算只换了顺序（§10.1）。中、右两块飞得远的都是词嵌入梯度（运行库 0.0.46 的读数；0.0.52 上 R 3.60、26.11，几乎一样。右块另有一个路由门控权重 1.20 倍刚过线）—— 为什么偏偏是它，第八节整节讲。</p></details>
@@ -1336,7 +1385,7 @@ __FIG_DDPCURVE__
   <tr><td>纯数据并行</td><td><b>«C2_EMB_DP_T»</b>（R «C2_EMB_R_T»）</td><td>比值中位数 «C2_OTHER_MED_T»；记「换了顺序」的 185 个 R ≤ 1.2，多路残差小参数另算</td></tr>
   <tr><td>基线 FSDP ／ GPU</td><td>«C2_EMB_G_T» ／ «C2_EMB_GPU_T»</td><td>—</td></tr>
   </tbody></table>
-  <p>R 的分母取基线和 GPU 中位数里离 FP64 远的那个（GPU 的 4.17e-3）：这样 TPU 自己的基线本来就偏时，不会被算成「新改动丢了精度」。§4.2 定责流程图第一行的算例就是它。多路残差混合的小参数照例单列（«C2_IHC_SKIP» 个超线，数值上病态，向来不定责）。</p>
+  <p>R 的分母取基线和 GPU 中位数里离 FP64 远的那个（GPU 的 4.17e-3）：这样 TPU 自己的基线本来就偏时，不会被算成「新改动丢了精度」。§4.2 算例小表第一行就是它。多路残差混合的小参数照例单列（«C2_IHC_SKIP» 个超线，数值上病态，向来不定责）。</p>
 
   </details>
 
@@ -2046,10 +2095,6 @@ FIGS = {
         '<b>灰带是尺子 ±N，蓝点都在带外，是 N 的 1.5 到 2.5 倍。</b><br><em>N ＝ GPU 10 份两两 45 对里最大的那个差；浅灰小点只给人看。</em>'),
     "__FIG_FUNNEL__": ("fig-funnel", "fig8-funnel.svg", "topic08-fig-intro.py",
         '<b>左边往上验收，右边往下排查。</b><br><em>每一级用什么尺子，见下面的表。</em>'),
-    "__FIG_REPLAY__": ("fig-replay", "fig8-replay.svg", "topic08-fig-l0.py",
-        '<b>每一格都要对上指纹。</b><br><em>画的是一步；对 GPU 逐格比了前 «FP_STEPS» 步（«FP_UNITS_T» 项），全部相同。</em>'),
-    "__FIG_WD__": ("fig-wd", "fig8-wd.svg", "topic08-fig-l0.py",
-        '<b>虚线是写的，实线是用的。</b><br><em>证据是每一步从优化器参数组读出来的值，不是配置文件。</em>'),
     "__FIG_DT__": ("fig-dt", "fig8-dt.svg", "topic08-fig-series.py",
         '<b>两团点一样宽，下面那团蓝点整体沉下去了。</b><br><em>点都是真实的逐步值。</em>'),
     "__FIG_MTP32K__": ("fig-mtp32k", "fig8-mtp32k.svg", "topic08-fig-series.py",
@@ -2074,10 +2119,6 @@ FIGS = {
         '<b>左边只有一根橙条（路由偏置均值）略过 1；中间没有点过 2；右边红点关掉 base2 以后挪到真值旁边。</b><br><em>三块都是实测；左块那项待定，同配置另五份的这一项都过。</em>'),
     "__FIG_RPIPE__": ("fig-rpipe", "fig8-rpipe.svg", "topic08-fig-yardstick.py",
         '<b>上面一条序列配两个括号；下面一路除下来，最后取最大。</b><br><em>上块是混元 3、下块是第二次迁移的算例，数都是实测。</em>'),
-    "__FIG_STEP1__": ("fig-step1", "fig8-step1.svg", "topic08-fig-yardstick.py",
-        '<b>上面一行四步；同一个张量两次读数，第三步都超出，第四步才分出谁丢了精度。</b><br><em>两行算例都是第二次迁移的词嵌入梯度。</em>'),
-    "__FIG_QUAD__": ("fig-quad", "fig8-quad.svg", "topic08-fig-yardstick.py",
-        '<b>先看右下那格：两样都不过，按 bug 查。</b><br><em>四格各一个例子在图下出处。</em>'),
     "__FIG_LOO__": ("fig-loo", "fig8-loo.svg", "topic08-fig-yardstick.py",
         '<b>灰点是纯噪声，不少落进「待定」那一格（1 到 2 之间）。</b>'),
     "__FIG_BASELINE__": ("fig-baseline", "fig8-baseline.svg", "topic08-fig-series.py",
@@ -2110,8 +2151,6 @@ FIGS = {
         '<b>每一行先找两条线分开的那一格：五个例子，五列各一个。</b><br><em>例子取自三次迁移；只讲在哪不一样，不讲差多大。</em>'),
     "__FIG_CAPTAIN__": ("fig-captain", "fig8-captain.svg", "topic08-fig-fp.py",
         '<b>红色那一小截就是秤的一格。</b><br><em>船和船长是比方，比例跟实测一样；右边四问是实测。</em>'),
-    "__FIG_RR__": ("fig-rR", "fig8-rR.svg", "topic08-fig-tensor.py",
-        '<b>左边看差多少，右边看谁更近真值。</b><br><em>示意：点距和圆半径只表示大小关系。</em>'),
     "__FIG_ELIDE__": ("fig-elide", "fig8-elide.svg", "topic08-fig-fp.py",
         '<b>中间一行五个点都在零的右边，四个出了灰段。</b><br><em>一个点是一次 1000 步的 TPU 运行；三行都是实测，「省了一半」的机制在最小复现里看到。</em>'),
     "__FIG_TRANS__": ("fig-trans", "fig8-trans.svg", "topic08-fig-fp.py",
@@ -2356,7 +2395,7 @@ for _tag in ("h2", "h3", "section", "div", "details", "table"):
     _c = _html.count("</%s>" % _tag)
     assert _o == _c, "<%s> 开 %d 个、闭 %d 个" % (_tag, _o, _c)
 # ⭐ 正文里手打的关键数，必须在对应的图里也出现（图是脚本现算的）—— 照专题五的 _NUM_LOCK。
-_NUM_LOCK = [("1,950", "fig8-replay.svg"), ("0.033", "fig8-wd.svg"), ("3.45", "fig8-judge.svg"), ("1.92", "fig8-judge.svg"), ("1.29", "fig8-judge.svg"), ("1.14", "fig8-judge.svg"),
+_NUM_LOCK = [("3.45", "fig8-judge.svg"), ("1.92", "fig8-judge.svg"), ("1.29", "fig8-judge.svg"), ("1.14", "fig8-judge.svg"),
              ("1.235", "fig8-rratio.svg"), ("1.41", "fig8-windowed.svg"), ("1.41", "fig8-inout.svg"), ("0.127", "fig8-drift.svg"),
              ("17.1", "fig8-rows.svg"), ("6.5e-4", "fig8-gauge.svg"), ("4.4e-04", "fig8-head.svg"),
              ("0.36%", "fig8-swap.svg"), ("+0.0182", "fig8-exact.svg"), ("0.0207", "fig8-decomp.svg"),
