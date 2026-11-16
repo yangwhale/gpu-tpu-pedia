@@ -76,14 +76,15 @@ head += """<style>
 table.ftab{width:100%;font-size:14px;margin:2px 0 4px}
 table.ftab td{padding-top:1px;padding-bottom:1px;line-height:1.4}
 table.ftab th{padding-top:2px;padding-bottom:2px}
-table.ftab details.fimp summary{cursor:pointer;padding:1px 0;font-size:14px;line-height:1.45}
-table.ftab details.fimp div{color:var(--gray);font-size:13.5px;margin:2px 0 4px 18px}
+table.ftab td.fimp{color:var(--ink);font-size:13.5px}
 table.ftab td:last-child{white-space:nowrap}
 table.ftab tr.fgrp td{background:var(--blue-l);padding:1px 12px;border-bottom:none;font-size:13.5px}
 table.ftab tr.fgrp span{color:var(--gray);font-size:13px}
 .newtag{margin-right:4px}
 .foundbox .fnote{font-size:13px;color:var(--gray);margin:2px 0;line-height:1.5}
 .foundbox .fbridge{font-weight:600;margin:2px 0 4px}
+/* 11-16 负责人：默认折叠时，屏上要讲的框不能跟着藏 —— 一句话框、先想一想、调查线标题、公式卡说明、节末过渡问句 */
+body.figonly section .note:not(.vocab), body.figonly section p.trail-t, body.figonly section p.asub, body.figonly section p.bridge{display:block !important}
 </style>"""
 head += """<style>
 .trail{display:flex;align-items:stretch;margin:14px 0 22px}
@@ -199,13 +200,13 @@ HERO = '''
 #   每条一行：现象（大白话）＋ 影响（带数，e 记法）＋ 在哪一节展开。只列不解释；案例一、案例二只报现象，不点破答案（第五节、第八节的防剧透规矩照旧）。
 #   条目只取正文已经讲到的；🆕 两条是 2026-11-14 图文 32K 的新发现，正文放在 §4.3、§5.4 的折叠里（课上不讲）。数字都是正文里已有的（新两条走 topic08_numbers）。
 def _frow(what, effect, where, href, new=False):
-    # 11-16 版式（负责人定：整张表留在一屏上）：「影响多大」收进每行的折叠，点开看
-    return ('<tr><td><details class="fimp"><summary>%s%s</summary><div>%s</div></details></td><td><a href="#%s">%s</a></td></tr>\n'
+    # 11-16 负责人：「影响多大」要直接看得到，不收折叠（夜里收进折叠那版撤回）
+    return ('<tr><td>%s%s</td><td class="fimp">%s</td><td><a href="#%s">%s</a></td></tr>\n'
             % ('<span class="newtag">🆕</span>' if new else "", what, effect, href, where))
 
 
 def _fgrp(title, n):
-    return '<tr class="fgrp"><td colspan="2"><b>%s</b>　<span>%d 处</span></td></tr>\n' % (title, n)
+    return '<tr class="fgrp"><td colspan="3"><b>%s</b>　<span>%d 处</span></td></tr>\n' % (title, n)
 
 
 _FOUND_ROWS = [
@@ -243,7 +244,7 @@ FOUND = ('''
 <div class="foundbox">
   <div class="ft">开场：三次迁移，真正查清的 ''' + str(_FOUND_N) + ''' 处</div>
   <p class="fsub">后两次迁移，两边为对上改了七十来处（改动台账 119 行，去掉诊断开关、工具和只核对不改的），编译器省掉的舍入一份程序就有 272 处，多数盖不过 GPU 自己的噪声。下面 16 处是真正查清的，三处在 GPU↔TPU 曲线上看不出、可会让配置或参照不作数。<b>点一行看影响多大</b>。</p>
-  <table class="t9 ftab"><tbody>
+  <table class="t9 ftab"><thead><tr><th>查出来的现象</th><th>影响多大</th><th>在哪讲</th></tr></thead><tbody>
 ''' + "".join(_fgrp(t, len(rows)) + "".join(_frow(*r) for r in rows) for t, rows in _FOUND_ROWS) + '''  </tbody></table>
   <p class="fnote">R：离 FP64 的距离之比（§4.2）；r：曲线上的差 ÷ GPU 自己的噪声上限，过 2 判不过（§3.3）；格：末位差几格（§5.5）；🆕 新查到，正文在折叠里。</p>
   <p class="fbridge">它们是怎么一处一处查出来的，就是这一讲。从最开头那件讲起 ↓</p>
@@ -324,17 +325,16 @@ TRAIL2 = trail("三样输入，一个验法（只比结果、逐位比），第 
 ])
 
 # ── §7 开头「输出头的形状与三个公式」卡（11-15 试讲：十二万项求和是哪一步、两个矩阵共不共用，之前没讲明白）──
-HEAD_CARD = (   # 11-16 负责人定：主线只留形状和 dH 一行，①②③ 和两个说明框收进卡下折叠
+HEAD_CARD = (   # 11-16 负责人：形状、①②③、dH 都在主线；只有两个说明框收进卡下折叠
     '\n  <div class="adamcard">\n'
-    '  <p class="asub"><b>先把输出头摆清楚</b>：混元 3，隐藏维 4096，词表 120,832，一个微批是一条 4096 个 token 的序列。</p>\n'
+    '  <p class="asub"><b>先把输出头摆清楚</b>：混元 3，隐藏维 4096，词表 120,832，一个微批是一条 4096 个 token 的序列；输入词嵌入和输出矩阵<b>不共用</b>，输出层是单独一份权重。</p>\n'
     '  <div class="aw"><span class="k">形状</span>隐状态 H：4096 token × 4096 维　　输出矩阵 W：120,832 词 × 4096 维（每个词一行）</div>\n'
-    '  <div class="af long">dH ＝ dZ · W　　dH<sub>t,j</sub> ＝ Σ<sub>v＝1…120,832</sub> dZ<sub>t,v</sub> · W<sub>v,j</sub></div>\n'
-    '  <p class="asub">(4096 × 120,832) · (120,832 × 4096) → 4096 × 4096：中间收缩的那一维就是词表。<b>十二万项的求和只在这一步</b>：输出头反向，把梯度传回隐状态（dgrad）。</p>\n'
-    '  <details class="foldfig"><summary><b>前向、loss、求导三步，和为什么偏偏是这一次求和</b>（课上不讲）</summary>\n'
-    '  <p>输入词嵌入和输出矩阵<b>不共用</b>（配置写明不共享，输出层是单独一份权重）。</p>\n'
     '  <div class="aw"><span class="k">① 前向</span>logits Z ＝ H · Wᵀ　→　4096 token × 120,832 词　<em>（每个分数是 token 向量和一个词那一行的点积，沿 4096 维求和）</em></div>\n'
     '  <div class="aw"><span class="k">② loss</span>p ＝ softmax(Z) 逐 token；loss ＝ 对所有 token 平均的 −log p<sub>正确词</sub></div>\n'
     '  <div class="aw"><span class="k">③ 求导</span>dZ<sub>t,v</sub> ＝ (p<sub>t,v</sub> − [v 是正确词]) ÷ token 数　<em>（正确词一项接近 −1，其余十二万多项是很小的正数，整行加起来精确为 0）</em></div>\n'
+    '  <div class="af long">dH ＝ dZ · W　　dH<sub>t,j</sub> ＝ Σ<sub>v＝1…120,832</sub> dZ<sub>t,v</sub> · W<sub>v,j</sub></div>\n'
+    '  <p class="asub">(4096 × 120,832) · (120,832 × 4096) → 4096 × 4096：中间收缩的那一维就是词表。<b>十二万项的求和只在这一步</b>：输出头反向，把梯度传回隐状态（dgrad）。</p>\n'
+    '  <details class="foldfig"><summary><b>为什么偏偏是这一次求和，另外两处为什么没有十二万项</b>（课上不讲）</summary>\n'
     '  <div class="acases">\n'
     '    <div><b>为什么这次求和最容易出事</b><br>一项接近 −1，十二万项小正数，要加出一个很小的结果：大量抵消。每项截掉一点、小项整个被舍掉，相对结果都不小；五万八千多个从没出现过的词，概率越压越小，正是最容易被吞的那批。</div>\n'
     '    <div><b>另外两处没有十二万项</b><br>输出矩阵自己的梯度 dW ＝ dZᵀ · H，收缩的是 token 那一维（4096 项）。输入词嵌入是查表，反向按 token 编号把梯度加回对应行（第八节），不沿词表求和。</div>\n'
@@ -486,7 +486,7 @@ __FIG_FUNNEL__
   <tr><td style="white-space:nowrap"><b>第三次迁移</b></td><td>混元 4 的另一个尺寸，不先对齐代码，从生产代码原样起步、一个开关一个开关地打开；它的几个发现，都是「换了一个条件，之前的验证就不作数」</td></tr>
   </tbody></table>
 
-  <div class="note"><span class="t">后面常出现的三个词，先认个脸</span>
+  <div class="note vocab"><span class="t">后面常出现的三个词，先认个脸</span>
   <b>TPU 自比</b>：在 TPU 上只改一样东西（换并行、关一个编译开关、升版本……），跟一次确认过的 TPU 运行比。尺子仍借 GPU 重跑，因为 TPU 自己重跑逐位相同、量不出宽度。第二次迁移的很多例子来自它（§10.1 汇总）。<br>
   <b>运行库（libtpu）</b>：TPU 的编译器后端和运行时打包成的库；文中 0.0.46、0.0.52 是它的版本号（§10.2）。<br>
   <b>对齐记录</b>：这几次迁移的公开实验仓库，课件里的「代码：」链接都指向它，数字都能在里面追到结果文件。</div>

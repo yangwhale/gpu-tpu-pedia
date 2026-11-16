@@ -734,14 +734,15 @@ p.bridge { color:var(--gray); border-left:3px solid var(--line); padding-left:12
 table.ftab{width:100%;font-size:14px;margin:2px 0 4px}
 table.ftab td{padding-top:1px;padding-bottom:1px;line-height:1.4}
 table.ftab th{padding-top:2px;padding-bottom:2px}
-table.ftab details.fimp summary{cursor:pointer;padding:1px 0;font-size:14px;line-height:1.45}
-table.ftab details.fimp div{color:var(--gray);font-size:13.5px;margin:2px 0 4px 18px}
+table.ftab td.fimp{color:var(--ink);font-size:13.5px}
 table.ftab td:last-child{white-space:nowrap}
 table.ftab tr.fgrp td{background:var(--blue-l);padding:1px 12px;border-bottom:none;font-size:13.5px}
 table.ftab tr.fgrp span{color:var(--gray);font-size:13px}
 .newtag{margin-right:4px}
 .foundbox .fnote{font-size:13px;color:var(--gray);margin:2px 0;line-height:1.5}
 .foundbox .fbridge{font-weight:600;margin:2px 0 4px}
+/* 11-16 负责人：默认折叠时，屏上要讲的框不能跟着藏 —— 一句话框、先想一想、调查线标题、公式卡说明、节末过渡问句 */
+body.figonly section .note:not(.vocab), body.figonly section p.trail-t, body.figonly section p.asub, body.figonly section p.bridge{display:block !important}
 </style><style>
 .trail{display:flex;align-items:stretch;margin:14px 0 22px}
 .trail .st{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;padding:7px 9px 8px;background:#fff}
@@ -923,28 +924,28 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <div class="foundbox">
   <div class="ft">开场：三次迁移，真正查清的 16 处</div>
   <p class="fsub">后两次迁移，两边为对上改了七十来处（改动台账 119 行，去掉诊断开关、工具和只核对不改的），编译器省掉的舍入一份程序就有 272 处，多数盖不过 GPU 自己的噪声。下面 16 处是真正查清的，三处在 GPU↔TPU 曲线上看不出、可会让配置或参照不作数。<b>点一行看影响多大</b>。</p>
-  <table class="t9 ftab"><tbody>
-<tr class="fgrp"><td colspan="2"><b>写的，不是生效的</b>　<span>3 处</span></td></tr>
-<tr><td><details class="fimp"><summary>权重衰减：GPU 框架模板里两个默认值分了家，优化器写 0.1、调度器写 0.033，调度器每步覆盖</summary><div>0.1 一步都没用上，实际 0.033，差 3 倍；GPU↔TPU 曲线上看不出</div></details></td><td><a href="#s2-3">§2.3</a></td></tr>
-<tr><td><details class="fimp"><summary>「存下路由、反向不重选」，配错一种重算策略就被悄悄忽略</summary><div>平均 2.4% 的 token（最多 3.05%）按另一套路由算梯度；参数范数 r 4.56，存下路由后 2.27</div></details></td><td><a href="#s2-3">§2.3 折叠</a></td></tr>
-<tr><td><details class="fimp"><summary>TF32 开关说的不算：只关 PyTorch 的，另一条路照样走 TF32；设环境变量全关了，开关读回来反倒是「开」</summary><div>FP32 矩阵乘离 FP64：只关 PyTorch 开关时那条仍是 2.94e-4，设 <code>NVIDIA_TF32_OVERRIDE=0</code> 全关才到 1.15e-6；GPU↔TPU 曲线上看不出</div></details></td><td><a href="#s5-5">§5.5</a></td></tr>
-<tr class="fgrp"><td colspan="2"><b>在哪儿舍、怎么舍</b>　<span>6 处</span></td></tr>
-<tr><td><details class="fimp"><summary>GPU 张量核每 16 个乘积抹一次零</summary><div>同一次求和越长越偏：合成输入长 65,536 时朝零偏 3.1e-4（相对）</div></details></td><td><a href="#s5-2">§5.2</a></td></tr>
-<tr><td><details class="fimp"><summary>4 个设备上验过的程序，换到 8 个设备，一次求和从舍 1 次变成舍 6 次</summary><div>那批投影离 FP64：TPU 2.35e-3，GPU 1.66e-3，R 1.41；代码一行没改</div></details></td><td><a href="#s5-3">§5.3</a></td></tr>
-<tr><td><details class="fimp"><summary>名义 FP32 的输出头，在 TPU 默认精度下只算一遍 BF16；第 1 步看不出</summary><div>权重离开格点后 logits 误差是真 FP32 的约 5000 倍（推断：1.9e-3 对 3.7e-7，在模拟离格 10 步的权重上测）；前 300 步主 loss r 7.32，换 high 档 1.03</div></details></td><td><a href="#s5-5">§5.5</a></td></tr>
-<tr><td><details class="fimp"><summary>TPU 默认的 exp、log 图快不图准</summary><div>v5p 上 exp 最多差 105 格、log 62 格（GPU ≤ 2 格）；单算子离 FP64 最多是 GPU 的 8.68 倍；GPU↔TPU 曲线上看不出</div></details></td><td><a href="#s5-5">§5.5</a></td></tr>
-<tr><td><details class="fimp"><summary>一个 Python 常数（log₂e）跟着 BF16 的 q 一起被舍</summary><div>注意力 logits 整体放大 1.8e-3</div></details></td><td><a href="#s5-5">§5.5 折叠</a></td></tr>
-<tr><td><details class="fimp"><summary><span class="newtag">🆕</span>MTP 头的梯度舍成 BF16 之前，两边乘的系数不同（GPU ×0.1，TPU ×0.1 再除以 token 数）</summary><div>正确词那一项挤在一个 BF16 格距里，两边舍的方向相反；1000 步 MTP 偏到尺子的 3.02–4.28 倍；诊断已定位（TPU 改在 GPU 的尺度上舍，回到 0.15–0.68 倍），修法待定</div></details></td><td><a href="#mtp-head">§5.5 折叠</a></td></tr>
-<tr class="fgrp"><td colspan="2"><b>编译器替你省掉的舍入</b>　<span>2 处</span></td></tr>
-<tr><td><details class="fimp"><summary>RMSNorm scale 那次「舍成 BF16」：4K 程序里在，32K 程序里 8 个全被删</summary><div>没补时 1000 步主 loss r 7.8，不过；二分时只补这一处降到尺子的 0.54 倍，补别处的都还在 28 倍左右</div></details></td><td><a href="#s5-4">§5.4</a></td></tr>
-<tr><td><details class="fimp"><summary>三份梯度相加，两边舍的次数不一样</summary><div>主 loss 判待定（r 1.55）：第 551–1000 步对 GPU 16 份均值偏 ＋9.4e-6，照 GPU 写法全补上还剩 ＋6.9e-6</div></details></td><td><a href="#s9-1">§9.1</a></td></tr>
-<tr class="fgrp"><td colspan="2"><b>路由一翻，梯度就换了一份</b>　<span>2 处</span></td></tr>
-<tr><td><details class="fimp"><summary>输入只差一丝，近平局的 token 就换了专家</summary><div>第 1 步 TPU 对 GPU 的 rel_L2：比到的 50 个张量合起来 1.28e-3，一个专家的梯度 0.102，是它的约 80 倍；对 FP64 这个专家 R 不超过 1.04，不是算错</div></details></td><td><a href="#s4-3">§4.3</a></td></tr>
-<tr><td><details class="fimp"><summary><span class="newtag">🆕</span>视觉塔自己不选专家，q、k 的梯度照样越线</summary><div>R 1.21–1.53；照 TPU 的路由重算 FP64，降到 0.43–0.83：全是路由翻转</div></details></td><td><a href="#vit-flip">§4.3 折叠</a></td></tr>
-<tr class="fgrp"><td colspan="2"><b>两个案例，一个编译器 bug</b>　<span>3 处</span></td></tr>
-<tr><td><details class="fimp"><summary>TPU 的主 loss 三百步以后平均比 GPU 低约 1.7e-4：TPU 算错了吗？</summary><div>第 301–1000 步对一份 GPU 基线的带符号均值 −1.66e-4（相对）；第 1000 步参数范数多涨 2.1e-2（绝对差，参数范数约 3042）。答案在一个谁都没怀疑的地方</div></details></td><td><a href="#s七">第七节</a></td></tr>
-<tr><td><details class="fimp"><summary>DDP 和 FSDP 数学等价，曲线却超出噪声</summary><div>词嵌入梯度离 FP64：纯数据并行 1.51e-2，GPU 4.17e-3，R 3.62；全出在 39 个词上</div></details></td><td><a href="#s八">第八节</a></td></tr>
-<tr><td><details class="fimp"><summary>一个 FP32 开关打开，一块梯度凭空没了</summary><div>r 冲到 611</div></details></td><td><a href="#s8-2">§8.2</a></td></tr>
+  <table class="t9 ftab"><thead><tr><th>查出来的现象</th><th>影响多大</th><th>在哪讲</th></tr></thead><tbody>
+<tr class="fgrp"><td colspan="3"><b>写的，不是生效的</b>　<span>3 处</span></td></tr>
+<tr><td>权重衰减：GPU 框架模板里两个默认值分了家，优化器写 0.1、调度器写 0.033，调度器每步覆盖</td><td class="fimp">0.1 一步都没用上，实际 0.033，差 3 倍；GPU↔TPU 曲线上看不出</td><td><a href="#s2-3">§2.3</a></td></tr>
+<tr><td>「存下路由、反向不重选」，配错一种重算策略就被悄悄忽略</td><td class="fimp">平均 2.4% 的 token（最多 3.05%）按另一套路由算梯度；参数范数 r 4.56，存下路由后 2.27</td><td><a href="#s2-3">§2.3 折叠</a></td></tr>
+<tr><td>TF32 开关说的不算：只关 PyTorch 的，另一条路照样走 TF32；设环境变量全关了，开关读回来反倒是「开」</td><td class="fimp">FP32 矩阵乘离 FP64：只关 PyTorch 开关时那条仍是 2.94e-4，设 <code>NVIDIA_TF32_OVERRIDE=0</code> 全关才到 1.15e-6；GPU↔TPU 曲线上看不出</td><td><a href="#s5-5">§5.5</a></td></tr>
+<tr class="fgrp"><td colspan="3"><b>在哪儿舍、怎么舍</b>　<span>6 处</span></td></tr>
+<tr><td>GPU 张量核每 16 个乘积抹一次零</td><td class="fimp">同一次求和越长越偏：合成输入长 65,536 时朝零偏 3.1e-4（相对）</td><td><a href="#s5-2">§5.2</a></td></tr>
+<tr><td>4 个设备上验过的程序，换到 8 个设备，一次求和从舍 1 次变成舍 6 次</td><td class="fimp">那批投影离 FP64：TPU 2.35e-3，GPU 1.66e-3，R 1.41；代码一行没改</td><td><a href="#s5-3">§5.3</a></td></tr>
+<tr><td>名义 FP32 的输出头，在 TPU 默认精度下只算一遍 BF16；第 1 步看不出</td><td class="fimp">权重离开格点后 logits 误差是真 FP32 的约 5000 倍（推断：1.9e-3 对 3.7e-7，在模拟离格 10 步的权重上测）；前 300 步主 loss r 7.32，换 high 档 1.03</td><td><a href="#s5-5">§5.5</a></td></tr>
+<tr><td>TPU 默认的 exp、log 图快不图准</td><td class="fimp">v5p 上 exp 最多差 105 格、log 62 格（GPU ≤ 2 格）；单算子离 FP64 最多是 GPU 的 8.68 倍；GPU↔TPU 曲线上看不出</td><td><a href="#s5-5">§5.5</a></td></tr>
+<tr><td>一个 Python 常数（log₂e）跟着 BF16 的 q 一起被舍</td><td class="fimp">注意力 logits 整体放大 1.8e-3</td><td><a href="#s5-5">§5.5 折叠</a></td></tr>
+<tr><td><span class="newtag">🆕</span>MTP 头的梯度舍成 BF16 之前，两边乘的系数不同（GPU ×0.1，TPU ×0.1 再除以 token 数）</td><td class="fimp">正确词那一项挤在一个 BF16 格距里，两边舍的方向相反；1000 步 MTP 偏到尺子的 3.02–4.28 倍；诊断已定位（TPU 改在 GPU 的尺度上舍，回到 0.15–0.68 倍），修法待定</td><td><a href="#mtp-head">§5.5 折叠</a></td></tr>
+<tr class="fgrp"><td colspan="3"><b>编译器替你省掉的舍入</b>　<span>2 处</span></td></tr>
+<tr><td>RMSNorm scale 那次「舍成 BF16」：4K 程序里在，32K 程序里 8 个全被删</td><td class="fimp">没补时 1000 步主 loss r 7.8，不过；二分时只补这一处降到尺子的 0.54 倍，补别处的都还在 28 倍左右</td><td><a href="#s5-4">§5.4</a></td></tr>
+<tr><td>三份梯度相加，两边舍的次数不一样</td><td class="fimp">主 loss 判待定（r 1.55）：第 551–1000 步对 GPU 16 份均值偏 ＋9.4e-6，照 GPU 写法全补上还剩 ＋6.9e-6</td><td><a href="#s9-1">§9.1</a></td></tr>
+<tr class="fgrp"><td colspan="3"><b>路由一翻，梯度就换了一份</b>　<span>2 处</span></td></tr>
+<tr><td>输入只差一丝，近平局的 token 就换了专家</td><td class="fimp">第 1 步 TPU 对 GPU 的 rel_L2：比到的 50 个张量合起来 1.28e-3，一个专家的梯度 0.102，是它的约 80 倍；对 FP64 这个专家 R 不超过 1.04，不是算错</td><td><a href="#s4-3">§4.3</a></td></tr>
+<tr><td><span class="newtag">🆕</span>视觉塔自己不选专家，q、k 的梯度照样越线</td><td class="fimp">R 1.21–1.53；照 TPU 的路由重算 FP64，降到 0.43–0.83：全是路由翻转</td><td><a href="#vit-flip">§4.3 折叠</a></td></tr>
+<tr class="fgrp"><td colspan="3"><b>两个案例，一个编译器 bug</b>　<span>3 处</span></td></tr>
+<tr><td>TPU 的主 loss 三百步以后平均比 GPU 低约 1.7e-4：TPU 算错了吗？</td><td class="fimp">第 301–1000 步对一份 GPU 基线的带符号均值 −1.66e-4（相对）；第 1000 步参数范数多涨 2.1e-2（绝对差，参数范数约 3042）。答案在一个谁都没怀疑的地方</td><td><a href="#s七">第七节</a></td></tr>
+<tr><td>DDP 和 FSDP 数学等价，曲线却超出噪声</td><td class="fimp">词嵌入梯度离 FP64：纯数据并行 1.51e-2，GPU 4.17e-3，R 3.62；全出在 39 个词上</td><td><a href="#s八">第八节</a></td></tr>
+<tr><td>一个 FP32 开关打开，一块梯度凭空没了</td><td class="fimp">r 冲到 611</td><td><a href="#s8-2">§8.2</a></td></tr>
   </tbody></table>
   <p class="fnote">R：离 FP64 的距离之比（<a href="#s4-2">§4.2</a>）；r：曲线上的差 ÷ GPU 自己的噪声上限，过 2 判不过（<a href="#s3-3">§3.3</a>）；格：末位差几格（<a href="#s5-5">§5.5</a>）；🆕 新查到，正文在折叠里。</p>
   <p class="fbridge">它们是怎么一处一处查出来的，就是这一讲。从最开头那件讲起 ↓</p>
@@ -1168,7 +1169,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td style="white-space:nowrap"><b>第三次迁移</b></td><td>混元 4 的另一个尺寸，不先对齐代码，从生产代码原样起步、一个开关一个开关地打开；它的几个发现，都是「换了一个条件，之前的验证就不作数」</td></tr>
   </tbody></table>
 
-  <div class="note"><span class="t">后面常出现的三个词，先认个脸</span>
+  <div class="note vocab"><span class="t">后面常出现的三个词，先认个脸</span>
   <b>TPU 自比</b>：在 TPU 上只改一样东西（换并行、关一个编译开关、升版本……），跟一次确认过的 TPU 运行比。尺子仍借 GPU 重跑，因为 TPU 自己重跑逐位相同、量不出宽度。第二次迁移的很多例子来自它（<a href="#s10-1">§10.1</a> 汇总）。<br>
   <b>运行库（libtpu）</b>：TPU 的编译器后端和运行时打包成的库；文中 0.0.46、0.0.52 是它的版本号（<a href="#s10-2">§10.2</a>）。<br>
   <b>对齐记录</b>：这几次迁移的公开实验仓库，课件里的「代码：」链接都指向它，数字都能在里面追到结果文件。</div>
@@ -9244,15 +9245,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="trail"><div class="st"><div class="tq">① 现象（7.1）</div><div class="tk">−1.7e-4</div><div class="tw">三百步以后 TPU 的 loss 平均偏低，尺子的两倍多</div></div><div class="ar">→</div><div class="st"><div class="tq">② 拆（7.2）</div><div class="tk">少压 ¼</div><div class="tw">没出现过的词那些行，TPU 每步被压得少</div></div><div class="ar">→</div><div class="st"><div class="tq">③ 为什么（7.3）</div><div class="tk">−0.218</div><div class="tw">所有 logits 的整体水平（lse），第 300 步 TPU 低</div></div><div class="ar">→</div><div class="st"><div class="tq">④ 是这股力（7.3）</div><div class="tk">差归零</div><div class="tw">去掉这个方向，lse 差 −0.33 → −0.007</div></div><div class="ar">→</div><div class="st"><div class="tq">⑤ 谁推歪的（7.4）</div><div class="tk">6.5e-4</div><div class="tw">输出头反向那次十二万项求和，第 1 步沿这个方向就差这么多，之后每步同向</div></div><div class="ar">→</div><div class="st end"><div class="tq">⑥ 怎么修（7.5）</div><div class="tk">分块</div><div class="tw">那次求和改成分块累加，两条参数范数重合，步时 ＋6%</div></div></div>
 
   <div class="adamcard">
-  <p class="asub"><b>先把输出头摆清楚</b>：混元 3，隐藏维 4096，词表 120,832，一个微批是一条 4096 个 token 的序列。</p>
+  <p class="asub"><b>先把输出头摆清楚</b>：混元 3，隐藏维 4096，词表 120,832，一个微批是一条 4096 个 token 的序列；输入词嵌入和输出矩阵<b>不共用</b>，输出层是单独一份权重。</p>
   <div class="aw"><span class="k">形状</span>隐状态 H：4096 token × 4096 维　　输出矩阵 W：120,832 词 × 4096 维（每个词一行）</div>
-  <div class="af long">dH ＝ dZ · W　　dH<sub>t,j</sub> ＝ Σ<sub>v＝1…120,832</sub> dZ<sub>t,v</sub> · W<sub>v,j</sub></div>
-  <p class="asub">(4096 × 120,832) · (120,832 × 4096) → 4096 × 4096：中间收缩的那一维就是词表。<b>十二万项的求和只在这一步</b>：输出头反向，把梯度传回隐状态（dgrad）。</p>
-  <details class="foldfig"><summary><b>前向、loss、求导三步，和为什么偏偏是这一次求和</b>（课上不讲）</summary>
-  <p>输入词嵌入和输出矩阵<b>不共用</b>（配置写明不共享，输出层是单独一份权重）。</p>
   <div class="aw"><span class="k">① 前向</span>logits Z ＝ H · Wᵀ　→　4096 token × 120,832 词　<em>（每个分数是 token 向量和一个词那一行的点积，沿 4096 维求和）</em></div>
   <div class="aw"><span class="k">② loss</span>p ＝ softmax(Z) 逐 token；loss ＝ 对所有 token 平均的 −log p<sub>正确词</sub></div>
   <div class="aw"><span class="k">③ 求导</span>dZ<sub>t,v</sub> ＝ (p<sub>t,v</sub> − [v 是正确词]) ÷ token 数　<em>（正确词一项接近 −1，其余十二万多项是很小的正数，整行加起来精确为 0）</em></div>
+  <div class="af long">dH ＝ dZ · W　　dH<sub>t,j</sub> ＝ Σ<sub>v＝1…120,832</sub> dZ<sub>t,v</sub> · W<sub>v,j</sub></div>
+  <p class="asub">(4096 × 120,832) · (120,832 × 4096) → 4096 × 4096：中间收缩的那一维就是词表。<b>十二万项的求和只在这一步</b>：输出头反向，把梯度传回隐状态（dgrad）。</p>
+  <details class="foldfig"><summary><b>为什么偏偏是这一次求和，另外两处为什么没有十二万项</b>（课上不讲）</summary>
   <div class="acases">
     <div><b>为什么这次求和最容易出事</b><br>一项接近 −1，十二万项小正数，要加出一个很小的结果：大量抵消。每项截掉一点、小项整个被舍掉，相对结果都不小；五万八千多个从没出现过的词，概率越压越小，正是最容易被吞的那批。</div>
     <div><b>另外两处没有十二万项</b><br>输出矩阵自己的梯度 dW ＝ dZᵀ · H，收缩的是 token 那一维（4096 项）。输入词嵌入是查表，反向按 token 编号把梯度加回对应行（第八节），不沿词表求和。</div>
