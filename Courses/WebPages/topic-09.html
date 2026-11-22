@@ -884,7 +884,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h1>GPU→TPU 训练性能优化</h1>
   <div class="hook">
     公开的 Hy4（770B 总参、49B 激活的多模态 MoE），在 64 片 TPU v7x（128 个设备）上、三条定死的条件下训练：从 20 层 12.9 秒（原始代码）优化到层数翻倍的 39 层 3.9 秒；有效 MFU 4.3% → 25.9%，过了 25%；编译约半小时 → 3 分钟。<br>
-    <small style="font-size:14px;line-height:1.6;display:inline-block;color:var(--gray)">口径：长图文（按生产图像比例，一行基本一整篇）；20 层同一个作业里首尾比，原始代码慢 5.73 倍，4.3% 是推导值（<a href="#tab-data">读数对照表</a>、<a href="#s十一">第十一节</a>）；编译指 128 片一格独占一台编译机：1522 → 181 秒。</small><br>
+    <small style="font-size:14px;line-height:1.6;display:inline-block;color:var(--gray)">口径：长图文（按生产图像比例，一行基本一整篇），终点是 30 步短格；20 层同一个作业里首尾比，原始代码慢 5.73 倍，4.3% 是推导值（<a href="#tab-data">读数对照表</a>、<a href="#s十一">第十一节</a>）；编译指 128 片一格独占一台编译机：1522 → 181 秒。</small><br>
     <small style="font-size:14px;line-height:1.6;display:inline-block;color:var(--gray)"><b>局限一句话</b>：页首的数只量在长图文上；长短文档混拼、全是短文档两种数据，新版还没测，后者是下一步第一优先（<a href="#s十一">第十一节</a>）。</small><br>
     <em>不在关键路径上的，省了也白省。</em>
   </div>
@@ -1218,7 +1218,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="fsub">先看收益最大的 5 件（按那一刀的收益排），正文逐件讲；其余 15 件在下面的折叠里。</p>
   <table class="t9 ftab"><thead><tr><th>现象</th><th>多大</th><th>在哪讲</th></tr></thead><tbody>
 <tr><td>原样跑（短文 12.743 秒），主核 59.3% 在等通信，大半是专家权重收发</td><td class="fimp">换成专家并行那一刀 −45.4%</td><td><a href="#s三">第三节 · 站 1</a></td></tr>
-<tr><td>两项改动单测各快 6.5% 和 5.7%，一起开</td><td class="fimp">−16.9%：一加一大于二？</td><td><a href="#s六">第六节 · 站 14</a></td></tr>
+<tr><td>梯度 BF16 单测 6.5%、一组开关 5.7%（原数据），三样一起开</td><td class="fimp">−16.9%（滤掉长文档的数据）：一加一大于二？</td><td><a href="#s六">第六节 · 站 14</a></td></tr>
 <tr><td>优化器里每块专家权重搬了设计的 2.5 倍</td><td class="fimp">修掉 −7.3%（局部修法；正式修法单独 −6.3%），不改精度</td><td><a href="#s九">第九节 · 站 19</a></td></tr>
 <tr><td>一道只改调度、不改数值的屏障</td><td class="fimp">单独量 −6.9%，小核的活一点没少</td><td><a href="#s七">第七节 · 7.1</a></td></tr>
 <tr><td>一颗融合核报了耗时，调度器把通信排空</td><td class="fimp">不报快 3.8%；报了、调准也慢 10.6%</td><td><a href="#s九">第九节 · 9.5</a></td></tr>
@@ -1410,7 +1410,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p><b>预习</b>（先想一想，这一讲里揭晓）：</p>
 <ol start="2">
 <li><b>第二问</b>：滤掉长文档，按块数推一步该省约 578 毫秒，实际只快 148 毫秒。剩下的去哪了？（<a href="#s五">第五节</a>）</li>
-<li><b>第三问</b>：两项改动各快 6.5% 和 5.7%，一起开快了 16.9%。比 12% 多出一截，你先怀疑什么？（<a href="#s六">第六节</a>）</li>
+<li><b>第三问</b>：两项改动在原数据上各快 6.5% 和 5.7%，一起开（在另一份数据上）快了 16.9%。比 12% 多出一截，你先怀疑什么？（<a href="#s六">第六节</a>）</li>
 </ol>
 </div>
 </details>
@@ -2199,7 +2199,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </div></section>
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>找关键路径：该省 578 毫秒，只快 148 毫秒</h2></div>
 
-  <table class="t9 mini" id="tab-mid-map"><caption>第二段（半层底座·短文）的四站在哪讲</caption><thead><tr><th>站</th><th>计入编年史的改动</th><th>对上一站</th><th>在哪讲</th></tr></thead><tbody><tr><td>13</td><td>数据滤掉长文档</td><td>−2.7%</td><td>第五节</td></tr><tr><td>14</td><td>少搬字节（改了精度，第六节讲）</td><td>−16.9%</td><td>第六节</td></tr><tr><td>15</td><td>三样改排法、改存什么的改动（第七节讲）</td><td>−6.0%</td><td>第七节</td></tr><tr><td>16</td><td>两类通信分开排队（第六节讲）</td><td>−2.4%（跨作业）</td><td>第六节 6.4 讲，第七节末计入</td></tr></tbody></table>
+  <table class="t9 mini" id="tab-mid-map"><caption>第二段（半层底座·短文）的四站在哪讲</caption><thead><tr><th>站</th><th>计入编年史的改动</th><th>对上一站</th><th>在哪讲</th></tr></thead><tbody><tr><td>13</td><td>数据滤掉长文档</td><td>−2.7%</td><td>第五节</td></tr><tr><td>14</td><td>少搬字节（改了精度，第六节讲）</td><td>−16.9%</td><td>第六节</td></tr><tr><td>15</td><td>三样改排法、改存什么的改动（第七节讲）</td><td>−6.0%</td><td>第七节</td></tr><tr><td>16</td><td>收集限 2 条在飞＋两类通信分开排队（第六节讲）</td><td>−2.4%（两项合开、叠在站 15 上跨作业量）</td><td>第六节 6.4 讲，第七节末计入</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>作者私有编年史总表；中间穿插的单项读数（例如 7.1 屏障单独 −6.9%、6.4 限 2 条在飞＋分两颗小核 −3.1%）是旁证，不是站。</p></details>
 
   <details class="foldfig"><summary><b>这一段出现的几个「对照」各是哪一格</b>：5.476、5.448、5.311、5.300</summary>
@@ -2608,14 +2608,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </details>
 
   
-<details class="foldfig"><summary><b>考考自己</b>：把这条链交给两颗小核一起跑，能快一倍吗？</summary><p>不能。单核双核每设备都是约 186 GB/s，不卡在小核个数上（最可能卡在芯片之间的链路，推断）；实测两颗小核一起收反而慢 1.2%。要么少搬字节（改精度），要么别让它跟别的通信排在一条队列里（快 3.1%）。</p></details>
+<details class="foldfig"><summary><b>考考自己</b>：把这条链交给两颗小核一起跑，能快一倍吗？</summary><p>不能。单核双核每设备都是约 186 GB/s，不卡在小核个数上（最可能卡在芯片之间的链路，推断）；实测两颗小核一起收反而慢 1.2%。要么少搬字节（改精度），要么别让它跟别的通信排在一条队列里（限 2 条在飞＋分两颗小核，合起来快 3.1%）。</p></details>
   <p class="bridge">链本身藏得住。下一节看另一类等。</p>
 </div></section>
 <section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>同样的活，排法不同：调度</h2></div>
   <p class="station">站 15 · 屏障、all-to-all 交给小核、MoE 分支输出不重算 · 4.410 → 4.147 秒（同作业 −6.0%，对照是同作业重编的站 14）</p>
   <p class="lead">还有一类等跟链长无关：活一样多，调度器把通信排在哪，决定主核等不等。</p>
   <h3 id="s7-1">7.1　一道屏障，快 6.9%</h3>
-  <p>在优化器之前加一道屏障，告诉编译器：优化器那段的通信，别往前挪。不改任何数值。一步从 5.311 秒到 4.946 秒（在站 13 的对照上单独量；站 15 是三样叠在一起）。</p>
+  <p>在优化器之前加一道屏障，告诉编译器：优化器那段的通信，别往前挪。不改任何数值。一步从 5.311 秒到 4.946 秒（单独量，对照是另一个作业里同配置的 5.311 秒，跨作业；站 15 是三样叠在一起）。</p>
 <figure class="fbox fwide" id="fig-phases"><svg viewBox="0 0 1400 576" width="100%" role="img" aria-label="一步按时间段切成五段，每段一根条，画的是加屏障以后这一段变了百分之几：往左是变短，往右是变长。反向循环是一步里最长的一段，2950.0 变 2599.4 毫秒，少了约 12%，省下的时间几乎都在这里；前向之前那段本来很短，180.1 变 114.4，少约 36% 也只是一小截；前向循环 920.8 不变；前后向之间 142.2 变 153.7，多约 8%；优化器段 1055.6 变 1094.9，多约 4%。合计 5248.7 变 4883.2 毫秒。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">快在哪一段：最长的反向循环少了 351 毫秒，其余几段增减都很小</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">条长 ＝ 这一段变了百分之几（左短右长）；条的粗细 ＝ 这一段在一步里大致多长；右边是这一段的毫秒（对照 → 加屏障）</text>
@@ -3325,7 +3325,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <table class="t9"><thead><tr><th>条件</th><th>一步</th><th>为什么</th></tr></thead><tbody>
   <tr><td>短文（第七节）</td><td>慢 2.0%</td><td>一条梯度规约的完成点被挪到注意力反向之前，没东西盖</td></tr>
-  <tr><td>长文，单开（9.1）</td><td>快 1.1%</td><td>注意力长，等待被盖住，省下的计算兑现了（推断）</td></tr>
+  <tr><td>长文，单开（9.1，对照 4.788 秒的配置）</td><td>快 1.1%</td><td>注意力长，等待被盖住，省下的计算兑现了（推断）</td></tr>
   <tr><td>长文，叠在暂存上限上（9.1）</td><td>基本没快</td><td>省 156 毫秒计算，规约多露 121、同步集合多等 82</td></tr>
   <tr><td>长文，叠在少重算的配置上（9.3）</td><td>慢 7.8%</td><td>三条专家权重收集的放行排到了紧挨着完成</td></tr>
   <tr><td>长文，定稿之后（9.5）</td><td>慢 10.6%；不报耗时快 3.8%</td><td>核报了耗时就成了收集的搭档，完成点被钉在它旁边，括号排空</td></tr>
