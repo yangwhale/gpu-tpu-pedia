@@ -1221,7 +1221,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <tr><td>原样跑（短文 12.743 秒），主核 59.3% 在等通信，大半是专家权重收发</td><td class="fimp">换成专家并行那一刀 −45.4%</td><td><a href="#s三">第三节 · 站 1</a></td></tr>
 <tr><td>两项改动单测各快 6.5% 和 5.7%，一起开</td><td class="fimp">−16.9%：一加一大于二？</td><td><a href="#s六">第六节 · 站 14</a></td></tr>
 <tr><td>优化器里每块专家权重搬了设计的 2.5 倍</td><td class="fimp">修掉 −7.3%（局部修法；正式修法单独 −6.3%），不改精度</td><td><a href="#s九">第九节 · 站 19</a></td></tr>
-<tr><td>一道只改调度、不改数值的屏障</td><td class="fimp">−6.9%，小核的活一点没少</td><td><a href="#s七">第七节 · 站 15</a></td></tr>
+<tr><td>一道只改调度、不改数值的屏障</td><td class="fimp">单独量 −6.9%，小核的活一点没少</td><td><a href="#s七">第七节 · 7.1</a></td></tr>
 <tr><td>一颗融合核报了耗时，调度器把通信排空</td><td class="fimp">不报快 3.8%；报了、调准也慢 10.6%</td><td><a href="#s九">第九节 · 9.5</a></td></tr>
 </tbody></table>
   <details class="foldfig"><summary><b>其余 15 件</b>：按编年史排</summary>
@@ -1913,8 +1913,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>先看颜色：红＝砍通信字节（最上面），蓝＝排法与 kernel，橙＝给小核队列减负，灰＝数据；越往下一刀越小。</b><span class="capmore"><br><em>每一站叠在上一站之上。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测：站 0 有效 MFU 2.30%，站 12 12.25%（站 10 换了预打包数据，分子从 325.18 变成 386.56 TFLOP，有效 MFU 从这一站起跳一档）。</p>
 <p>站 2 合了两步：小核分工、token 分两块、先算 top-k（单测 +0.3%，在噪声内，站 5 时去掉）和搬来已上线的注意力配置 ＋ 层调度器（−29.0%）。前 7 站取第 20–35 步，从站 7 起第 5–9 步。站 0 的有效 MFU 2.30% 用这几步自己的有效分子（本课推导：2.30% × 12.743 × 1155 ≈ 338 TFLOP，跟第二节第 5–9 步的 325.18 不是同一批步）。</p></details></figure>
   <p class="deept"><b>同一把时间尺子看六格</b>　起点、两段末尾、两次换底座（profile 截图）</p>
-<figure class="fbox fwide shot" id="shot-ov"><img src="media/topic08b-shot-ov.webp" loading="lazy" alt="六个节点的一整步，同一把时间尺子：三段路、两次换底座。每张窗宽 13 秒；括号是芯片上被录下的那一步的实测长度；起点 12.7 秒 → 第一段末 2.9 秒（录下的单步；30 步平均 2.731 秒）；换半层底座 5.4 秒 → 4.0 秒；换长文 5.5 秒 → 4.2 秒" style="width:100%;height:auto;border:1px solid #dadce0;border-radius:6px">
-<figcaption><b>六个节点的一整步，同一把时间尺子：三段路、两次换底座</b><ol class="shotkey" style="margin:.3em 0 .2em 1.2em;padding:0;list-style:none"><li>每张窗宽 13 秒；括号是芯片上被录下的那一步的实测长度</li><li>起点 12.7 秒 → 第一段末 2.9 秒（录下的单步；30 步平均 2.731 秒）；换半层底座 5.4 秒 → 4.0 秒；换长文 5.5 秒 → 4.2 秒</li></ol><details class="figsrc"><summary>出处与口径</summary><p>实测：XProf，一颗芯片。图里每段标题和括号都是被录下的那一步，跟编年史里的多步均值略有出入。第一段最后一站没录 profile，图上 2.9 秒那一格是前一站，编年史第一段终点是 2.731 秒。换底座时一步里要算的东西也变了，只比每段自己的起点和终点。</p></details></figcaption></figure>
+<figure class="fbox fwide shot" id="shot-ov"><img src="media/topic08b-shot-ov.webp" loading="lazy" alt="六个节点的一整步，同一把时间尺子：三段路、两次换底座。每张窗宽 13 秒；括号是芯片上被录下的那一步的实测长度；起点 12.7 秒 → 第一段末 2.9 秒（站 12 没录，这格是站 11；终点 2.731 秒）；换半层底座 5.4 秒 → 4.0 秒；换长文 5.5 秒 → 4.2 秒" style="width:100%;height:auto;border:1px solid #dadce0;border-radius:6px">
+<figcaption><b>六个节点的一整步，同一把时间尺子：三段路、两次换底座</b><ol class="shotkey" style="margin:.3em 0 .2em 1.2em;padding:0;list-style:none"><li>每张窗宽 13 秒；括号是芯片上被录下的那一步的实测长度</li><li>起点 12.7 秒 → 第一段末 2.9 秒（站 12 没录，这格是站 11；终点 2.731 秒）；换半层底座 5.4 秒 → 4.0 秒；换长文 5.5 秒 → 4.2 秒</li></ol><details class="figsrc"><summary>出处与口径</summary><p>实测：XProf，一颗芯片。图里每段标题和括号都是被录下的那一步，跟编年史里的多步均值略有出入。第一段最后一站没录 profile，图上 2.9 秒那一格是前一站，编年史第一段终点是 2.731 秒。换底座时一步里要算的东西也变了，只比每段自己的起点和终点。</p></details></figcaption></figure>
 
   
   <h3 id="s3-1">3.1　先砍字节（站 0–3）</h3>
@@ -2418,7 +2418,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>实测：这两类通信只走 3D 环面的两个轴（每轴正反两条；编译产物里的环配置）；一颗芯片两个设备同时各收各的。</p>
 <p>实测：让专家权重收集也用两颗小核，同一个作业里 4.415 → 4.467 秒（第 5–9 步），慢 1.2%；每条收集没有变快，反而多占一条队列。</p>
 <p>📌 公开规格：每芯片 6 条 ICI 链路，每条双向 200 GB/s（Google Cloud TPU7x 文档）。⚠️ 本课推导：每方向约 100 GB/s；这两类通信走 3D 环面的两个轴共 4 条，入向约 400 GB/s；一颗芯片两个设备合计约 372 GB/s，到九成多。一颗芯片里两块计算晶粒怎么分这几条链路官方没公开，所以这个对比只对量级；「卡在链路上」也是由此推断。</p></details></figure>
-  <p>收集和规约、FP32 和 BF16、一颗小核和两颗小核，全落在同一条线上：每设备约 186 GB/s。<b>这条链不卡在小核个数上（实测），最可能卡在芯片之间的链路带宽上</b>（约为芯片间链路入向上限的九成多，折算见下图出处；推断）；两颗小核一起收反而慢 1.2%。要缩它，只能少搬字节；把两份权重拼成一趟收也不省链路时间。</p>
+  <p>收集和规约、FP32 和 BF16、一颗小核和两颗小核，全落在同一条线上：每设备约 186 GB/s。<b>这条链不卡在小核个数上（实测），最可能卡在芯片之间的链路带宽上</b>（约为芯片间链路入向上限的九成多，折算见图出处；推断）；两颗小核一起收反而慢 1.2%。要缩它，只能少搬字节；把两份权重拼成一趟收也不省链路时间。</p>
 
   <h3 id="s6-2">6.2　砍一刀：梯度改 BF16，再加两个开关</h3>
   <p>专家梯度原来按 FP32 规约。改成 BF16，字节减半；再加上公开配方里的两条运行库开关（开关甲、开关乙，都是让编译器排通信更自由）。三样合开：5.311 → 4.413 秒，快 16.9%。</p>
@@ -2662,7 +2662,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <details class="foldfig"><summary><b>动画的静态版</b>：那块数据活多久、反向循环里的四个量</summary>
 <figure class="fbox fwide" id="fig-barrier"><svg viewBox="0 0 1400 586" width="100%" role="img" aria-label="左边是示意：一步分四段，前向、反向、优化器。没有屏障时，调度器把优化器要用的一份参数收集提前到前向之前，收进来的 7.1 GiB 一直活到优化器段才用，整个前向和反向都占着显存。加一道屏障以后，这次收集挪回优化器段。右边是实测：反向循环里每条小核通信在放行和完成之间夹的计算从 801 个变成 1261 个，括号里一个计算都没有的从 18 条变成 1 条；反向每层从 79.7 毫秒变成 70.3 毫秒；小核 1 在反向里的忙时 1935.7 对 1936.0 毫秒，活一点没少。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一道屏障什么都没少算：腾出约 6 GiB，括号里的计算变多（显存是原因：推断）</text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一道屏障什么都没少算：7.1 GiB 那块挪回优化器段，括号里的计算变多（显存是原因：推断）</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：一块数据活多久（示意）；右：反向循环里的四个量，每对两根条（实测，按各自较大的那根归一）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">被提前收进来的那块数据</text>
@@ -3716,7 +3716,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p><b>最后是正路。</b>所有核照实报耗时，门槛提到 3 毫秒：耗时短的核全挡在外面，专家权重收集没有搭档，完成点贴着用数据的矩阵乘；小核收集的延迟估计乘 0.32（约 26 毫秒校到接近实测的 8 毫秒）。融合核照实报也只有零点几毫秒，进不了候选，第二步「不报」就不需要了。门槛从默认扫到 10 毫秒：</p>
 <figure class="fbox fwide" id="fig-cethresh"><svg viewBox="0 0 1400 746" width="100%" role="img" aria-label="所有核照实报耗时、小核收集的延迟估计乘 0.32 以后，把 Pallas 核入选候选的门槛从默认一路提到 10 毫秒，客观判据预测的整步（4 层模型按实测核时长回放，只用来排名）。64 片拓扑：默认 3337，0.75 到 1 毫秒是一个平台 2988 上下，3 毫秒最好 2709，6 毫秒以上不再变化 2945，跟现在的推荐配置 2922 差不多。128 片拓扑：默认 3344，3 毫秒最好 2696，6 毫秒以上 2936，推荐配置 2915。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">把门槛提到 3 毫秒：耗时短的核挡在门外，收集的完成点回到用数据的地方</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴 ＝ Pallas 核入选候选的门槛（按估计时长）；纵轴 ＝ 客观判据预测的整步（毫秒，越低越好）；所有核照实报耗时，收集延迟估计 ×0.32</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴 ＝ Pallas 核入选候选的门槛（按估计时长）；纵轴 ＝ 客观判据预测的 4 层模型整步（毫秒，只排名，不是 39 层步时）；所有核照实报耗时，收集延迟估计 ×0.32</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">64 片拓扑</text>
 <rect x="119.80000000000001" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -3825,7 +3825,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 <details class="foldfig"><summary><b>这一节每个说法的证据</b></summary>
 
-  <table class="t9 mini" id="tab-cefacts"><caption>这一节每个说法的证据</caption><thead><tr><th></th><th>说法</th></tr></thead><tbody><tr><td>上卡实测（八格）</td><td>融合核报耗时 +10.6%，不报 −3.8%，几格校准 +5.8% 到 +9.4%；gate/up 收集每步露出 41.5 → 290.5 → 不到 14 毫秒；报、调准、不报三格逐位相同</td></tr><tr><td>编译产物</td><td>报了耗时，收集的完成点和融合核分在同一个调度组，括号里只排进 0.48 毫秒；调准了还是 0.55；不报，和矩阵乘同组，排进 11.9 毫秒；校准那几格，搭档前移到 token 搬运核和小的矩阵乘</td></tr><tr><td>预测</td><td>所有核照实报 ＋ 门槛 3 毫秒 ＋ 延迟估计 ×0.32 整步最好（4 层两种拓扑、39 层复核排序一致，39 层预测 −6.3%）；128 片拓扑那条借用 64 片的通信时长，只看形状</td></tr><tr><td>上卡实测（正路）</td><td>3.907 → 3.868 秒，−1.0%，逐位相同；等待合计 1013 → 1003 毫秒，规约少露 254、专家收集多露约 290</td></tr><tr><td>推断</td><td>规约和专家收集在小核同一条先来先做的车道上抢；把多核集合通信放进车道的判据，专家收集露出对得上</td></tr><tr><td>没单独重测</td><td>9.3 那一格（少重算的配置）没有单独去掉估计重测，按同一条规则解释</td></tr></tbody></table>
+  <table class="t9 mini" id="tab-cefacts"><caption>这一节每个说法的证据</caption><thead><tr><th></th><th>说法</th></tr></thead><tbody><tr><td>上卡实测（八格）</td><td>融合核报耗时 +10.6%，不报 −3.8%，几格校准 +4.8% 到 +9.4%；gate/up 收集每步露出 41.5 → 290.5 → 不到 14 毫秒；报、调准、不报三格逐位相同</td></tr><tr><td>编译产物</td><td>报了耗时，收集的完成点和融合核分在同一个调度组，括号里只排进 0.48 毫秒；调准了还是 0.55；不报，和矩阵乘同组，排进 11.9 毫秒；校准那几格，搭档前移到 token 搬运核和小的矩阵乘</td></tr><tr><td>预测</td><td>所有核照实报 ＋ 门槛 3 毫秒 ＋ 延迟估计 ×0.32 整步最好（4 层两种拓扑、39 层复核排序一致，39 层预测 −6.3%）；128 片拓扑那条借用 64 片的通信时长，只看形状</td></tr><tr><td>上卡实测（正路）</td><td>3.907 → 3.868 秒，−1.0%，逐位相同；等待合计 1013 → 1003 毫秒，规约少露 254、专家收集多露约 290</td></tr><tr><td>推断</td><td>规约和专家收集在小核同一条先来先做的车道上抢；把多核集合通信放进车道的判据，专家收集露出对得上</td></tr><tr><td>没单独重测</td><td>9.3 那一格（少重算的配置）没有单独去掉估计重测，按同一条规则解释</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>上卡：八格各在不同的常驻机器上（跨机噪声约 0.4%），30 步取第 13–20 步。编译产物：离线编译导出的调度时间线和最终程序里的调度分组。预测：客观判据，见上一段。</p></details>
 
 </details>
@@ -3846,7 +3846,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p><b>编一次，等二十多分钟。</b>每一刀都要先离线编译、看产物。128 片全量编一格，独占一台 192 核的编译机要 1522 秒，约 25 分钟（页首按半小时取整）；编译机上十几格挤着编，要 33 到 39 分钟。半层也要 647 秒。</p>
 <details class="foldfig"><summary><b>时间花在哪：程序太大</b></summary>
 
-  <p>半层一格 89% 的时间在 XLA 编译里，编译时间跟着程序大小走。解码器的层是用 scan 写的，39 层变 78 层，循环体一条指令都不多；可 128 片编一格还是半层的 2.4 倍。增长全在循环外最大的那一段程序里：优化前半层 61.0 千条指令、128 片 109.8 千条，其中约八成是优化器。</p>
+  <p>半层一格 89% 的时间在 XLA 编译里，编译时间跟着程序大小走。解码器的层是用 scan 写的，39 层变 78 层，循环体一条指令都不多；可 128 片编一格还是半层的 2.4 倍。增长全在循环外最大的那一段程序里：优化前这一段半层 61.0 千条指令、128 片 109.8 千条（整个程序见图右栏 86.8／143.4 千条），其中约八成是优化器。</p>
   <p><b>Python 的 for 和 JAX 的循环，编出来不一样。</b>JAX 先把函数在 Python 里跑一遍、记下每个运算（trace）。Python 的 for 在 trace 时真的跑 N 遍，每一遍都原样记进程序；<code>lax.fori_loop</code>、<code>lax.scan</code> 只记一份循环体，编译器也只编这一份。</p>
 
   <p>半层一个程序里正交化被调用 174 次，约 107 次是视觉塔的单块矩阵。</p>
@@ -4291,13 +4291,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="figsrc"><summary>出处与口径</summary><p>实测（离线编译产物）：被省掉的舍入，是代码里写了要舍成 BF16、编译器融合时省掉的那些（专题八 §5.4 的「省舍入」）。两份程序融合得不一样，省掉的位置就不一样；不先让两边都真舍，比出来的差分不清是改动的还是融合的。</p><p>第一次两边都开强制舍入时，换切法那边还多 11 处，都在正交化的输入转 BF16 那一下：强制舍入没覆盖到；补上以后重扫，差 0 处（两条线各自独立扫过一次）。</p><p>强制舍入只在比对时开，生产不开。开了步时也没变：同一个作业里关 4.423／4.432 秒、开 4.413／4.407 秒，没看到变慢（这组在另一个底座上量，只说明不拖慢，不当收益）。</p></details>
 
   <p>第二道是短跑比 loss（甲只做了这一道，上面的舍入扫描拿的是乙）：甲（9.2 那一刀）从第 2 步起单步差约 5e-4，跟借来的参照（乙那组只改执行方式的副本，300 步逐步平均 3.9e-4 到 4.5e-4）同一量级；口径不同，只算旁证（推断）。放行的依据是：改的只是在哪一边相加、算法不变（第六节那张表），叠好以后 300 步整体验证在噪声里（10.4）。</p>
-<details class="foldfig"><summary><b>没有现成的 GPU 尺子时，拿什么当参照：只改执行方式的副本</b></summary>
-
-  <p>这一格配置没有现成的 GPU 参照；拿「只改执行方式」的副本当旁证，改动带来的差跟它一样大（4.0e-4 对 3.9e-4、4.5e-4），没有一边倒的偏移。</p>
-
-</details>
-
-<details class="foldfig"><summary><b>没有 GPU 尺子时，旁证怎么做的</b></summary>
+<details class="foldfig"><summary><b>乙的旁证：只改执行方式的副本，差多大</b></summary>
   <p>做法：换切法那一刀和对照都从同一份初始权重跑 300 步，再各配一份只改执行方式的副本（关掉通信与计算重叠的调度，算法不变）。比的是逐步 loss 差的平均绝对值：4.0e-4 是换切法对对照，3.9e-4 和 4.5e-4 是两对副本。这只是旁证，正式判档要回到有 GPU 尺子的对齐设置（专题八）。</p>
 </details>
 
@@ -4373,7 +4367,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <span class="sub">（25 秒，Manim 渲染，可一步一步看。颜色＝这一刀打在哪类瓶颈上（同开场的编年史图）；第二道虚线处是站 13 那套配置量两次（5.311 → 5.553），不是从站 16 跳上去。）</span></figcaption></figure>
 <details class="foldfig"><summary><b>全部工作一张表：兑现的、没兑现的、下一步</b></summary>
 
-  <table class="t9 mini" id="tab-work"><caption>全部工作一张表：兑现的、没兑现的、下一步</caption><thead><tr><th></th><th>改动（按类）</th><th>收益或变化</th><th>在哪讲</th></tr></thead><tbody><tr><td>① 兑现了</td><td>专家通信：换切法（按专家切），搬来已上线的注意力配置</td><td>−45.4%；−29.0%</td><td>第三节</td></tr><tr><td></td><td>计算侧：新版分组矩阵乘核、收集流水化、缓冲只读写有效行等</td><td>每站 −2.0% 到 −7.5%</td><td>第三节</td></tr><tr><td></td><td>优化器：Muon 只沿一个轴搬一段；修掉白搬 FP32 主权重</td><td>−11.2%；−6.3%（正式修法单量，先上的局部修法 −7.3%）</td><td>第三、九节</td></tr><tr><td></td><td>小核队列：token 排序挪回主核；两类通信分两颗小核</td><td>−11.3%；−3.1%</td><td>第三、六节</td></tr><tr><td></td><td>梯度 BF16 ＋ 两条运行库开关；优化器前一道屏障</td><td>−16.9%；−6.9%（单量）</td><td>第六、七节</td></tr><tr><td></td><td>长文注意力：短文那套开关整包搬、片上暂存上限、空块不再空转</td><td>−13.5%、−2.3%、−0.8%</td><td>第九节</td></tr><tr><td></td><td>路由：先挑 top-k 再收集</td><td>−0.9%</td><td>开篇总览</td></tr><tr><td></td><td>调度器：融合核不报耗时；照实报 ＋ 门槛 3 ms</td><td>−3.8%；−1.0%</td><td>9.5</td></tr><tr><td></td><td>编译：两进程 ＋ 同形批量 ＋ 视觉塔 scan</td><td>128 片一格 1522 → 181 秒；步时 −0.5%</td><td>9.6</td></tr><tr><td></td><td>精度修正：归一化与梯度写法改回参考实现</td><td>持平到 +0.2%（不为提速）</td><td>第九节</td></tr><tr><td>② 没兑现或变慢</td><td>融合核照原样（带耗时估计）</td><td>+7.8%（9.3）、+10.6%（9.5）</td><td>9.3、9.5</td></tr><tr><td></td><td>按实测把各类核的耗时估计校准准</td><td>+5.8% 到 +9.4%</td><td>9.5</td></tr><tr><td></td><td>门槛 4 ms；牛顿迭代改 JAX 循环</td><td>+2.5%；+2.2%</td><td>9.5、9.6</td></tr><tr><td></td><td>两颗小核一起收同一条；注意力前向计算块改小；三个省显存开关一起开</td><td>+1.2%；+2.3%；+11.5%</td><td>第六、九节</td></tr><tr><td>③ 下一步</td><td>全是短文档的数据（每篇只占对角线上的小三角，块里大半被掩掉）</td><td>新版还没测，第一优先</td><td>页首</td></tr><tr><td></td><td>长短文档混拼：按长度分桶</td><td>还没测</td><td>页首</td></tr><tr><td></td><td>减少同一时段挤在小核车道上的通信</td><td>多半要改代码</td><td>9.5</td></tr><tr><td></td><td>128 片全量上卡</td><td>离线编过、放得下，还没上卡</td><td>第九节</td></tr></tbody></table>
+  <table class="t9 mini" id="tab-work"><caption>全部工作一张表：兑现的、没兑现的、下一步</caption><thead><tr><th></th><th>改动（按类）</th><th>收益或变化</th><th>在哪讲</th></tr></thead><tbody><tr><td>① 兑现了</td><td>专家通信：换切法（按专家切），搬来已上线的注意力配置</td><td>−45.4%；−29.0%</td><td>第三节</td></tr><tr><td></td><td>计算侧：新版分组矩阵乘核、收集流水化、缓冲只读写有效行等</td><td>每站 −2.0% 到 −7.5%</td><td>第三节</td></tr><tr><td></td><td>优化器：Muon 只沿一个轴搬一段；修掉白搬 FP32 主权重</td><td>−11.2%；−6.3%（正式修法单量，先上的局部修法 −7.3%）</td><td>第三、九节</td></tr><tr><td></td><td>小核队列：token 排序挪回主核；两类通信分两颗小核</td><td>−11.3%；−3.1%</td><td>第三、六节</td></tr><tr><td></td><td>梯度 BF16 ＋ 两条运行库开关；优化器前一道屏障</td><td>−16.9%；−6.9%（单量）</td><td>第六、七节</td></tr><tr><td></td><td>长文注意力：短文那套开关整包搬、片上暂存上限、空块不再空转</td><td>−13.5%、−2.3%、−0.8%</td><td>第九节</td></tr><tr><td></td><td>路由：先挑 top-k 再收集</td><td>−0.9%</td><td>开篇总览</td></tr><tr><td></td><td>调度器：融合核不报耗时；照实报 ＋ 门槛 3 ms</td><td>−3.8%；−1.0%</td><td>9.5</td></tr><tr><td></td><td>编译：两进程 ＋ 同形批量 ＋ 视觉塔 scan</td><td>128 片一格 1522 → 181 秒；步时 −0.5%</td><td>9.6</td></tr><tr><td></td><td>精度修正：归一化与梯度写法改回参考实现</td><td>持平到 +0.2%（不为提速）</td><td>第九节</td></tr><tr><td>② 没兑现或变慢</td><td>融合核照原样（带耗时估计）</td><td>+7.8%（9.3）、+10.6%（9.5）</td><td>9.3、9.5</td></tr><tr><td></td><td>按实测把各类核的耗时估计校准准</td><td>+4.8% 到 +9.4%</td><td>9.5</td></tr><tr><td></td><td>门槛 4 ms；牛顿迭代改 JAX 循环</td><td>+2.5%；+2.2%</td><td>9.5、9.6</td></tr><tr><td></td><td>两颗小核一起收同一条；注意力前向计算块改小；三个省显存开关一起开</td><td>+1.2%；+2.3%；+11.5%</td><td>第六、九节</td></tr><tr><td>③ 下一步</td><td>全是短文档的数据（每篇只占对角线上的小三角，块里大半被掩掉）</td><td>新版还没测，第一优先</td><td>页首</td></tr><tr><td></td><td>长短文档混拼：按长度分桶</td><td>还没测</td><td>页首</td></tr><tr><td></td><td>减少同一时段挤在小核车道上的通信</td><td>多半要改代码</td><td>9.5</td></tr><tr><td></td><td>128 片全量上卡</td><td>离线编过、放得下，还没上卡</td><td>第九节</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>本课归纳：收益都是对各自同作业对照量的，各行在不同底座上，不能相乘，也不能互相比大小。</p></details>
 
 </details>
