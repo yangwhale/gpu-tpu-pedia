@@ -105,9 +105,10 @@ def short(s, n=12):
 
 TITLE = "优化编年史：28 站，一站一站降下去"
 CAP_SWITCH = "换底座：同一配置量两次"
+CAP_SWITCH2 = "换数据：同一配置量两次"
 CAP_RULER = "跳回去不是变慢：换了尺子，前后不能相除"
 CAP_END = ("28 站：先砍字节，再理排法，", "再修小核队列，最后对着长文一项项修")
-for s in [TITLE, CAP_SWITCH, CAP_RULER, *CAP_END]:
+for s in [TITLE, CAP_SWITCH, CAP_SWITCH2, CAP_RULER, *CAP_END]:
     assert len(s) <= 22, s
 
 # ── 版面 ─────────────────────────────────────────────────────────
@@ -167,7 +168,7 @@ class ChronDescent(Scene):
             leg.add(VGroup(Rectangle(width=0.22, height=0.22, stroke_width=0, fill_color=col, fill_opacity=1),
                            tx(name, 22, GREY_B)).arrange(RIGHT, buff=0.1))
         leg.add(VGroup(Rectangle(width=0.22, height=0.22, stroke_color=GREY, stroke_width=2.5),
-                       tx("换底座起点", 22, GREY_B)).arrange(RIGHT, buff=0.1))
+                       tx("切换后起点", 22, GREY_B)).arrange(RIGHT, buff=0.1))
         leg.arrange(RIGHT, buff=0.32).move_to([0, 2.88, 0]).to_edge(LEFT, buff=0.45)
         axis = Line([XL - 0.1, BASE, 0], [XR + 0.1, BASE, 0], color=GREY, stroke_width=3)
         yt = VGroup()
@@ -177,9 +178,9 @@ class ChronDescent(Scene):
         nums = VGroup(*[tx(d["lab"], 22, GREY if d["k"] == "start" else GREY_B).move_to([slot_x(i), BASE - 0.28, 0])
                         for i, d in enumerate(SLOTS)])
         dashes, dlabs = VGroup(), VGroup()
-        for x in X_DASH:
+        for x, dl in zip(X_DASH, ("换底座", "换数据")):
             dashes.add(DashedLine([x, BASE - 0.1, 0], [x, 0.85, 0], color=GREY_B, stroke_width=3, dash_length=0.12))
-            dlabs.add(tx("换底座", 22, GREY_B).move_to([x, 1.08, 0]))   # 压低：别跟右上角计数器挤成一行
+            dlabs.add(tx(dl, 22, GREY_B).move_to([x, 1.08, 0]))   # 压低：别跟右上角计数器挤成一行
         seg_c = [(slot_x(4) + slot_x(J1 - 1)) / 2, (slot_x(J1) + slot_x(J2 - 1)) / 2, (slot_x(J2) + slot_x(NS - 1)) / 2]
         segl = VGroup(*[tx(SEG_NAME[k], 24, GREY_B, True).move_to([seg_c[k], 0.65, 0]) for k in range(3)])
         self.add(title, leg, axis, yt, nums, dashes, dlabs, segl)
@@ -251,8 +252,8 @@ class ChronDescent(Scene):
             g.set_opacity((1.0 if cur_slot(uu) == i else 0.0) * (1 - r.get_value()))
 
         # ── 底部两行字幕：建一次，按 u 区间切透明度 ──
-        line1 = [tx("站 %s · %s" % (d["lab"], short(d["txt"])) if d["txt"] else CAP_SWITCH, 26,
-                    WHITE if d["txt"] else YELLOW).move_to([0, Y_CAP1, 0]) for d in SLOTS]
+        line1 = [tx("站 %s · %s" % (d["lab"], short(d["txt"])) if d["txt"] else (CAP_SWITCH2 if i == J2 else CAP_SWITCH), 26,
+                    WHITE if d["txt"] else YELLOW).move_to([0, Y_CAP1, 0]) for i, d in enumerate(SLOTS)]
         ruler = tx(CAP_RULER, 26, YELLOW).move_to([0, Y_CAP2, 0])
         end1 = tx(CAP_END[0], 28, YELLOW, True).move_to([0, Y_CAP1, 0])
         end2 = tx(CAP_END[1], 28, YELLOW, True).move_to([0, Y_CAP2, 0])
