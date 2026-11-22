@@ -215,7 +215,7 @@ SELF_SLOW = [("iHC：4 路残差（含每层一次同步 all-reduce）", +248), 
 SAME_TOTAL_DIFF_MS = -370    # 同条件总差：本讲模型快约 0.37 秒（较长的截层，按最忙设备修正后的估计）
 # 只录一颗芯片：这一步、这颗芯片执行的子块数与前向耗时
 BUSY_OURS_BLOCKS, BUSY_THEIRS_BLOCKS, BUSY_THEIRS_MAX = 66, 8, 46
-FULL_CAUSAL_BLOCKS = 68
+FULL_CAUSAL_BLOCKS = 66                          # 32K ÷ 1024 = 32 块，32 × 33 ÷ 2 ÷ 8 = 66
 FWD_MS_OURS, FWD_MS_THEIRS = 9.31, 2.37
 FWD_SPEED_RATIO = 1.7                            # 按各自执行的块、按运算量折算的前向速度：本讲模型约是对方的 1.7 倍
 FWD_TFS_OURS, FWD_TFS_THEIRS = 487, 290          # 按各自执行的块折算的前向速度（TFLOP/s）
