@@ -1479,7 +1479,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1066" y="289" fill="#fff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在等 2.07 秒</tspan></text>
 <rect x="1286.0523636363635" y="262" width="13.795363636363845" height="40" rx="2" fill="#e8eaed" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="1299" y="252" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">主机均值 5.31 秒</text>
-<text class="svgsm" x="170" y="328" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">真正空着的不到 2 毫秒，但四成时间停着等通信</text>
+<text class="svgsm" x="170" y="328" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">设备上这一步 5.25 秒（主机均值多出的在设备之外）；空着不到 2 毫秒，四成时间在等通信</text>
 <rect x="0" y="452" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="452" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="452" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -1940,7 +1940,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 
   <h3 id="s3-2">3.2　再理排法和优化器（站 4–7）</h3>
-  <p>字节降下来以后，通信已经比计算短，剩下的是它排在哪。<b>站 4</b>：一条收集放行到完成之间没东西陪它；改成流水（分几块收，收一块就先算这一块），对同作业对照 4.605 秒快 7.5%（下图）。</p>
+  <p>字节降下来以后，通信已经比计算短，剩下的是它排在哪。（试过预取下一层权重：4.948 → 5.388 秒，+8.9%，没采用。）<b>站 4</b>：一条收集放行到完成之间没东西陪它；改成流水（分几块收，收一块就先算这一块），对同作业对照 4.605 秒快 7.5%（下图）。</p>
 <figure class="fbox fwide shot" id="shot-agp"><img src="media/topic08b-shot-agp.webp" loading="lazy" alt="站 4 前后：同一条专家权重收集，放行到完成之间夹没夹计算。上：流水关，放行到完成之间没有矩阵乘，主核在红框里停 6.94 毫秒；下：流水开，中间夹进两个矩阵乘（绿框），只停 4.95 毫秒" style="width:100%;height:auto;border:1px solid #dadce0;border-radius:6px">
 <figcaption><b>站 4 前后：同一条专家权重收集，放行到完成之间夹没夹计算</b><ol class="shotkey" style="margin:.3em 0 .2em 1.2em;padding:0;list-style:none"><li>上：流水关，放行到完成之间没有矩阵乘，主核在红框里停 6.94 毫秒</li><li>下：流水开，中间夹进两个矩阵乘（绿框），只停 4.95 毫秒</li></ol><details class="figsrc"><summary>出处与口径</summary><p>收齐要的时间两边差不多（9.6 对 9.9 毫秒），收益全在重叠。实测：XProf，两张同窗宽 20 毫秒，左沿在这条收集放行前 4 毫秒。</p></details></figcaption></figure>
 
@@ -2515,7 +2515,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="552.4832495973061" y1="324" x2="1118.083333333333" y2="324" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3"/>
 <rect x="544.4832495973061" y="316" width="16" height="16" rx="8" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="536" y="329" fill="#681da8" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.341</tspan></text>
-<text class="svgsm" x="1132" y="329" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">再换成新数据：梯度 BF16 重测 −12.4%</text>
+<text class="svgsm" x="1132" y="329" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">三项都在新数据上重测（−12.4%、−2.7%、−4.1%）再相乘</text>
 <text class="svgsm" x="456" y="380" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">④ 实测：三项合开</tspan></text>
 <line x1="594.25" y1="376" x2="1118.083333333333" y2="376" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3"/>
 <rect x="586.25" y="368" width="16" height="16" rx="8" fill="#202124" stroke="#202124" stroke-width="1.0"/>
@@ -3243,7 +3243,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="482.0" y1="516" x2="482.0" y2="552" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
 <text class="svgsm" x="496" y="536" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只夹 0.7 ms，停下来等 3.6–3.9 ms</tspan></text>
 <text class="svgsm" x="30" y="592" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整步：主核计算少约 190 ms，专家权重收集露出 64 → 560 ms；只加融合核，一步 4.351 → 4.692 秒（+7.8%）</tspan></text>
-<text class="svgsm" x="30" y="628" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">把这类收集的延迟估计调大一倍：括号里的核 1/2/3 → 2/3/5 个（对照是 4/5/6）；4.693 → 4.630 秒，342 毫秒只救回 63</tspan></text>
+<text class="svgsm" x="30" y="628" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">把这类收集的延迟估计调大一倍：三条收集括号里夹的矩阵乘 1/2/3 → 2/3/5 个（对照是 4/5/6）；4.693 → 4.630 秒，342 毫秒只救回 63</tspan></text>
 <rect x="0" y="687" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="687" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="687" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -3501,7 +3501,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>实测（上卡，profile 第 11 步一颗芯片一个主核，按收集的名字合计全部层）：gate/up 那条每步露出 41.5 → 290.5 → 不到 14 ms；down 那条 85.4 → 150.8 → 77.4 ms。对照的 41.5 取同配置另一作业的 profile。核报耗时那格，gate/up 括号里主核真在干活的时间各层中位只有 0.65 ms（对照 6.7–7.0 ms）。</p>
 <p>「报：约 0.1 ms」：融合核四颗各报的耗时换算成时长是 0.068 到 0.178 ms；调准那格按实测把四颗各乘 1.35 到 1.98 倍。为什么报了这么小的耗时就把括号排空，见下一节的配对规则：报了耗时它就成了候选，又是本轮最大的计算，收集的完成点被钉在它旁边。</p></details></figure>
   <p>对照里括号里排进 10.4 毫秒计算。换上融合核，只剩 0.48 毫秒，调度器自己都记下这一层空等 21.8 毫秒。把融合核报的耗时按实测调准，还是 0.55 毫秒。<b>让它什么都不报</b>，括号里回来 11.9 毫秒，比对照还多。四颗融合核各报的耗时换算下来只有 0.07 到 0.18 毫秒：报不报就差这么一点，括号一个满、一个空。差在「报没报」，不在「准不准」。</p>
-  <p><b>第三步，上卡。</b>时间线只是调度器自己的估计，算不算数要上卡量。八格都叠在同一个对照上：</p>
+  <p><b>第三步，上卡。</b>时间线只是调度器自己的估计，算不算数要上卡量。七个改动加一个对照共八格，都叠在同一个对照上（「不报 ＋ 同样校准」那格没导出调度器估计）：</p>
 <figure class="fbox fwide" id="fig-cecells"><svg viewBox="0 0 1400 1150" width="100%" role="img" aria-label="八格上卡，都叠在同一个对照上（4.088 秒）。Ⓐ 实测步时对对照的变化：gmm 和注意力核的估计按实测校准，慢 9.4%；小核收集的延迟估计按实测调短，慢 5.8%；两样一起，慢 6.1%；换上融合核、核报耗时，慢 10.6%；把它报的耗时调准，还是慢 10.6%；融合核不报耗时，快 3.8%；融合核不报耗时再加同样的校准，慢 4.8%。Ⓑ 调度器自己估的整步时长和上卡实测：对照估 5167 毫秒、实测 4088；校准以后估 3965、实测 4474；两样一起估 3870、实测 4337；融合核不报耗时估 4986、实测 3931。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">把估计调准了，调度器估的整步落到实测附近，上卡却慢了</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Ⓐ 条 ＝ 上卡实测步时对对照变化了百分之几（绿＝快，红＝慢）；Ⓑ 空心圈 ＝ 调度器自己估的整步，实心点 ＝ 上卡实测，同一行连一条线</text>
@@ -3565,37 +3565,37 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="588.9600000000002" y1="650" x2="1221.9733333333334" y2="650" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <circle cx="1222.0" cy="650.0" r="8.0" fill="#fff" stroke="#5f6368" stroke-width="2.4"/>
 <circle cx="589.0" cy="650.0" r="8.0" fill="#202124" fill-opacity="0.85"/>
-<text class="svgsm" x="1221" y="637" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 5167</text>
+<text class="svgsm" x="1221" y="637" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 5.17 秒</text>
 <text class="svgsm" x="400" y="708" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家矩阵乘、注意力核的估计按实测校准</tspan></text>
 <line x1="516.8000000000001" y1="702" x2="815.4133333333335" y2="702" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <circle cx="516.8" cy="702.0" r="8.0" fill="#fff" stroke="#5f6368" stroke-width="2.4"/>
 <circle cx="815.4" cy="702.0" r="8.0" fill="#d93025" fill-opacity="0.85"/>
-<text class="svgsm" x="516" y="689" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 3965</text>
+<text class="svgsm" x="516" y="689" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 3.96 秒</text>
 <text class="svgsm" x="400" y="760" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">小核收集的延迟估计按实测调短</tspan></text>
 <line x1="728.0000000000002" y1="754" x2="1155.0933333333332" y2="754" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <circle cx="1155.1" cy="754.0" r="8.0" fill="#fff" stroke="#5f6368" stroke-width="2.4"/>
 <circle cx="728.0" cy="754.0" r="8.0" fill="#d93025" fill-opacity="0.85"/>
-<text class="svgsm" x="1155" y="741" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 5053</text>
+<text class="svgsm" x="1155" y="741" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 5.05 秒</text>
 <text class="svgsm" x="400" y="812" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两样一起校准</tspan></text>
 <line x1="461.06666666666683" y1="806" x2="735.04" y2="806" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <circle cx="461.1" cy="806.0" r="8.0" fill="#fff" stroke="#5f6368" stroke-width="2.4"/>
 <circle cx="735.0" cy="806.0" r="8.0" fill="#d93025" fill-opacity="0.85"/>
-<text class="svgsm" x="461" y="793" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 3870</text>
+<text class="svgsm" x="461" y="793" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 3.87 秒</text>
 <text class="svgsm" x="400" y="864" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换上融合核（核报耗时）</tspan></text>
 <line x1="843.5733333333336" y1="858" x2="1138.0800000000002" y2="858" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <circle cx="1138.1" cy="858.0" r="8.0" fill="#fff" stroke="#5f6368" stroke-width="2.4"/>
 <circle cx="843.6" cy="858.0" r="8.0" fill="#d93025" fill-opacity="0.85"/>
-<text class="svgsm" x="1138" y="845" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 5024</text>
+<text class="svgsm" x="1138" y="845" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 5.02 秒</text>
 <text class="svgsm" x="400" y="916" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">融合核，报的耗时按实测调准</tspan></text>
 <line x1="843.5733333333336" y1="910" x2="1153.3333333333335" y2="910" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <circle cx="1153.3" cy="910.0" r="8.0" fill="#fff" stroke="#5f6368" stroke-width="2.4"/>
 <circle cx="843.6" cy="910.0" r="8.0" fill="#d93025" fill-opacity="0.85"/>
-<text class="svgsm" x="1153" y="897" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 5050</text>
+<text class="svgsm" x="1153" y="897" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 5.05 秒</text>
 <text class="svgsm" x="400" y="968" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">融合核，不报耗时</tspan></text>
 <line x1="496.85333333333347" y1="962" x2="1115.7866666666666" y2="962" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <circle cx="1115.8" cy="962.0" r="8.0" fill="#fff" stroke="#5f6368" stroke-width="2.4"/>
 <circle cx="496.9" cy="962.0" r="8.0" fill="#1e8e3e" fill-opacity="0.85"/>
-<text class="svgsm" x="1115" y="949" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 4986</text>
+<text class="svgsm" x="1115" y="949" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">估 4.99 秒</text>
 <rect x="0" y="1076" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="1076" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="1076" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>

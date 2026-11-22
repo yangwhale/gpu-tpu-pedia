@@ -106,7 +106,7 @@ def fig_agwin():
     yt = py + 460
     f.t(30, yt, "整步：主核计算少约 %d ms，专家权重收集露出 %d → %d ms；只加融合核，一步 %.3f → %.3f 秒（+%.1f%%）" % (
         (N.IH_COMPUTE_SAVED,) + N.IH_AG_EXPOSED + (N.IH_CTL, N.IH_S, N.IH_PCT)), RD, True, 15)
-    f.t(30, yt + 36, "把这类收集的延迟估计调大一倍：括号里的核 %d/%d/%d → %d/%d/%d 个（对照是 %d/%d/%d）；%.3f → %.3f 秒，%d 毫秒只救回 %d" % (
+    f.t(30, yt + 36, "把这类收集的延迟估计调大一倍：三条收集括号里夹的矩阵乘 %d/%d/%d → %d/%d/%d 个（对照是 %d/%d/%d）；%.3f → %.3f 秒，%d 毫秒只救回 %d" % (
         N.IH_WIN_KERN[1] + N.IH_WIN_KERN[2] + N.IH_WIN_KERN[0] + N.IH_KNOB + (N.IH_KNOB_GAP, N.IH_KNOB_BACK)), GY, True, 15)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "计算变短了，原来盖着的通信就露出来：省了计算，还要看放行和完成之间还剩什么", [])

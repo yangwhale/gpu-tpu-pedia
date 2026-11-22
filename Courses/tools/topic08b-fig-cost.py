@@ -184,7 +184,7 @@ def fig_cecells():
         _dot(f, X(e), yy, 8, GY, hollow=True)
         col = RD if N.CE_PCT[k] > 0 else (GR if N.CE_PCT[k] < 0 else INK)
         _dot(f, X(s), yy, 8, col)
-        f.t(X(e), yy - 13, "估 %d" % round(e * 1000), GY, False, 13, "middle")
+        f.t(X(e), yy - 13, "估 %.2f 秒" % e, GY, False, 13, "middle")
     f._pan = None
     yb = f.band(pyb + PHB + 20, "ok", "八格里只有「融合核不报耗时」那一格兑现了，−3.8%；几格校准全都变慢", [])
     yb = f.src(yb + 10,

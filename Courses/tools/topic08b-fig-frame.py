@@ -60,7 +60,7 @@ def fig_budget():
     f.t((X(c) + X(c + w)) / 2, y2 + 27, "在等 %.2f 秒" % w, "#fff", True, 15, "middle")
     f.box(X(c + w), y2, X(N.CTL_STEP) - X(c + w), 40, LINE2, GY2, 2)
     f.t(X(N.CTL_STEP), y2 - 10, "主机均值 %.2f 秒" % N.CTL_STEP, GY, size=13, anchor="middle")
-    f.t(X0, y2 + 66, "真正空着的不到 2 毫秒，但四成时间停着等通信", GY, size=14)
+    f.t(X0, y2 + 66, "设备上这一步 %.2f 秒（主机均值多出的在设备之外）；空着不到 2 毫秒，四成时间在等通信" % (N.PROF_DEVSTEP_MS / 1000), GY, size=14)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "实测是理想的 %.1f 倍：四成在等；在算的那部分，也是理想的 %.1f 倍" % (N.GAP_X, N.COMPUTE_OVER_IDEAL), [])
     yb = f.src(yb + 10,
