@@ -344,7 +344,7 @@ FUSE_INSTR = (42, 1)                          # 那条梯度规约「放行到�
 FUSE_WAIT_RATIO = 1.58                         # 那条规约每层的等待：开核后是原来的 1.58 倍
 FUSE_LAYER_WAIT = (10.1, 16.0)                # 每层等待（ms）
 FUSE_BWD_MS, FUSE_FWD_MS, FUSE_AR_MS = 217, 55, 28   # 各层合计多露 / 前向一条收集 / 同步 all-reduce（ms）
-FUSE_NET_MS = 100
+FUSE_NET_MS = 107                                 # 5.420 − 5.313（分项 217＋55＋28−183＝117，差在拆账误差）
 FUSE_OTHER_PCT = -0.2                         # 另一种截层上这颗核：误差内
 # 两件小的
 WO_CTL, WO_S = 5.311, 5.120
@@ -854,3 +854,5 @@ assert abs(CURVE_GAP_X - 3.89) < 0.005 and abs(CURVE_GAP_RUN_X - 3.96) < 0.005 a
 DSV3_BUSY_AVG_BLOCKS = 50       # 4.2 / fig-ref：对方文本数据第 5–9 步最忙设备平均约 50 个子块（本讲模型几乎每步 66）
 HW_MFU_FINAL = 36.5             # 11.3：定稿硬件 MFU（实际执行的矩阵运算，含重算、优化器、冗余；修正核的记账后）
 FINAL_PROFILE_S = 4.122         # 11.3：定稿时间账那次多芯片 profile 的步时
+FULL128_NORMAL_GIB, FULL128_HEADROOM_GIB = 88.99, 4.25   # 9.4：128 片全量正常步离线峰值与余量（作者调优记录）
+RAW_HALF_MEM_GIB = 103.24                                # 第十一节 / fig-mile：原始代码放到半层底座要的显存（放不下）
