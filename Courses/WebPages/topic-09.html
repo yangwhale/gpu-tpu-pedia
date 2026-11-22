@@ -884,11 +884,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h1>GPU→TPU 训练性能优化</h1>
   <div class="hook">
     公开的 Hy4（770B 总参、49B 激活的多模态 MoE），在 64 片 TPU v7x（128 个设备）上、三条定死的条件下训练：从 20 层 12.9 秒（原始代码）优化到层数翻倍的 39 层 3.9 秒；有效 MFU 4.3% → 25.9%，过了 25%；编译约半小时 → 3 分钟。<br>
-    <small style="font-size:14px;line-height:1.6;display:inline-block;color:var(--gray)">两端都是长图文；首尾只能在同一底座上比，20 层同一个作业里原始代码慢 5.73 倍（三份数据的读数见<a href="#tab-data">读数对照表</a>）。4.3% 是推导值，推导式和以前以文字为主的长文上的读数见<a href="#s十一">第十一节</a>。编译指独占一台编译机、128 片一格：1522 → 181 秒。</small><br>
+    <small style="font-size:14px;line-height:1.6;display:inline-block;color:var(--gray)">口径：长图文；20 层同一个作业里首尾比，原始代码慢 5.73 倍，4.3% 是推导值（<a href="#tab-data">读数对照表</a>、<a href="#s十一">第十一节</a>）；编译指 128 片一格独占一台编译机：1522 → 181 秒。</small><br>
     <small style="font-size:14px;line-height:1.6;display:inline-block;color:var(--gray)"><b>局限一句话</b>：页首的数只量在长图文上；长短文档混拼、全是短文档两种数据还没测，后者是下一步第一优先（<a href="#s十一">第十一节</a>）。</small><br>
     <em>不在关键路径上的，省了也白省。</em>
   </div>
-  <p style="max-width:820px;color:var(--gray);font-size:15px"><b>本课的 MFU 都是「有效 MFU」</b>：分子只算模型真正需要的矩阵乘，训练按前向 × 3 记，重算、优化器和冗余计算都不算；扣掉文档掩码挡掉的跨文档注意力和填充 token，补上框架漏算的 MTP 头（多预测几个 token 的附加输出层），视觉塔按实际图像块数算。有效 MFU ＝ 有效分子 ÷ 步时 ÷ 每个设备的峰值 1155 TFLOP/s。短文档数据上它只有框架日志口径的一半出头，长文上两者几乎一样。把重算、优化器、冗余都算进去的「硬件 MFU」，定稿那一格是 36.5%，口径不同。怎么数的见<a href="#s二">第二节</a>。</p>
+  <p style="max-width:820px;color:var(--gray);font-size:15px"><b>本课的 MFU 都是「有效 MFU」</b>：分子只算模型真正需要的矩阵乘（训练按前向 × 3；不算重算、优化器、冗余计算、跨文档注意力和填充 token；补上框架漏算的 MTP 头，视觉塔按实际图像块数），除以步时和每设备峰值 1155 TFLOP/s。它在短文档上只有框架日志口径的一半出头、长文上几乎一样；把重算、优化器、冗余都算进去的「硬件 MFU」定稿那格是 36.5%，口径不同（<a href="#s二">第二节</a>）。</p>
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（主核、小核）、<b>专题五</b>（FSDP、all-gather）、<b>专题七</b>（MFU、读一条通信）、<b>专题八</b>（尺子）</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
@@ -1154,6 +1154,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 </div>
 <div class="wrap" id="gloss">
+  <p>先记四个词：<b>设备</b>（一颗 v7x 芯片里有两个）；<b>主核＝师傅</b>（TensorCore，做正活）；<b>小核＝小工</b>（SparseCore，跑通信和杂活）；<b>藏住／露出</b>（通信跑的时候主核有没有别的活干）。其余的词在下面的折叠里，正文第一次用到时也会就地解释。</p>
+  <details class="foldfig"><summary><b>先认几个词</b>：底座、作业与格、三份数据、放行与完成点、关键路径、kernel……</summary>
   <table class="t9"><thead><tr><th colspan="2">先认几个词（全讲都用；工坊比方接专题五）</th></tr></thead><tbody>
   <tr><td><b>设备</b></td><td>v7x 一颗芯片里有两个设备；后面说「每设备」都指它</td></tr>
   <tr><td><b>主核 ＝ 师傅</b></td><td>每个设备一个，做矩阵乘、注意力这些正活（TensorCore）</td></tr>
@@ -1164,7 +1166,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td><b>20 层底座 ／ 半层底座</b></td><td>调优用的两个缩小版测试配置：20 层底座只留前 20 层；半层底座留 39 层主干、20 层视觉塔，加 MTP 头（多预测几个 token 的附加输出层），每个设备的参数和每层的计算跟 128 片全量（78 层）一样（3.4）</td></tr>
   <tr><td><b>短文 ／ 长文 ／ 长图文</b></td><td>三份数据：短文一行 32K 拼几十篇短文档（第一、二段）；长文以文字为主、一行基本一整篇（第三段和开篇曲线）；长图文按生产图像比例，一行基本一整篇，页首的数都量在它上面</td></tr>
   </tbody></table>
-  <details class="foldfig"><summary><b>其余的词</b>：放行与完成点、关键路径、kernel、重算、token 收发、all-to-all……正文第一次用到时也会就地解释，忘了回这儿查</summary>
+  
   <table class="t9"><tbody>
   <tr><td><b>MoE、专家</b></td><td>每层有很多组「专家」权重，每个 token 只挑几组来算</td></tr>
   <tr><td><b>切片规模</b></td><td>64 片排成 4x4x4，共 128 个设备；参照模型用公开的 DeepSeek V3（第四节）；半层底座激活跟全量不一样（3.4）</td></tr>
@@ -1188,11 +1190,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <div class="wrap">
 <div class="foundbox hardbox" id="hard">
   <div class="ft">先定基调：这个模型难在条件上</div>
-  <p class="fsub">慢，主要不是结构慢（第四节拿公开模型在同样条件下对过），是三条条件定死了：</p>
+  <p class="fsub">慢，主要不是结构慢（第四节对过），是三条条件定死了：</p>
   <ol class="hardlist">
-    <li><b>32K 长上下文，带文档掩码。</b>注意力按 32K 算，又被文档边界切碎，算得多，还不规整。</li>
-    <li><b>必须开上下文并行 8，每个设备只有 4096 token。</b>每层要收的专家权重不随 token 变；token 少，这笔通信就摊不薄。</li>
-    <li><b>用 Muon 优化器。</b>每步先用几轮矩阵乘把动量矩阵「正交化」，再加到权重上；正交化要每个设备拿整块矩阵，所以还要跨卡搬动量。AdamW 那种逐元素更新的便宜做法用不上。</li>
+    <li><b>32K 长上下文、带文档掩码</b> → 注意力算得多又不规整；短序列配方用不上。</li>
+    <li><b>上下文并行 8，每设备只有 4096 token</b> → 每层专家权重的通信摊不薄；加大每卡 batch 被项目定死。</li>
+    <li><b>Muon 优化器</b> → 每步要跨卡搬动量做正交化；AdamW 那种逐元素的便宜更新用不上。</li>
   </ol>
   <details class="foldfig"><summary><b>常用的五种提速手段为什么用不上</b>：加大 batch、短序列、换回 AdamW、FP8、权重留到反向，各自量过的代价</summary>
   <table class="t9 ftab"><thead><tr><th>常用的提速手段</th><th>为什么用不上</th><th>量过的代价</th></tr></thead><tbody>
@@ -1249,7 +1251,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <tr><td>定稿 300 步对长文起点比 loss</td><td class="fimp">性能改动只差 −1.7e-6；−3.5e-5 来自保留的三处 BF16</td><td><a href="#s十">第十节</a></td></tr>
 </tbody></table>
   </details>
-</div>
+  <details class="foldfig"><summary><b>编年史全图</b>：三段、28 站，一站一站往下</summary>
 <figure class="fbox fwide" id="fig-chron"><svg viewBox="0 0 1400 616" width="100%" role="img" aria-label="优化编年史，三段底座。第一段 20 层底座：站 0 原样 12.743 秒，到站 12 2.731 秒。衔接一：同一配置放到半层底座是 5.476 秒。第二段半层底座短文：站 13 5.311 秒，到站 16 4.049 秒。衔接二：站 13 那套配置换长文是 5.553 秒。第三段半层底座长文：站 17 4.804 秒，到站 24 4.094 秒；站 25 到 27 三站精度修正，步时持平、+0.2%、+0.1%，终点 4.116 秒，有效 MFU 24.18%。三段的纵轴各自独立，段与段之间不能比高低。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">优化编年史：三段底座，28 站，12.743 秒 → 4.116 秒</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每根柱一站，柱高 ＝ 步时（秒）；颜色 ＝ 这一刀打在哪类瓶颈上；灰框 ＝ 换底座以后的起点。三段纵轴各自独立，不能跨段比高低</text>
@@ -1383,6 +1385,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>衔接①：同一份推荐配置，20 层底座 2.731 秒、有效 MFU 12.25%，半层底座（39 层主干 ＋ 视觉塔 20 层 ＋ MTP 头，每个设备的负担跟 128 片全量一样）5.476 秒、11.10%。</p>
 <p>衔接②：站 13 那套配置，短文 5.311 秒、10.98%，长文 5.553 秒、17.83%：长文每行一篇长文，有效分子从 673.5 变成 1148.2 TFLOP，有效 MFU 高了，步时反而长。</p>
 <p>站 10、13 是换数据：步时快了一点，有效 MFU 跳一档主要因为分子变了。</p></details></figure>
+  </details>
+</div>
 </div>
 
 <div class="wrap" id="tab-data">
@@ -1971,7 +1975,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <details class="foldfig"><summary><b>考考自己</b>：站 8：注意力反向跳块，注意力核少算约 340 毫秒，步时只快 78。按第一节的说法，你先怀疑什么？</summary><p>省下的计算不在关键路径上。那时关键路径是小核 0 那条队列（占满步长的 88%），主核算得再快，也只是换个地方等。把 token 排序挪回主核、给小核减负，才快了 11.3%。</p></details>
 
   <h3 id="s3-4">3.4　衔接①：换到半层底座</h3>
-  <p><b>为什么换。</b>换成半层底座：78 层主干留 39 层、视觉塔 40 层留 20 层，再加 MTP 头。128 片全量每个设备分到的参数、每层要算要收的，跟半层一样（层数是半层的 2 倍，切参数的份数也是 2 倍），20 层底座每层的活也一样，但每设备的参数只有一半，优化器显得偏轻。</p>
+  <p><b>为什么换。</b>换成半层底座：78 层主干留 39 层、视觉塔 40 层留 20 层，再加 MTP 头。半层底座层数减半、切参数的份数也减半，所以每设备的参数和每层的活都跟 128 片全量一样。20 层底座每层的活一样，但每设备参数只有一半，优化器偏轻。</p>
 <details class="foldfig"><summary><b>为什么换底座前后的数不能直接比</b></summary>
   <p>同一份推荐配置量两次：20 层底座 2.731 秒、有效 MFU 12.25%；半层底座 5.476 秒、11.1%。层数从 20 到 39 翻了一倍还多，又多了视觉塔，步时和分子都跟着变。</p>
 </details>
@@ -2414,7 +2418,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>实测：这两类通信只走 3D 环面的两个轴（每轴正反两条；编译产物里的环配置）；一颗芯片两个设备同时各收各的。</p>
 <p>实测：让专家权重收集也用两颗小核，同一个作业里 4.415 → 4.467 秒（第 5–9 步），慢 1.2%；每条收集没有变快，反而多占一条队列。</p>
 <p>📌 公开规格：每芯片 6 条 ICI 链路，每条双向 200 GB/s（Google Cloud TPU7x 文档）。⚠️ 本课推导：每方向约 100 GB/s；这两类通信走 3D 环面的两个轴共 4 条，入向约 400 GB/s；一颗芯片两个设备合计约 372 GB/s，到九成多。一颗芯片里两块计算晶粒怎么分这几条链路官方没公开，所以这个对比只对量级；「卡在链路上」也是由此推断。</p></details></figure>
-  <p>收集和规约、FP32 和 BF16、一颗小核和两颗小核，全落在同一条线上：每设备约 186 GB/s。<b>这条链不卡在小核个数上（实测），最可能卡在芯片之间的链路带宽上</b>（公开规格每芯片 6 条链路、每条每方向约 100 GB/s；这两类通信走其中 4 条，入向约 400 GB/s，一颗芯片两个设备合计约 372 GB/s，到九成多；推断）；两颗小核一起收反而慢 1.2%。要缩它，只能少搬字节；把两份权重拼成一趟收也不省链路时间。</p>
+  <p>收集和规约、FP32 和 BF16、一颗小核和两颗小核，全落在同一条线上：每设备约 186 GB/s。<b>这条链不卡在小核个数上（实测），最可能卡在芯片之间的链路带宽上</b>（约为芯片间链路入向上限的九成多，折算见下图出处；推断）；两颗小核一起收反而慢 1.2%。要缩它，只能少搬字节；把两份权重拼成一趟收也不省链路时间。</p>
 
   <h3 id="s6-2">6.2　砍一刀：梯度改 BF16，再加两个开关</h3>
   <p>专家梯度原来按 FP32 规约。改成 BF16，字节减半；再加上公开配方里的两条运行库开关（开关甲、开关乙，都是让编译器排通信更自由）。三样合开：5.311 → 4.413 秒，快 16.9%。</p>
@@ -2479,7 +2483,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 
   <h3 id="s6-3">6.3　一加一大于二？</h3>
-  <p>回头看这三样（梯度 BF16、开关甲、开关乙）：在原数据上单测，梯度 BF16 快 6.5%，两条开关合起来快 5.7%（它俩只合起来量过），相加约 12%；合开却快了 16.9%。打在同一条链上，合起来就超可加？先别急着下结论。</p>
+  <p>回头看这三样（梯度 BF16、开关甲、开关乙）：在原数据上单测，梯度 BF16 快 6.5%，两条开关合起来快 5.7%（在原数据上它俩只合起来量过），相加约 12%；合开却快了 16.9%。打在同一条链上，合起来就超可加？先别急着下结论。</p>
   <div class="note"><span class="t">先想一想</span>这三个数，各是在哪份数据上量的？</div>
 <figure class="fbox fwide" id="fig-additive"><svg viewBox="0 0 1400 586" width="100%" role="img" aria-label="同一个对照 5.311 秒。拿旧数据上两个单项相加推，预计 4.663 秒，实测合开 4.413 秒，看着像一加一大于二。只把加法换成乘法，预计 4.68 秒，几乎不变；再换成新数据上重测的单项相乘推，预计 4.34 秒，实测 4.413 秒，反而略慢于相乘。差在数据，不在加法乘法。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一加一大于二？拿同一份数据量的单项去推，就不大于了</text>
@@ -2819,7 +2823,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <details class="foldfig"><summary><b>同一条规矩的另外三个例子（存下输出、交给小核、限在飞条数）</b></summary>
 
   <table class="t9 mini" id="tab-sched-small"><caption>同一条规矩的另外三个例子</caption><thead><tr><th>改动</th><th>省了什么</th><th>一步变化</th><th>为什么</th></tr></thead><tbody><tr><td>iHC 里 MoE 分支的输出存下来、反向不再重算</td><td>主核计算约 116 毫秒，token 规约的等待约 136 毫秒</td><td>5.311 → 5.12 秒（−3.6%）</td><td>兑现的是 token 规约那段等待；专家权重那条链没短（＋6 毫秒），所以只拿到一部分。代价：每层多存一份，峰值显存 ＋1.7 GiB；64 片跑全部 78 层放不下（96.67 ＞ 94.74 GiB），半层底座放得下，站 15 起一直带着</td></tr><tr><td>把每步约 347.6 毫秒的 all-to-all 从主核交给小核（新版本运行库默认把它留在主核上同步跑，第八节讲）</td><td>主核上那 347.6 毫秒同步通信</td><td>只少 64 毫秒（−1.3%）</td><td>主核还得等小核做完（187 毫秒）；小核跑它要 361 毫秒，不比主核快；按这两个数本该少一百六十来毫秒，实测只少 64，差的那截落在别处，这次没拆；挪地方不等于省</td></tr><tr><td>限制同时在飞的通信条数</td><td>—</td><td>4.882 → 5.059 秒（＋3.6%）</td><td>反向循环里括号夹的计算 1261 → 620：括号被压短，通信又露出来</td></tr></tbody></table>
-  <details class="figsrc"><summary>出处与口径</summary><p>实测：三行各自同一个作业里的对照；MoE 分支输出那一行叠在第六节最好那一格上又快 3.7%（4.418 → 4.256 秒）。</p><p>all-to-all 那一行要先加屏障腾出约 3 GiB 显存才放得下（不加屏障时强交给小核，峰值多 8.1 GiB）。</p></details>
+  <details class="figsrc"><summary>出处与口径</summary><p>实测：三行各自同一个作业里的对照；MoE 分支输出那一行叠在第六节最好那一格上又快 3.7%（4.418 → 4.256 秒）。</p><p>all-to-all 那一行要先加屏障才放得下：不加屏障时强交给小核，调度器把这批通信提前进反向，峰值多 8.1 GiB；加了屏障它们留在优化器段。</p></details>
 
 </details>
 
@@ -2933,7 +2937,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="s8-3">8.3　看产物，不看名字</h3>
   <p>这次调优里四次靠「看产物」省了事，见下表；最后一行是反例：离线看括号变没变，既不充分也不必要。</p>
 
-  <table class="t9 mini" id="tab-look"><caption>看产物，不看名字：这次调优里四次靠它省了事</caption><thead><tr><th>看什么</th><th>看到了什么</th><th>省了什么</th></tr></thead><tbody><tr><td>程序指纹：加了开关以后编出来的程序跟对照比</td><td>一组开关里 5 条编出来跟对照逐条相同</td><td>上卡前就知道是空操作（第二节的尺子正是它们）</td></tr><tr><td>kernel 在编译产物里是真 kernel 还是循环</td><td>参照代码的一颗核被编成了解释循环</td><td>没把 25% 的差算到别的头上（8.1）</td></tr><tr><td>两个名字不同的开关，产物比一比</td><td>优化后的程序逐条相同（只差核体里内嵌的源码位置串）；显存都是 90.57 GiB，上卡都是 5.12 秒</td><td>知道是同一个机制，不用重复试两遍</td></tr><tr><td>离线看通信窗口变没变</td><td>同项目另一个模型上：窗口变好了上卡 0.8%（噪声内）；窗口没变上卡 -5.5%</td><td>窗口既不充分也不必要：变了要上卡核实，没变也不能否掉小核分配这类改动</td></tr></tbody></table>
+  <table class="t9 mini" id="tab-look"><caption>看产物，不看名字：这次调优里四次靠它省了事</caption><thead><tr><th>看什么</th><th>看到了什么</th><th>省了什么</th></tr></thead><tbody><tr><td>程序指纹：加了开关以后编出来的程序跟对照比</td><td>一组开关里 5 条编出来跟对照逐条相同</td><td>上卡前就知道是空操作（第二节的尺子正是它们）</td></tr><tr><td>kernel 在编译产物里是真 kernel 还是循环</td><td>参照代码的一颗核被编成了解释循环</td><td>没把 25% 的差算到别的头上（8.1）</td></tr><tr><td>两个名字不同的开关，产物比一比</td><td>优化后的程序逐条相同（只差核体里内嵌的源码位置串）；显存都是 90.57 GiB，上卡都是 5.12 秒</td><td>知道是同一个机制，不用重复试两遍</td></tr><tr><td>离线看通信窗口变没变</td><td>同项目另一个模型上：窗口变好了上卡 0.8%（噪声内）；窗口没变，上卡反而快 5.5%</td><td>窗口既不充分也不必要：变了要上卡核实，没变也不能否掉小核分配这类改动</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>实测：前三行出自本讲模型和参照配方的复现；第四行出自同一个项目里另一个较小的模型。</p></details>
 
   <p>看产物还有两条边界，这次各撞上一次：</p>
@@ -2975,7 +2979,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>推断：按离线指令数模型，注意力核本身只省约 0.25%；暂存大了以后，编译器的矩阵乘融合能用更大的分块（没读底层指令，未证实）。</p></details></figure>
   
   <p><b>离线数指令（不上卡，只数编出来的指令有多少拍），只能预测不改数据搬运的改动。</b>产物是上卡之前的筛子，不是判决。</p>
-  <p>拿编出来的指令包数估注意力反向核：把块改大，预测这颗核快 3.5%、3.7%；上卡整步慢 6.3%、18.5%，方向都反了。</p>
+  <p>反例：拿编出来的指令包数估注意力反向核：把块改大，预测这颗核快 3.5%、3.7%；上卡整步慢 6.3%、18.5%，方向都反了。</p>
 <details class="foldfig"><summary><b>为什么块改大，预测快、上卡反而慢</b></summary>
   <p>块大了，很多行只剩一步，读进 K/V、写回梯度没有计算可以盖住，换行时的搬运露了出来，静态指令数看不到它（推断）。反过来，另一次只改计算、不改搬运的核改动，预测前向快 12.4%，单芯片真机快 10%，对得上。</p>
 </details>
@@ -3010,7 +3014,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   
 <figure class="fbox fwide shot" id="shot-long"><img src="media/topic08b-shot-long.webp" loading="lazy" alt="换成长文以后：注意力的两颗核成了主角。① 绿框：注意力前向核，一层 9.0 毫秒；② 紫框：注意力反向核，一层 13.3 毫秒（约是前向的 1.5 倍）" style="width:100%;height:auto;border:1px solid #dadce0;border-radius:6px">
-<figcaption><b>换成长文以后：注意力的两颗核成了主角</b><ol class="shotkey" style="margin:.3em 0 .2em 1.2em;padding:0;list-style:none"><li>① 绿框：注意力前向核，一层 9.0 毫秒</li><li>② 紫框：注意力反向核，一层 13.3 毫秒（约是前向的 1.5 倍）</li></ol><details class="figsrc"><summary>出处与口径</summary><p>两颗核合起来约占一步的 17%；同一个模型在短文上，这两颗核一整步只有约 0.24 秒。实测：XProf，长文数据，前向、反向各放大一层。</p></details></figcaption></figure>
+<figcaption><b>换成长文以后：注意力的两颗核成了主角</b><ol class="shotkey" style="margin:.3em 0 .2em 1.2em;padding:0;list-style:none"><li>① 绿框：注意力前向核，一层 9.0 毫秒</li><li>② 紫框：注意力反向核，一层 13.3 毫秒（约是前向的 1.5 倍）</li></ol><details class="figsrc"><summary>出处与口径</summary><p>两颗核合起来约占一步的 17%（本课推导：每层毫秒 × 39 ÷ 这一格的步时）；同一个模型在短文上，这两颗核一整步只有约 0.24 秒。实测：XProf，长文数据，前向、反向各放大一层。</p></details></figcaption></figure>
 
   <p>关键路径一换，原来的刀就重新排名：</p>
 <figure class="fbox fwide" id="fig-flip"><svg viewBox="0 0 1400 646" width="100%" role="img" aria-label="三把刀，各自在短文数据和长文数据上对同作业对照的步时变化。融合核：短文慢 2.0%，长文快 1.1%。token 和专家权重分到两颗小核：短文快 3.1%，长文只快 0.7%。片上暂存上限放到 64 MiB：短文快 0.4%，长文快 2.3%。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -3397,7 +3401,6 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>为什么偏（本课程作者的解释，部分是推断）：专家矩阵乘按整块 MoE 缓冲的行数报运算量，核实际只算有效行，所以偏长约 2.4 倍；注意力核按静态掩码报，运行时又跳掉一截空块，所以偏长，视觉塔那两颗反过来偏短；融合核报的读写字节核过是对的，慢在它只跑到显存带宽的一半左右。</p>
 <p>小核上的收集不是 Pallas 核，没有「报」这回事：调度器按自己的通信公式估，估约 26 ms，实测小核上约 8.2 ms。</p>
 <p>这张图只说明估计普遍不准；下一张图说明，准不准并不是括号空掉的原因。</p></details></figure>
-  <p>第一个念头顺理成章：估不准，校准就好。</p>
   <p><b>第二步，看调度器自己排的时间线</b>（离线编译时导出，每条指令的起止全按它自己的估计）。盯住 gate/up 那条收集的括号：</p>
 <figure class="fbox fwide" id="anim-cebracket">
 <video src="media/topic08b-cebracket.mp4?v=9d98b67b" autoplay loop muted playsinline data-pauses="1.10,8.30,12.40,18.00,23.60,29.00,32.20"
@@ -3839,10 +3842,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s9-6">9.6　编译时间：一格从 1522 秒到 181 秒</h3>
   <p class="station">定稿之后 · 工具 · 不为步时，为编一格要多久</p>
-  <p><b>编一次，等半小时。</b>每一刀都要先离线编译、看产物。128 片全量编一格，独占一台 192 核的编译机要 1522 秒，约 25 分钟（页首按半小时取整）；编译机上十几格挤着编，要 33 到 39 分钟。半层也要 647 秒。</p>
+  <p><b>编一次，等二十多分钟。</b>每一刀都要先离线编译、看产物。128 片全量编一格，独占一台 192 核的编译机要 1522 秒，约 25 分钟（页首按半小时取整）；编译机上十几格挤着编，要 33 到 39 分钟。半层也要 647 秒。</p>
 <details class="foldfig"><summary><b>时间花在哪：程序太大</b></summary>
 
-  <p>半层一格 89% 的时间在 XLA 编译里，编译时间跟着程序大小走。解码器的层是用 scan 写的，39 层变 78 层，循环体一条指令都不多；可 128 片还是比半层慢 2.4 倍。增长全在循环外最大的那一段程序里：优化前半层 61.0 千条指令、128 片 109.8 千条，其中约八成是优化器。</p>
+  <p>半层一格 89% 的时间在 XLA 编译里，编译时间跟着程序大小走。解码器的层是用 scan 写的，39 层变 78 层，循环体一条指令都不多；可 128 片编一格还是半层的 2.4 倍。增长全在循环外最大的那一段程序里：优化前半层 61.0 千条指令、128 片 109.8 千条，其中约八成是优化器。</p>
   <p><b>Python 的 for 和 JAX 的循环，编出来不一样。</b>JAX 先把函数在 Python 里跑一遍、记下每个运算（trace）。Python 的 for 在 trace 时真的跑 N 遍，每一遍都原样记进程序；<code>lax.fori_loop</code>、<code>lax.scan</code> 只记一份循环体，编译器也只编这一份。</p>
 
   <p>半层一个程序里正交化被调用 174 次，约 107 次是视觉塔的单块矩阵。</p>
@@ -3941,7 +3944,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <details class="foldfig"><summary><b>改编译之前，先量了哪两个数</b></summary>
   <p>为了看清时间花在哪，故意改程序编了两格（不是方案）：优化器换成 AdamW，正常步编译 −41%；视觉塔 20 层减到 10 层，−28%。所以优化器的展开代码约占编译时间的四成，视觉塔每层约 10 秒（正常步程序单独编，基线 345 秒）。另外两件没做：牛顿迭代的流水块改循环只省 1.6%，而那几块是为了让通信和计算交错才展开的；梯度范数、Adam 这些按叶子批量，要多搬约 23 GiB，不划算。</p>
 </details>
-<details class="foldfig"><summary><b>考考自己</b>：一个模型的解码器用 scan 写了，层数从 39 翻到 78，编译时间却涨了 2.4 倍。先查哪里？</summary><p>数优化前程序的指令数，按 Python 调用栈归类，找循环外最大的那一段程序里是谁被展开了。这一讲是视觉塔逐层写和优化器逐叶展开：视觉塔每多一层，优化器就多一整套代码。改成 scan、批量以后，128 片和半层编得一样快。</p></details>
+<details class="foldfig"><summary><b>考考自己</b>：一个模型的解码器用 scan 写了，层数从 39 翻到 78，编译时间却变成原来的 2.4 倍。先查哪里？</summary><p>数优化前程序的指令数，按 Python 调用栈归类，找循环外最大的那一段程序里是谁被展开了。这一讲是视觉塔逐层写和优化器逐叶展开：视觉塔每多一层，优化器就多一整套代码。改成 scan、批量以后，128 片和半层编得一样快。</p></details>
 
   <p class="bridge">修掉白搬字节的那一刀，第 2 步起 loss 就不再逐位相同（约 5e-4）。快了，还是同一个模型吗？</p>
 </div></section>
