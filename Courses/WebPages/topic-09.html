@@ -888,7 +888,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <small style="font-size:14px;line-height:1.6;display:inline-block;color:var(--gray)"><b>局限一句话</b>：页首的数只量在长图文上；长短文档混拼、全是短文档两种数据还没测，后者是下一步第一优先（<a href="#s十一">第十一节</a>）。</small><br>
     <em>不在关键路径上的，省了也白省。</em>
   </div>
-  <p style="max-width:820px;color:var(--gray);font-size:15px"><b>本课的 MFU 都是「有效 MFU」</b>：分子只算模型真正需要的矩阵乘（训练按前向 × 3；不算重算、优化器、冗余计算、跨文档注意力和填充 token；补上框架漏算的 MTP 头，视觉塔按实际图像块数），除以步时和每设备峰值 1155 TFLOP/s。它在短文档上只有框架日志口径的一半出头、长文上几乎一样；把重算、优化器、冗余都算进去的「硬件 MFU」定稿那格是 36.5%，口径不同（<a href="#s二">第二节</a>）。</p>
+  <p style="max-width:820px;color:var(--gray);font-size:15px"><b>本课的 MFU 都是「有效 MFU」</b>：分子只算模型真正需要的矩阵乘（训练按前向 × 3；不算重算、优化器、冗余计算、跨文档注意力和填充 token；补上框架漏算的 MTP 头（多预测几个 token 的附加输出层），视觉塔按实际图像块数），除以步时和每设备峰值 1155 TFLOP/s。它在短文档上只有框架日志口径的一半出头、长文上几乎一样；把重算、优化器、冗余都算进去的「硬件 MFU」定稿那格是 36.5%，口径不同（<a href="#s二">第二节</a>）。</p>
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（主核、小核）、<b>专题五</b>（FSDP、all-gather）、<b>专题七</b>（MFU、读一条通信）、<b>专题八</b>（尺子）</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
@@ -1193,7 +1193,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="fsub">慢，主要不是结构慢（第四节对过），是三条条件定死了：</p>
   <ol class="hardlist">
     <li><b>32K 长上下文、带文档掩码</b> → 注意力算得多又不规整；短序列配方用不上。</li>
-    <li><b>上下文并行 8，每设备只有 4096 token</b> → 每层专家权重的通信摊不薄；加大每卡 batch 被项目定死。</li>
+    <li><b>上下文并行 8，每设备只有 4096 token</b> → 计算量小，每层却得把专家权重收一遍，通信盖不住；加大每卡 batch 被项目定死。</li>
     <li><b>Muon 优化器</b> → 每步要跨卡搬动量做正交化；AdamW 那种逐元素的便宜更新用不上。</li>
   </ol>
   <details class="foldfig"><summary><b>常用的五种提速手段为什么用不上</b>：加大 batch、短序列、换回 AdamW、FP8、权重留到反向，各自量过的代价</summary>
@@ -1218,11 +1218,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="ft">开场：这次调优查清的 20 件事</div>
   <p class="fsub">先看收益最大的 5 件（按那一刀的收益排），正文逐件讲；其余 15 件在下面的折叠里。</p>
   <table class="t9 ftab"><thead><tr><th>现象</th><th>多大</th><th>在哪讲</th></tr></thead><tbody>
-<tr><td>原样跑（短文 12.743 秒），主核 59.3% 在等专家权重收发</td><td class="fimp">换切法那一刀 −45.4%</td><td><a href="#s三">第三节 · 站 1</a></td></tr>
+<tr><td>原样跑（短文 12.743 秒），主核 59.3% 在等通信，大半是专家权重收发</td><td class="fimp">换成专家并行那一刀 −45.4%</td><td><a href="#s三">第三节 · 站 1</a></td></tr>
 <tr><td>两项改动单测各快 6.5% 和 5.7%，一起开</td><td class="fimp">−16.9%：一加一大于二？</td><td><a href="#s六">第六节 · 站 14</a></td></tr>
 <tr><td>优化器里每块专家权重搬了设计的 2.5 倍</td><td class="fimp">修掉 −7.3%（局部修法；正式修法单独 −6.3%），不改精度</td><td><a href="#s九">第九节 · 站 19</a></td></tr>
 <tr><td>一道只改调度、不改数值的屏障</td><td class="fimp">−6.9%，小核的活一点没少</td><td><a href="#s七">第七节 · 站 15</a></td></tr>
-<tr><td>一颗融合核不报耗时</td><td class="fimp">快 3.8%；把耗时估准，反而慢 9.4%</td><td><a href="#s九">第九节 · 9.5</a></td></tr>
+<tr><td>一颗融合核报了耗时，调度器把通信排空</td><td class="fimp">不报快 3.8%；报了、调准也慢 10.6%</td><td><a href="#s九">第九节 · 9.5</a></td></tr>
 </tbody></table>
   <details class="foldfig"><summary><b>其余 15 件</b>：按编年史排</summary>
   <p class="fnote">子块：注意力按 1024 × 1024 切成的小块；静态公式：模型自带的分子公式，按整行因果和全部 token 算（第二节）。</p>
@@ -1390,7 +1390,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </div>
 
 <div class="wrap" id="tab-data">
-  <table class="t9"><thead><tr><th>读数对照（步时 · 有效 MFU）</th><th>20 层起点（原始代码）</th><th>20 层终点（定稿，同一个作业）</th><th>39 层终点（半层底座，含定稿之后三步）</th></tr></thead><tbody>
+  <table class="t9"><thead><tr><th>读数对照（步时 · 有效 MFU）</th><th>20 层起点（原始代码）</th><th>20 层终点（定稿，同一个作业）</th><th>39 层终点（半层底座；站 27 定稿之后又走三步）</th></tr></thead><tbody>
   <tr><td><b>短文</b></td><td>12.743 秒 · 2.30%</td><td>—</td><td>—</td></tr>
   <tr><td><b>长文（以文字为主）</b></td><td>12.914 秒 · 4.17%†</td><td>2.228 秒 · 24.16%</td><td>3.868 秒 · 25.74%</td></tr>
   <tr><td><b>长图文</b></td><td>12.899 秒 · 4.25%†</td><td>2.253 秒 · 24.35%</td><td>3.923 秒 · 25.88%</td></tr>
@@ -1950,7 +1950,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 <details class="foldfig"><summary><b>站 4–7 逐站四件事</b></summary>
 
-  <table class="t9 mini" id="tab-front2"><caption>站 4–7：排法与优化器</caption><thead><tr><th>站</th><th>看到什么</th><th>怎么判断的</th><th>做了什么</th><th>快了多少</th></tr></thead><tbody><tr><td>4</td><td>第一次录全一步：主核等通信仍占 44%；专家权重收集从放行到完成之间，0 个矩阵乘</td><td>收集用时正常，只是没有计算陪它</td><td>专家权重收集流水化</td><td>4.601 → 4.260 秒（对同作业对照 4.605 是 −7.5%）；中间夹进 2 个矩阵乘，收集用时几乎不变</td></tr><tr><td>5、6</td><td>（照已有方案试的，事先没有单独诊断）</td><td>两项单独叠都变慢、一起开才快：收益来自哪段通信能藏到哪段计算底下，不是字节，也不是运算量</td><td>上下文并行改成收潜变量（同时精简配置）；整条序列的 K 一次矩阵乘</td><td>4.260 → 4.101 → 4.021 秒（−3.7%、−2.0%）</td></tr><tr><td>7</td><td>步尾优化器段 906 毫秒，露出 651 毫秒（原样时只露 158）</td><td>放大是三组同步 all-to-all，合计 497 毫秒：Muon 正交化前要把动量换成「每个设备拿整块矩阵」（当时连参数也一起搬），原来的写法被编译器拆成沿几个设备轴分三步搬</td><td>换一种切的顺序，只沿 FSDP 那一个轴搬一步</td><td>4.028 → 3.577 秒（−11.2%）；优化器段约 819 → 340 毫秒（906 是站 3 那格；截图按「反向结束到一步结束」量是 1094 → 644）</td></tr></tbody></table>
+  <table class="t9 mini" id="tab-front2"><caption>站 4–7：排法与优化器</caption><thead><tr><th>站</th><th>看到什么</th><th>怎么判断的</th><th>做了什么</th><th>快了多少</th></tr></thead><tbody><tr><td>4</td><td>第一次录全一步：主核等通信仍占 44%；专家权重收集从放行到完成之间，0 个矩阵乘</td><td>收集用时正常，只是没有计算陪它</td><td>专家权重收集流水化</td><td>4.601 → 4.260 秒（对同作业对照 4.605 是 −7.5%）；中间夹进 2 个矩阵乘，收集用时几乎不变</td></tr><tr><td>5、6</td><td>（照已有方案试的，事先没有单独诊断）</td><td>站 5 的两样（收潜变量、精简配置）单独叠都变慢、一起开才快：收益来自哪段通信能藏到哪段计算底下，不是字节，也不是运算量</td><td>上下文并行改成收潜变量（同时精简配置）；整条序列的 K 一次矩阵乘</td><td>4.260 → 4.101 → 4.021 秒（−3.7%、−2.0%）</td></tr><tr><td>7</td><td>步尾优化器段 906 毫秒，露出 651 毫秒（原样时只露 158）</td><td>放大是三组同步 all-to-all，合计 497 毫秒：Muon 正交化前要把动量换成「每个设备拿整块矩阵」（当时连参数也一起搬），原来的写法被编译器拆成沿几个设备轴分三步搬</td><td>换一种切的顺序，只沿 FSDP 那一个轴搬一步</td><td>4.028 → 3.577 秒（−11.2%）；优化器段约 819 → 340 毫秒（906 是站 3 那格；截图按「反向结束到一步结束」量是 1094 → 644）</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>实测：站 4 起的「看到什么」来自站 3 那一格第一次录全的一步 profile。站 7 的对照 4.028 秒是同一个窗口（第 5–9 步）重新取的；Muon 在第九节还会再出场一次。</p></details>
 
 </details>
@@ -3251,7 +3251,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>两条红线之间：上面夹着一长段蓝，下面几乎只剩红。</b><span class="capmore"><br><em>各层取中位；橙条长度示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（profile，一颗芯片的一个主核，各层取中位；拆的是融合核另带一项小改动的那一格，4.693 秒、+7.9%，那项小改动单开只慢 1.7%）：三条重新收集的括号里夹的主核计算 7.2 / 9.0 / 15.2 → 0.4 / 0.7 / 0.7 ms；设备一步 4258 → 4606 ms，主核计算少约 190 ms。</p>
 <p>实测（编译产物，指令顺序）：括号里夹的核 4/5/6 → 1/2/3 个。融合核本身是真核。小核上集合通信的总忙时只多约 88 ms：活没多，是放行的位置变了。</p>
 <p>实测：对照在三个作业里是 4.347 / 4.347 / 4.351 秒；换一个底座重测，4.421 → 4.768 秒，也是 +7.8%。显存不是原因（带融合核那一格峰值反而低约 4 GiB）。</p>
-<p>原因见 9.5：融合核报了耗时，就成了层调度器给收集挑的搭档，收集的完成点被钉在它旁边；在定稿之后的配置上去掉这颗融合核的估计，括号恢复、一步快 3.8%（实测）。这一格本身没有单独去掉估计重测，按同一条规则解释。限制同时在飞的收集条数，两种取值编出来跟原来一字不差（空操作）。</p></details></figure>
+<p>原因见 9.5：融合核报了耗时，就成了层调度器给收集挑的搭档，收集的完成点被钉在它旁边；在定稿之后的配置上去掉这颗融合核的估计，括号恢复，一步比不加融合核的对照还快 3.8%（实测）。这一格本身没有单独去掉估计重测，按同一条规则解释。限制同时在飞的收集条数，两种取值编出来跟原来一字不差（空操作）。</p></details></figure>
   <p>反向重算前要先把这一层的专家权重再收一遍。原来这三条收集的括号里夹着 7 到 15 毫秒的计算，藏得住。</p>
 <details class="foldfig"><summary><b>括号塌了，露出多少</b></summary>
   <p>重算段变短以后，调度器把放行排到了紧挨着完成，括号里只剩不到 1 毫秒，主核每条停下来等将近 4 毫秒；各层都这样，整步专家权重收集的露出从 64 涨到 560 毫秒，比主核省下的那一百九十毫秒还多，一步反而慢 7.8%。</p>
@@ -3750,7 +3750,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="1020.909090909091" y="172" width="249.090909090909" height="400" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
 <text class="svgsm" x="1145" y="192" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6 ms 以上：没有核够格当搭档</tspan></text>
 <line x1="200" y1="425.8079999999999" x2="1240" y2="425.8079999999999" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 4"/>
-<text class="svgsm" x="206" y="417" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">现在的推荐配置 ≈ 2919</tspan></text>
+<text class="svgsm" x="206" y="417" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">当时的推荐配置 ≈ 2919</tspan></text>
 <line x1="200.0" y1="214.02133333333325" x2="294.54545454545456" y2="341.65066666666667" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
 <line x1="294.54545454545456" y1="341.65066666666667" x2="389.0909090909091" y2="336.3306666666666" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
 <line x1="389.0909090909091" y1="336.3306666666666" x2="483.6363636363636" y2="385.88266666666675" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>

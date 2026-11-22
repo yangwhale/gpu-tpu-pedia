@@ -289,7 +289,7 @@ def fig_cethresh():
     # 推荐配置参考线
     v4 = sum(N.CE_TH_V4) / 2
     f.line(XL, Y(v4), XR, Y(v4), GY2, 1.6, dash="6 4", arrow=False)
-    f.t(XL + 6, Y(v4) - 8, "现在的推荐配置 ≈ %.0f" % v4, GY, True, 13)
+    f.t(XL + 6, Y(v4) - 8, "当时的推荐配置 ≈ %.0f" % v4, GY, True, 13)
     for ser, col in ((N.CE_TH64, BL), (N.CE_TH128, OR)):
         for i in range(len(xs) - 1):
             f.line(X(i), Y(ser[i]), X(i + 1), Y(ser[i + 1]), col, 2.4, arrow=False)
