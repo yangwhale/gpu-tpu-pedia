@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>专题九 · 讲义（授课稿）</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
-<meta property="og:title" content="精度与量化 · 讲义">
-<meta property="og:description" content="老师的草稿：逐字讲稿、该指哪张图、可能被问到什么、别讲什么。">
+<meta property="og:title" content="GPU→TPU 训练性能优化 · 讲义">
 <meta name="theme-color" content="#5f6368">
 <style>
 :root{
@@ -183,225 +182,1114 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   .qa .a{padding-left:18px}
 }
 </style>
+<style>
+.shell > main{grid-column:1 / -1}
+.plan table td:first-child, .plan table th:first-child{white-space:nowrap}
+
+/* ── 窄屏（course_narrow_css.py，2026-10-20）──────────────────────────
+   ① 正文表格在自己框里横向滚动，不再把整页撑宽（跟英文版同一条）。
+   ② 节标题那一行是 flex：录音条（.lecmedia，最小 280px）挤在徽章和标题后面会把页面撑出去，
+      窄屏下让它另起一行、占满整行。
+   ③ 手机上表格已经能在框里横滑了，就别再把格子压扁：公式（td 里的 code）一折就是逐字断行
+      （专题四 1.3 形状表每行约 400px 高），数值列「7.32 TiB」折成两行 —— 这两类不折行。 */
+@media(max-width:1000px){main table,section table,details table{display:block;max-width:100%;overflow-x:auto}}
+@media(max-width:600px){.stn{flex-wrap:wrap}.stn .lecmedia{flex:1 1 100%;min-width:0}
+  td code,td.num{white-space:nowrap}}
+
+p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;margin:12px 0;line-height:1.95}
+code{white-space:normal !important;overflow-wrap:anywhere;word-break:break-all}
+</style>
 </head>
 <body>
 
-<!-- ⛔ 这个文件由 Courses/tools/topic09-build-lecture.py 生成，不要手改。 -->
+<!-- ⛔ 这个文件由 Courses/tools/topic08b-build-lecture.py 生成，不要手改。 -->
 
 <div class="top"><div class="in">
-  <span class="who">专题九 · <b>精度与量化</b></span>
+  <span class="who">专题九 · <b>GPU→TPU 训练性能优化</b></span>
   <nav class="tabs">
     <a href="topic-09.html">课件</a>
     <a href="topic-09-lecture.html" class="on">讲义</a>
-    <a href="topic-02.html">专题二（硬件背景）</a>
+    <a href="topic-08.html">专题八（跑得准）</a>
+    <a href="index.html">课程总纲</a>
   </nav>
 </div></div>
 
 <div class="shell">
 <main>
 
-<div class="wip" style="max-width:820px;margin:0 0 14px;padding:10px 16px;border:2px solid #f9ab00;border-radius:10px;background:#fef7e0;color:#3c2f00;font-size:15.5px;line-height:1.7">🚧 <b style="color:#b06000">正在构建中</b>：这一讲还没写完。目前写完的是 §3（缩放）、§4 的后半（FP4 训练）、§5（硬件视角），带完整出处；§0、§1、§2、§6 还是大纲，页面上照原样标出来了。</div>
+<div class="plan" id="overview"><h2>开篇总览：一张图看全程</h2>
+<svg viewBox="0 0 1400 950" width="100%" role="img" aria-label="开篇总览，一条阶梯曲线。第一段 20 层底座：原样 12.743 秒，两刀砍掉一大半（−45.4%、−29.0%），到第 12 站 2.731 秒，段内 4.67 倍。换底座（20 层换半层）后同一配置是 5.476 秒；第二段短文到第 16 站 4.049 秒，段内 1.35 倍。换长文后同一配置是 5.553 秒；第三段长文到第 27 站定稿 4.116 秒，后面每站只抠 1% 上下，最后三站是精度修正；定稿之后再三步，3.868 秒，有效 MFU 25.74%（30 步口径；200 步长跑也过了 25%）。灰色叉是试过、变慢、没采用的三次尝试：预取下一层权重 +8.9%、融合核照原样 +7.8%、核耗时按实测校准 +9.4%。下面一条：同一底座、同一份长文数据直接比，12.914 → 2.228 秒，快 5.80 倍。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一张图看全程：一站一站往下抠，12.7 秒 → 3.87 秒（30 步口径）</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每级台阶是一站的步时（纵轴：秒，取对数，同样的百分比台阶一样高）。灰带是换测试底座，同一配置在两边各量一次（虚线），不是变慢，高低不能跨灰带比</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">20 层底座</text>
+<rect x="119.80000000000001" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="140" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">半层底座 · 短文</text>
+<rect x="293.36" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="314" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">半层底座 · 长文</text>
+<rect x="466.92" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="487" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">◆ 改了数值</text>
+<rect x="593.44" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="614" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">✕ 试过、变慢、没采用</text>
+<rect x="0" y="102" width="1400" height="530" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64 片 v7x，实测（每段从左往右看）</tspan></text>
+<line x1="70" y1="561.6059174646853" x2="1370" y2="561.6059174646853" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="62" y="565" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">2.5</text>
+<line x1="70" y1="523.5485794651863" x2="1370" y2="523.5485794651863" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="62" y="527" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">3</text>
+<line x1="70" y1="463.49855542953844" x2="1370" y2="463.49855542953844" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="62" y="467" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">4</text>
+<line x1="70" y1="416.9201381315189" x2="1370" y2="416.9201381315189" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="62" y="420" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">5</text>
+<line x1="70" y1="378.8628001320201" x2="1370" y2="378.8628001320201" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="62" y="382" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">6</text>
+<line x1="70" y1="318.81277609637215" x2="1370" y2="318.81277609637215" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="62" y="322" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">8</text>
+<line x1="70" y1="272.2343587983526" x2="1370" y2="272.2343587983526" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="62" y="276" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">10</text>
+<line x1="70" y1="234.17702079885385" x2="1370" y2="234.17702079885385" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="62" y="238" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">12</text>
+<rect x="572.1067415730338" y="196" width="62.078651685393254" height="408" rx="4" fill="#f1f3f4" stroke="#f1f3f4" stroke-width="1.0"/>
+<text class="svgsm" x="603" y="572" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换底座</tspan></text>
+<text class="svgsm" x="603" y="590" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">20 层→半层</text>
+<line x1="540.3370786516854" y1="543.158304196513" x2="603.1460674157304" y2="397.93818111047227" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
+<rect x="598.1460674157304" y="392.93818111047227" width="10" height="10" rx="5" fill="#fff" stroke="#80868b" stroke-width="1.5"/>
+<text class="svgsm" x="603" y="385" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">5.476</text>
+<rect x="798.5112359550562" y="196" width="62.078651685393254" height="408" rx="4" fill="#f1f3f4" stroke="#f1f3f4" stroke-width="1.0"/>
+<text class="svgsm" x="829" y="572" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换数据</tspan></text>
+<text class="svgsm" x="829" y="590" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">短文→长文</text>
+<line x1="766.7415730337078" y1="460.95705668051596" x2="829.5505617977528" y2="395.0234934164798" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
+<rect x="824.5505617977528" y="390.0234934164798" width="10" height="10" rx="5" fill="#fff" stroke="#80868b" stroke-width="1.5"/>
+<text class="svgsm" x="829" y="383" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">5.553</text>
+<line x1="74.38202247191012" y1="221.63702387687783" x2="102.13483146067415" y2="221.63702387687783" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="110.89887640449439" y1="348.1520795868138" x2="138.65168539325842" y2="348.1520795868138" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="102.13483146067415" y1="221.63702387687783" x2="110.89887640449439" y2="221.63702387687783" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="110.89887640449439" y1="221.63702387687783" x2="110.89887640449439" y2="348.1520795868138" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="147.41573033707863" y1="419.1023750816911" x2="175.1685393258427" y2="419.1023750816911" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="138.65168539325842" y1="348.1520795868138" x2="147.41573033707863" y2="348.1520795868138" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="147.41573033707863" y1="348.1520795868138" x2="147.41573033707863" y2="419.1023750816911" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="183.93258426966293" y1="434.2796303099989" x2="211.68539325842698" y2="434.2796303099989" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="175.1685393258427" y1="419.1023750816911" x2="183.93258426966293" y2="419.1023750816911" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="183.93258426966293" y1="419.1023750816911" x2="183.93258426966293" y2="434.2796303099989" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="220.44943820224717" y1="450.35335603962744" x2="248.20224719101122" y2="450.35335603962744" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="211.68539325842698" y1="434.2796303099989" x2="220.44943820224717" y2="434.2796303099989" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="220.44943820224717" y1="434.2796303099989" x2="220.44943820224717" y2="450.35335603962744" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="256.96629213483146" y1="458.29337692025905" x2="284.7191011235955" y2="458.29337692025905" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="248.20224719101122" y1="450.35335603962744" x2="256.96629213483146" y2="450.35335603962744" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="256.96629213483146" y1="450.35335603962744" x2="256.96629213483146" y2="458.29337692025905" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="293.4831460674157" y1="462.40555041802764" x2="321.23595505617976" y2="462.40555041802764" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="284.7191011235955" y1="458.29337692025905" x2="293.4831460674157" y2="458.29337692025905" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="293.4831460674157" y1="458.29337692025905" x2="293.4831460674157" y2="462.40555041802764" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="330.0" y1="486.82912022588914" x2="357.75280898876406" y2="486.82912022588914" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="321.23595505617976" y1="462.40555041802764" x2="330.0" y2="462.40555041802764" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="330.0" y1="462.40555041802764" x2="330.0" y2="486.82912022588914" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="366.51685393258424" y1="491.6102521815719" x2="394.2696629213483" y2="491.6102521815719" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="357.75280898876406" y1="486.82912022588914" x2="366.51685393258424" y2="486.82912022588914" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="366.51685393258424" y1="486.82912022588914" x2="366.51685393258424" y2="491.6102521815719" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="403.0337078651685" y1="516.7041152555673" x2="430.78651685393254" y2="516.7041152555673" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="394.2696629213483" y1="491.6102521815719" x2="403.0337078651685" y2="491.6102521815719" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="403.0337078651685" y1="491.6102521815719" x2="403.0337078651685" y2="516.7041152555673" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="439.5505617977528" y1="521.4026938291562" x2="467.30337078651684" y2="521.4026938291562" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="430.78651685393254" y1="516.7041152555673" x2="439.5505617977528" y2="516.7041152555673" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="439.5505617977528" y1="516.7041152555673" x2="439.5505617977528" y2="521.4026938291562" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="476.0674157303371" y1="527.3400804908795" x2="503.82022471910113" y2="527.3400804908795" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="467.30337078651684" y1="521.4026938291562" x2="476.0674157303371" y2="521.4026938291562" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="476.0674157303371" y1="521.4026938291562" x2="476.0674157303371" y2="527.3400804908795" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="512.5842696629214" y1="543.158304196513" x2="540.3370786516854" y2="543.158304196513" stroke="#1a73e8" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="503.82022471910113" y1="527.3400804908795" x2="512.5842696629214" y2="527.3400804908795" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="512.5842696629214" y1="527.3400804908795" x2="512.5842696629214" y2="543.158304196513" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="589.2696629213484" y1="397.93818111047227" x2="617.0224719101124" y2="397.93818111047227" stroke="#e8710a" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="629.438202247191" y1="404.3244547394231" x2="657.191011235955" y2="404.3244547394231" stroke="#e8710a" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="617.0224719101124" y1="397.93818111047227" x2="629.438202247191" y2="397.93818111047227" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="629.438202247191" y1="397.93818111047227" x2="629.438202247191" y2="404.3244547394231" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="665.9550561797753" y1="442.98793591135416" x2="693.7078651685392" y2="442.98793591135416" stroke="#e8710a" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="657.191011235955" y1="404.3244547394231" x2="665.9550561797753" y2="404.3244547394231" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="665.9550561797753" y1="404.3244547394231" x2="665.9550561797753" y2="442.98793591135416" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="702.4719101123596" y1="455.9650494357023" x2="730.2247191011236" y2="455.9650494357023" stroke="#e8710a" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="693.7078651685392" y1="442.98793591135416" x2="702.4719101123596" y2="442.98793591135416" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="702.4719101123596" y1="442.98793591135416" x2="702.4719101123596" y2="455.9650494357023" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="738.9887640449439" y1="460.95705668051596" x2="766.7415730337078" y2="460.95705668051596" stroke="#e8710a" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="730.2247191011236" y1="455.9650494357023" x2="738.9887640449439" y2="455.9650494357023" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="738.9887640449439" y1="455.9650494357023" x2="738.9887640449439" y2="460.95705668051596" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="815.6741573033709" y1="395.0234934164798" x2="843.4269662921348" y2="395.0234934164798" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="855.8426966292135" y1="425.2673419878066" x2="883.5955056179774" y2="425.2673419878066" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="843.4269662921348" y1="395.0234934164798" x2="855.8426966292135" y2="395.0234934164798" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="855.8426966292135" y1="395.0234934164798" x2="855.8426966292135" y2="425.2673419878066" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="892.3595505617977" y1="430.8152153758517" x2="920.1123595505617" y2="430.8152153758517" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="883.5955056179774" y1="425.2673419878066" x2="892.3595505617977" y2="425.2673419878066" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="892.3595505617977" y1="425.2673419878066" x2="892.3595505617977" y2="430.8152153758517" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="928.8764044943821" y1="446.6140949138116" x2="956.629213483146" y2="446.6140949138116" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="920.1123595505617" y1="430.8152153758517" x2="928.8764044943821" y2="430.8152153758517" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="928.8764044943821" y1="430.8152153758517" x2="928.8764044943821" y2="446.6140949138116" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="965.3932584269663" y1="450.79481716222597" x2="993.1460674157303" y2="450.79481716222597" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="956.629213483146" y1="446.6140949138116" x2="965.3932584269663" y2="446.6140949138116" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="965.3932584269663" y1="446.6140949138116" x2="965.3932584269663" y2="450.79481716222597" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1001.9101123595506" y1="452.0754190704298" x2="1029.6629213483145" y2="452.0754190704298" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="993.1460674157303" y1="450.79481716222597" x2="1001.9101123595506" y2="450.79481716222597" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1001.9101123595506" y1="450.79481716222597" x2="1001.9101123595506" y2="452.0754190704298" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1038.4269662921347" y1="453.7121949653311" x2="1066.1797752808989" y2="453.7121949653311" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="1029.6629213483145" y1="452.0754190704298" x2="1038.4269662921347" y2="452.0754190704298" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1038.4269662921347" y1="452.0754190704298" x2="1038.4269662921347" y2="453.7121949653311" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1074.943820224719" y1="454.4104810140593" x2="1102.6966292134832" y2="454.4104810140593" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="1066.1797752808989" y1="453.7121949653311" x2="1074.943820224719" y2="453.7121949653311" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1074.943820224719" y1="453.7121949653311" x2="1074.943820224719" y2="454.4104810140593" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1111.4606741573032" y1="458.6499754680768" x2="1139.2134831460673" y2="458.6499754680768" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="1102.6966292134832" y1="454.4104810140593" x2="1111.4606741573032" y2="454.4104810140593" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1111.4606741573032" y1="454.4104810140593" x2="1111.4606741573032" y2="458.6499754680768" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1147.9775280898875" y1="458.49707291722973" x2="1175.7303370786517" y2="458.49707291722973" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="1139.2134831460673" y1="458.6499754680768" x2="1147.9775280898875" y2="458.6499754680768" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1147.9775280898875" y1="458.6499754680768" x2="1147.9775280898875" y2="458.49707291722973" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1184.4943820224717" y1="457.9373865320333" x2="1212.2471910112358" y2="457.9373865320333" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="1175.7303370786517" y1="458.49707291722973" x2="1184.4943820224717" y2="458.49707291722973" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1184.4943820224717" y1="458.49707291722973" x2="1184.4943820224717" y2="457.9373865320333" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1221.011235955056" y1="457.53128240329477" x2="1248.7640449438202" y2="457.53128240329477" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="1212.2471910112358" y1="457.9373865320333" x2="1221.011235955056" y2="457.9373865320333" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1221.011235955056" y1="457.9373865320333" x2="1221.011235955056" y2="457.53128240329477" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1279.438202247191" y1="459.26270816734365" x2="1307.191011235955" y2="459.26270816734365" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="1248.7640449438202" y1="457.53128240329477" x2="1279.438202247191" y2="457.53128240329477" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1279.438202247191" y1="457.53128240329477" x2="1279.438202247191" y2="459.26270816734365" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1315.955056179775" y1="467.13069460272874" x2="1343.7078651685392" y2="467.13069460272874" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="1307.191011235955" y1="459.26270816734365" x2="1315.955056179775" y2="459.26270816734365" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1315.955056179775" y1="459.26270816734365" x2="1315.955056179775" y2="467.13069460272874" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="1352.4719101123594" y1="470.50311306600287" x2="1380.2247191011236" y2="470.50311306600287" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<line x1="1343.7078651685392" y1="467.13069460272874" x2="1352.4719101123594" y2="467.13069460272874" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1352.4719101123594" y1="467.13069460272874" x2="1352.4719101123594" y2="470.50311306600287" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round"/>
+<text class="svgsm" x="74" y="184" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第一段 · 20 层底座</tspan></text>
+<text class="svgsm" x="74" y="202" fill="#174ea6" style="font-size:13.1px;font-variant-numeric:tabular-nums">段内 ×4.67</text>
+<text class="svgsm" x="573" y="184" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第二段 · 半层 · 短文</tspan></text>
+<text class="svgsm" x="573" y="202" fill="#b06000" style="font-size:13.1px;font-variant-numeric:tabular-nums">段内 ×1.35</text>
+<text class="svgsm" x="800" y="184" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第三段 · 半层 · 长文</tspan></text>
+<text class="svgsm" x="800" y="202" fill="#681da8" style="font-size:13.1px;font-variant-numeric:tabular-nums">段内 ×1.44</text>
+<text class="svgsm" x="115" y="289" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−45.4%</tspan></text>
+<text class="svgsm" x="115" y="272" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">每个设备只收自己那份专家</text>
+<text class="svgsm" x="152" y="388" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−29.0%</tspan></text>
+<text class="svgsm" x="152" y="371" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">搬来已上线的注意力配置</text>
+<text class="svgsm" x="188" y="431" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−7.0%</tspan></text>
+<text class="svgsm" x="225" y="447" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−7.5%</tspan></text>
+<text class="svgsm" x="270" y="489" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−3.7%</text>
+<text class="svgsm" x="307" y="479" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−2.0%</text>
+<text class="svgsm" x="335" y="479" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−11.2%</tspan></text>
+<text class="svgsm" x="335" y="462" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">优化器换切法只搬一段</text>
+<text class="svgsm" x="380" y="508" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−2.2%</text>
+<text class="svgsm" x="408" y="509" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−11.3%</tspan></text>
+<text class="svgsm" x="408" y="492" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">token 排序挪回主核</text>
+<text class="svgsm" x="453" y="538" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−2.4%</text>
+<text class="svgsm" x="489" y="558" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−2.9%</text>
+<text class="svgsm" x="517" y="540" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−7.3%</tspan></text>
+<text class="svgsm" x="517" y="523" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">重分小核的活</text>
+<text class="svgsm" x="643" y="435" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−2.7%</text>
+<text class="svgsm" x="670" y="428" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−16.9%</tspan></text>
+<text class="svgsm" x="670" y="411" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">梯度改 BF16</text>
+<path d="M 679.83 429.99 L 684.83 434.99 L 679.83 439.99 L 674.83 434.99 Z" fill="#1e8e3e" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="707" y="454" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−6.0%</tspan></text>
+<text class="svgsm" x="752" y="477" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−2.4%</text>
+<text class="svgsm" x="860" y="415" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−13.5%</tspan></text>
+<text class="svgsm" x="860" y="398" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">短文那套开关整包搬来</text>
+<text class="svgsm" x="906" y="447" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−2.3%</text>
+<text class="svgsm" x="933" y="443" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−7.3%</tspan></text>
+<text class="svgsm" x="933" y="426" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">修白搬主权重</text>
+<text class="svgsm" x="979" y="467" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−2.1%</text>
+<text class="svgsm" x="1015" y="483" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−0.8%</text>
+<text class="svgsm" x="1052" y="470" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−0.8%</text>
+<text class="svgsm" x="1088" y="485" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−0.3%</text>
+<text class="svgsm" x="1125" y="475" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−1.9%</text>
+<text class="svgsm" x="1161" y="489" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">±0</text>
+<path d="M 1161.85 445.50 L 1166.85 450.50 L 1161.85 455.50 L 1156.85 450.50 Z" fill="#1e8e3e" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="1198" y="474" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">+0.2%</text>
+<path d="M 1198.37 444.94 L 1203.37 449.94 L 1198.37 454.94 L 1193.37 449.94 Z" fill="#1e8e3e" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="1234" y="488" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">+0.1%</text>
+<path d="M 1234.89 444.53 L 1239.89 449.53 L 1234.89 454.53 L 1229.89 449.53 Z" fill="#1e8e3e" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="1293" y="476" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−0.9%</text>
+<path d="M 1293.31 446.26 L 1298.31 451.26 L 1293.31 456.26 L 1288.31 451.26 Z" fill="#1e8e3e" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="1329" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−3.8%</text>
+<path d="M 1329.83 454.13 L 1334.83 459.13 L 1329.83 464.13 L 1324.83 459.13 Z" fill="#1e8e3e" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="1366" y="487" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−1.0%</text>
+<path d="M 1366.35 457.50 L 1371.35 462.50 L 1366.35 467.50 L 1361.35 462.50 Z" fill="#1e8e3e" stroke="none" stroke-width="1.0"/>
+<line x1="1264.1011235955057" y1="242" x2="1264.1011235955057" y2="508.50311306600287" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2 3"/>
+<text class="svgsm" x="1260" y="236" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">定稿</text>
+<text class="svgsm" x="1268" y="236" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">之后</text>
+<line x1="173.55056179775283" y1="395.31986334819726" x2="185.55056179775283" y2="407.31986334819726" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<line x1="173.55056179775283" y1="407.31986334819726" x2="185.55056179775283" y2="395.31986334819726" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="189" y="405" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">预取下一层权重 +8.9%</text>
+<line x1="1009.7865168539325" y1="424.19145303577443" x2="1021.7865168539325" y2="436.19145303577443" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<line x1="1009.7865168539325" y1="436.19145303577443" x2="1021.7865168539325" y2="424.19145303577443" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="1025" y="434" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">融合核照原样 +7.8%</text>
+<line x1="1323.8314606741571" y1="434.12236039457105" x2="1335.8314606741571" y2="446.12236039457105" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<line x1="1323.8314606741571" y1="446.12236039457105" x2="1335.8314606741571" y2="434.12236039457105" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="1335" y="410" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">核耗时按实测校准</text>
+<text class="svgsm" x="1335" y="426" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">+9.4%</text>
+<line x1="860.5898876404494" y1="464.73111780128227" x2="1370" y2="464.73111780128227" stroke="#1e8e3e" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2 3"/>
+<text class="svgsm" x="864" y="479" fill="#0d652d" style="font-size:13.1px;font-variant-numeric:tabular-nums">有效 25%</text>
+<text class="svgsm" x="110" y="226" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">原样 12.743 秒 · 有效 2.30%</tspan></text>
+<text class="svgsm" x="489" y="589" fill="#202124" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">2.731 秒 · 12.25%</text>
+<text class="svgsm" x="752" y="496" fill="#202124" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">4.049 秒 · 14.37%</text>
+<text class="svgsm" x="1161" y="505" fill="#202124" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">定稿 4.116 秒 · 24.18%</text>
+<text class="svgsm" x="1380" y="526" fill="#681da8" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.868 秒 · 有效 25.74%（30 步口径）</tspan></text>
+<text class="svgsm" x="1380" y="545" fill="#681da8" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">200 步长跑 3.941 秒 · 25.22%，长跑也第一次过 25%</text>
+<text class="svgsm" x="1380" y="563" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">定稿之后：路由先挑 top-k；去掉融合核估计；编译组合 ＋ 调度门槛</text>
+<text class="svgsm" x="88" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">0</text>
+<text class="svgsm" x="161" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">2</text>
+<text class="svgsm" x="234" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">4</text>
+<text class="svgsm" x="307" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">6</text>
+<text class="svgsm" x="380" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">8</text>
+<text class="svgsm" x="453" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">10</text>
+<text class="svgsm" x="526" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">12</text>
+<text class="svgsm" x="643" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">13</text>
+<text class="svgsm" x="679" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">14</text>
+<text class="svgsm" x="752" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">16</text>
+<text class="svgsm" x="869" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">17</text>
+<text class="svgsm" x="906" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">18</text>
+<text class="svgsm" x="979" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">20</text>
+<text class="svgsm" x="1052" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">22</text>
+<text class="svgsm" x="1125" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">24</text>
+<text class="svgsm" x="1198" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">26</text>
+<text class="svgsm" x="1234" y="620" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">27</text>
+<text class="svgsm" x="62" y="620" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">站</text>
+<rect x="0" y="678" width="1400" height="150" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="678" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="680" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="708" x2="1400" y2="708" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="698" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">首尾放到一起直接比：20 层底座、长文数据、一个作业里连着量</tspan></text>
+<text class="svgsm" x="318" y="738" fill="#202124" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">原样（原始代码）</text>
+<rect x="330" y="726" width="899.9999999999999" height="16" rx="3" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1240" y="739" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">12.914 秒</text>
+<text class="svgsm" x="318" y="764" fill="#202124" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">第一段终点</text>
+<rect x="330" y="752" width="194.9976769397553" height="16" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="534" y="765" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">2.798 秒　×4.62</text>
+<text class="svgsm" x="318" y="790" fill="#202124" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">第二段终点</text>
+<rect x="330" y="778" width="174.9961282329255" height="16" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="514" y="791" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">2.511 秒　×1.11</text>
+<text class="svgsm" x="318" y="816" fill="#202124" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">长文定稿</text>
+<rect x="330" y="804" width="155.2733467554592" height="16" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="495" y="817" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.228 秒　×1.13</tspan></text>
+<text class="svgsm" x="1380" y="808" fill="#202124" text-anchor="end" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">合计快 5.80 倍</tspan></text>
+<rect x="0" y="876" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="876" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="876" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="903" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前两刀砍掉一大半，后面每站只抠几个百分点；换底座后每段从自己的起点重新量</tspan></text>
+</svg>
+<p style="color:var(--gray)">上台第一张就放它（课件页首同一张图）。讲法见第一节开头。</p></div>
 
 <div class="plan">
   <h2>这份讲义怎么用</h2>
-  <p>这是<b>老师的草稿</b>，不是给学员的材料。学员看
-    <a href="topic-09.html">课件</a>，你看这一份。<br>
+  <p><b>两个用法。</b><br>
+    <b>① 上台讲</b>：照着念，台词、切图、每段几分钟都写着。<br>
+    <b>② 自学</b>：把这一整份丢给 AI，你会得到一个既有全部背景、
+    也知道该怎么讲的助教，让它带你走一遍。</p>
+  <p><b>口径先说清：</b>本课的 MFU 都是「有效 MFU」：分子只算模型真正需要的矩阵乘，训练按前向 × 3 记，重算、优化器和冗余计算都不算；扣掉文档掩码挡掉的跨文档注意力和填充 token，补上框架漏算的 MTP 头，视觉塔按实际图像块数算。有效 MFU ＝ 有效分子 ÷ 步时 ÷ 每个设备的峰值 1155 TFLOP/s。短文档数据上只有框架日志口径的一半出头，长文上两者几乎一样。把重算、优化器、冗余都算进去的「硬件 MFU」，定稿那一步是 36.5%。展开讲在<a href="topic-09.html#s二">课件第二节</a>。</p>
+  <p>内容本身在<a href="topic-09.html">课件</a>那边，这一份只管「怎么讲」。<br>
     课程作者 <b>Chris Yang</b> · Google Cloud AI Infra 架构师。</p>
   <table><tbody>
-    <tr><td>🎯</td><td><b>这一讲要留下什么</b>　讲完之后学员脑子里应该剩的那一句话。</td></tr>
-    <tr><td>🗣</td><td><b>讲稿</b>　接近逐字，可以照着念。<em>黄底</em>的是必须说出口的原话。</td></tr>
-    <tr><td>🖥</td><td><b>屏幕</b>　这一段该滚到课件的哪里。</td></tr>
-    <tr><td>⚠️</td><td><b>别讲什么</b>　这一讲最容易跑偏的方向。</td></tr>
+    <tr><td>🎯</td><td><b>这一节要留下什么</b>　讲完之后台下脑子里该剩的那一句。</td></tr>
+    <tr><td>🗣</td><td><b>讲稿</b>　<em>黄底</em>的可以照着念。</td></tr>
+    <tr><td>🖥</td><td><b>屏幕</b>　该滚到课件的哪张图。</td></tr>
+    <tr><td>⚠️</td><td><b>别讲什么</b>　这一节最容易跑偏的方向。</td></tr>
   </tbody></table>
 </div>
 
-<div class="warn">
-  <span class="k">🚧 这份讲义跟课件一样，只写完了中间三节</span>
-  <b>§3 缩放、§4 后半 FP4 训练、§5 硬件视角</b> ——&nbsp;这三节有逐字稿。<br>
-  <b>§0 §1 §2 §6 只有「打算怎么讲」</b>，<b>没有逐字稿</b>。
-  ⛔ <em>讲义里编一段，现场你会照着念 ——&nbsp;所以宁可空着。</em>
+<div class="plan">
+  <h2>⏱ 时间：一次课，主线 93′</h2>
+  <p>⛔ <b>这一讲是一条接力线，不能跳。</b>
+  <em>每节最后那句「这一节留下的问题」就是下一节的开场，时间再紧也要念。</em></p>
+  <table>
+<thead><tr><th>段落</th><th>分钟</th><th>能不能砍</th><th>说明</th></tr></thead><tbody>
+<tr><td>一　一步的时间去哪了</td><td>12</td><td>不能</td><td>⭐ 开场大表（只念一条，1′）＋热身；立住「在算／在等」「藏住／露出」「关键路径」三样</td></tr>
+<tr><td>二　先把数量准</td><td>7</td><td>尺子不能砍</td><td>有效分子；换数据只比步时；同作业尺子 0.002 秒；五个测量坑配工坊画面、左列为主</td></tr>
+<tr><td>三　第一段：20 层底座</td><td>9</td><td>3.2 可压成一句</td><td>⭐ 编年史站 0–12：先字节（每层约 77 → 12 GB）、再排法、再小核队列；衔接①换半层底座</td></tr>
+<tr><td>四　拿参照比</td><td>7</td><td>阶梯可压成三个乘数</td><td>参照阶梯、同条件对照、自己多花在哪；看最忙的芯片（开关不能照搬在备答里）</td></tr>
+<tr><td>五　找关键路径</td><td>7</td><td>不能</td><td>⭐ 一条线：现象 → 一重一轻 → 那根橙条 → 只有超出的那截兑现</td></tr>
+<tr><td>六　关键路径卡在哪</td><td>8</td><td>不能</td><td>⭐ 链路带宽 186；砍一刀 −16.9%（坦白一句）；一加一大于二先查口径；藏：分两颗小核 −3.1%</td></tr>
+<tr><td>七　同样的活，排法不同</td><td>8</td><td>7.3 可压成一句</td><td>⭐ 屏障 −6.9%（活没少、排法变了）；融合核反慢 2%；站 15、16 收尾</td></tr>
+<tr><td>八　编译器和运行库会变</td><td>6</td><td>8.2 可压成一句</td><td>只换版本慢 12.7%（热循环长五倍，展开兜住）；默认行为会变；看产物不看名字；两条边界；复现慢 25% 的坑</td></tr>
+<tr><td>九　换到长文</td><td>18</td><td>9.1 可压成一句</td><td>⭐ 换一份数据（MFU 11%→17.8%，刀重新排名）；优化器白搬 FP32 主权重（修好 −6.3%）；iHC 融合核在少重算的配置上慢 7.8%（收集露出）；最后三站精度修正、定稿 4.116 秒、长跑 4.192 秒；⭐ 9.5 回头查那颗核：报了耗时就成了收集的搭档，不报 −3.8%，正路是照实报 ＋ 门槛 3 ms；9.6 编译 25 分钟 → 两分半</td></tr>
+<tr><td>十　准入</td><td>6</td><td>10.2 可压成一句</td><td>同一份程序两种结果＝竞争（开关 × 次数，细节在课件折叠）；第 0 步不同先查初始化；两边都开强制舍入再逐处比，最后短跑比 loss；定稿后 300 步再验一遍</td></tr>
+<tr><td>十一　拿回去用</td><td>5</td><td>收尾不能砍</td><td>回到开头；同一底座首尾比 5.80 倍；清单只念四条；三问；预告跑得稳</td></tr>
+<tr><td><b>合计</b></td><td><b>93</b></td><td></td><td></td></tr>
+</tbody></table>
+  <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
+  <em>「地板」＝ 把讲稿一字不落念完、再加切图和动画静放的时间，一句现场发挥都没有，也不含互动（全讲 4 处互动，各留半分钟到一分钟）。每次 build 现数。时间紧时先砍：第九节站 25、26 合成一句，第十一节最后那道题只念题目。</em></p>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　一步的时间去哪了</td><td>1,719</td><td>13</td><td>12.0′</td><td>12′</td></tr><tr><td>第二节　先把数量准：分子、尺子、测量陷阱</td><td>922</td><td>5</td><td>5.9′</td><td>7′</td></tr><tr><td>第三节　第一段：20 层底座，12.7 秒到 2.7 秒</td><td>1,135</td><td>9</td><td>7.9′</td><td>9′</td></tr><tr><td>第四节　拿参照比：差在条件，不在模型</td><td>910</td><td>6</td><td>6.0′</td><td>7′</td></tr><tr><td>第五节　找关键路径：该省 578 毫秒，只快 148 毫秒</td><td>819</td><td>5</td><td>5.5′</td><td>7′</td></tr><tr><td>第六节　关键路径卡在哪：链路、排队，和一加一大于二</td><td>1,044</td><td>5</td><td>6.6′</td><td>8′</td></tr><tr><td>第七节　同样的活，排法不同：调度</td><td>1,022</td><td>8</td><td>7.2′</td><td>8′</td></tr><tr><td>第八节　编译器和运行库会变</td><td>898</td><td>4</td><td>5.5′</td><td>6′</td></tr><tr><td>第九节　换到长文：关键路径又搬家</td><td>2,660</td><td>14</td><td>17.4′</td><td>18′</td></tr><tr><td>第十节　快了，还是同一个模型吗：准入</td><td>883</td><td>4</td><td>5.5′</td><td>6′</td></tr><tr><td>第十一节　拿回去用</td><td>717</td><td>4</td><td>4.8′</td><td>5′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>84′</b></td><td><b>93′</b></td></tr></tbody></table>
 </div>
 
-<h3 class="sec">这一讲要留下的一句话</h3>
+<h3 class="sec">🧵 上台之前：把四条暗线记在心里</h3>
 <div class="say">
-  <span class="pause">整讲只留这一句：
-    <b>「四个 bit 只负责形状，量级由外面那层 scale 给 ——&nbsp;
-    所以量化的全部难点，都在<u>那个 scale 怎么定</u>。」</b></span>
-
-  <p><em>后面每一节都是它的一个侧面</em>：
-    <b>scale 要多密</b>（§3）、<b>训练和推理为什么要定得不一样</b>（§4）、
-    <b>硬件替你做了哪一半</b>（§5）、<b>定错了为什么不报错</b>（§6）。</p>
+  <p><b>① 每个数先问口径。</b>
+    <em>分子怎么数、峰值是哪个、步时取哪几步、跟谁比、是不是同一批机器上量的（接专题八「每个结论都要一把尺子」）。</em></p>
+  <p><b>② 不在关键路径上的，省了也白省。</b>
+    <em>这一讲的主线。第一节立概念，第五节查出是哪条链，第六、七节一刀一刀验。</em></p>
+  <p><b>③ 看产物，不看名字。</b>
+    <em>开关名、配置写的、「核变快了」，都以编译出来的程序和 profile 为准（接专题八「读回值要实测核对」）。</em></p>
+  <p><b>④ 换了条件就要重测。</b>
+    <em>换一份数据、换层数、换版本，之前的读数就不作数（接专题八同名暗线）。</em></p>
+  <span class="pause">⭐ <b>如果只能让台下带走一句话</b>：
+  <b>不在关键路径上的，省了也白省。</b></span>
 </div>
 
-<h3 class="sec">🚧 讲稿 · 0 开场</h3>
+<h3 class="sec">🖥 投屏怎么放</h3>
 <div class="say">
-  <span class="board">停在首屏。</span>
-  <p><b>打算这么开</b>：所有人都在往下压精度 ——&nbsp;
-    但「压精度」不是一个开关，是一整套决策。<br>
-    <em>然后直接抛出那个可验证的分界线：</em>
-    <b>同一个 FP4，推理侧权重按 1×16 分块，训练侧按 16×16。</b>
-    <b>先不解释为什么</b> ——&nbsp;那是 §4 的悬念。</p>
-  <span class="pause">⛔ <b>别在开场解释 16×16</b>。
-    <em>它的理由（链式法则）需要先建立「一个线性层三个矩阵乘」那个图景，
-    开场没有那个铺垫，说了等于白说。</em></span>
+  <p>⭐ <b>课件打开时讲解默认已折叠，直接投屏就行。</b>
+    <em>要看讲解，点右下角「展开讲解」或按 T。折叠时图注和正文段落都收起来，台词里报的数以台词为准，不要让台下去屏上找。</em></p>
+  <p>⭐ <b>八支动画默认连续循环。</b>
+    <em>讲义里写「停住」「先闭嘴放第一幕」的，投屏前把那支动画下面的「连续播放」取消勾选，它才会在每一步自动停下，点「开始」接着走。</em></p>
 </div>
 
-<h3 class="sec">🚧 讲稿 · 1 为什么低精度能行 · 2 格式</h3>
+
+<h3 class="sec" id="c0">第一节　一步的时间去哪了（12′）</h3>
 <div class="say">
-  <span class="board">课件 §1 §2。</span>
-  <p><b>只有提纲，没有逐字稿。</b>要立的两件事：</p>
-  <p>① <b>两个收益性质不同</b> ——&nbsp;算力受益的是训练和 prefill，
-    访存受益的是 decode。<em>这条不讲透，后面分不清训练和推理。</em></p>
-  <p>② <b>范围比精度重要</b> ——&nbsp;BF16 牺牲尾数保指数，所以它赢了 FP16。</p>
-  <span class="pause">⭐ <b>②那条一定要留个钩子</b>：
-    <b>「记住这个取舍，等下讲 FP4 的 scale 时它会原样再来一次。」</b>
-    <em>MXFP4 选纯指数的 E8M0、NVFP4 选有尾数的 E4M3 ——&nbsp;
-    同一个取舍换个位置又演一遍。<b>这是这一讲最好的一处呼应，别浪费。</b></em></span>
+
+<p>🎯 <b>这一节只留一句：步时 ＝ 在算 ＋ 在等 ＋ 空闲；主核等的，是调度器排在它眼前、又还没跑完的那一趟腿，不是因为小工忙不过来。</b></p>
+
+<p><b>▍一　开场：一个数，三条条件</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：先放课件页首那张阶梯总图（<code>fig-curve</code>，本讲义最上面也有一份），停二十秒让台下看形状。</p>
+
+<p class="say">「先看全程。横轴是一站一站的改动，纵轴是一步多少秒，取了对数，同样的百分比台阶一样高。前两刀砍掉一大半，后面每站只抠几个百分点。两条灰带是换了测试底座，同一个配置在两边各量一次，高低不能跨着比。」</p>
+
+<p class="say">「从头说结果：二十层的原始代码一步十二点九秒，优化到层数翻倍的三十九层只要三点九秒；有效 MFU 从百分之四点三提到二十五点九，过了百分之二十五；编译从约半小时压到三分钟。两头都量在按生产图像比例的长图文上；四点三是借同一个作业里定稿那格的有效分子推出来的，同作业比快五点七三倍。曲线用的是以前的纯文字长文，最下面那条五点八倍也是。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：课件页首那段大字（从 12.9 秒到 3.941 秒那句）；念到「先说难在哪」时往下滚到「先定基调」框，指三条条件。</p>
+
+<p class="say">「上一讲我们把一个模型从 GPU 搬对了，这一讲让它跑快。页首这行就是结果：在六十四片 v7x 上，二十层的原始代码一步十二点九秒，优化到三十九层只要三点九秒。先拿中间一站看差距：那时一步五点三一秒；可要是芯片按峰值干活，一步只要零点五八秒。差了九倍。这九倍去哪了，又怎么一点一点要回来，就是这一讲。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：往下滚到「本讲的模型：公开的 Hy4」那张小表。</p>
+
+<p class="say">「先认一认这一讲的模型：公开的 Hy4，一个多模态 MoE，架构数字都来自它在 Hugging Face 上的模型卡。总参七千七百亿，每个 token 激活四百九十亿；七十八层，第一层稠密，其余七十七层是 MoE，每层二百五十六个专家，每个 token 挑八个。我们调优时先只留前二十层跑，叫 20 层底座；后来留一半，三十九层加视觉塔和 MTP 头，叫半层底座。公开版的注意力还带一个稀疏索引器，我们测的训练配置没有它。」</p>
+
+<p class="say">「先说难在哪。不是模型结构难，是三条条件定死了：一行三万两千个 token；每个设备只分到四千零九十六个；优化器是 Muon，每步要多做一串矩阵运算、还要跨卡搬数据。加大 batch、换短序列、换回 AdamW，这些常用招数都碰了条件。没有一刀翻倍的办法，只能一点点往前抠。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：往下滚到蓝框「开场：这次调优查清的 20 件事」，只指「滤掉长文档」那一行；再往下停在「优化编年史：三段底座，28 站」那张柱图（<code>fig-chron</code>）。</p>
+
+<p class="say">「这张表是一路查清的事，先挑一条：滤掉长文档，按块数推一步该省五百多毫秒，实际只快一百四十八。下面这张柱图是整条路：二十八站，分三块，块和块之间换过测试底座，高低不能跨块比。最后一站四点一一六秒。首尾放到同一个底座、同一份数据上直接比，快五点八倍，这张表留到最后一节。重点的站都讲四件事：看到什么瓶颈、怎么判断、做了什么、快了多少。」</p>
+
+<p><b>▍二　热身：一道复习题</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：课件第一节最上面的「🎯 开场热身」，点开，只念第一问。</p>
+
+<p class="say">「先复习一道上一讲的题：判 TPU 跟 GPU 的一个差算不算数，拿什么比？」</p>
+
+<p>💬 <b>互动</b>：等台下说出「GPU 自己跟自己的差」「噪声尺子」，再点开答案。</p>
+
+<p class="say">「拿 GPU 自己重跑的差当尺子，第二节给性能的尺子。另外两问先揣着：剩下的那些毫秒去哪了？两项一起开，为什么比各自加起来还快？」</p>
+
+<p><b>▍三　五点三一秒拆开看</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：§1.1 那张公式卡，从上往下指四行。</p>
+
+<p class="say">「先认几个词。v7x 一颗芯片里有两个设备，每个设备有一个主核，做矩阵乘这些正活；后面说『每设备』都指它。本讲的模型是 MoE：每层有很多组专家权重，每个 token 只挑几组来算。拿编年史中段的第十三站当样本，这份数据已经滤掉了长文档，为什么滤第五节讲。每个设备每一步，模型真正需要六百七十三点五万亿次运算；每个设备的峰值按每秒一千一百五十五万亿次算。一除，零点五八秒。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：§1.2 下面那张「一步 5.31 秒，有用的计算按峰值只要 0.58 秒」（<code>fig-budget</code>），先指上面那根短短的绿条，再指下面那根长条的总长。</p>
+
+<p class="say">「实际是五点三一秒。零点五八除以五点三一，大约百分之十一，这个比就是 MFU。分子是模型要的，峰值是机器给的，都定死了；能动的只有步时。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：同一张图下面那根长条，依次指蓝段、红段。</p>
+
+<p class="say">「把 profile 里那一步打开，设备上是五点二五秒。这五点二五秒里，主核在算三点一八秒，停着等通信两点零七秒，空着的不到两毫秒。四成时间，主核手上没活。在算的那部分有的算得不够快、有的算了模型不要的，第二节碰一点；这一讲主要管那四成：在等，等的是谁？」</p>
+
+<p><b>▍四　师傅和小工：藏住和露出</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：停在 §1.3 小标题。</p>
+
+<p class="say">「还记得专题五那间工坊吗？主核是师傅，做矩阵乘、注意力这些正活。每个师傅身边有两个小工，这一讲里小工具体指芯片里的两颗小核，专门跑腿：把别的设备上的权重收过来，叫 all-gather；把大家的梯度汇总、每人只收自己那一份，叫 reduce-scatter；还兼着给 token 排序。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：§1.3 的动画「一趟腿花不花时间」（<code>anim-hide</code>），<b>先闭嘴放泡茶那两行</b>，放到第二次自动停住再开口。</p>
+
+<p class="say">「华罗庚《统筹方法》里说：先烧水、水开的工夫洗杯拿茶叶，十六分钟喝上茶；坐等水开，要二十分钟，原文叫『窝了工』。水自己在烧，就像小工自己在跑腿。小工跑腿的时候师傅手上有活，这趟腿不花时间，叫藏住；师傅停下手干等，就是窝工，叫露出。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：点继续放第二幕（三条实测通信）。顺序是：念完泡茶那段 → 念下面「换成实测」那句 → 再点「开始」；第二幕会自动停四次，每停一次念一句；静态版在动画下面的折叠里，台上不打开。</p>
+
+<p class="say">「换成实测，反向一层里的三趟腿。调度器，就是编译器里排先后的那一步，排定了上卡就不变。它给每趟腿排两个点：放行，从这儿开始跑；完成点，师傅走到这儿必须等腿跑完才能接着干。完成点排在哪，是调度器定的。」</p>
+
+<p class="say">「（停①）第一趟专家梯度规约，要十六点二毫秒，师傅第六点一毫秒就走到了它的完成点，等了十点一，露出。」</p>
+
+<p class="say">「（停②）第二趟 token 收发一点六毫秒，跑完师傅还在算，藏住。」</p>
+
+<p class="say">「（停③）第三趟收专家权重，八点一毫秒，露出五点六。」</p>
+
+<p class="say">「（停④）只有露出的那一截，算进步时。」</p>
+
+<p><b>▍五　一层反向：主核在等谁</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：「一层反向，主核和两颗小核」那张图（<code>fig-lanes</code>），先指主核那一行的第一段红，再顺着红虚线往下指到小核 1 的第一个红块。</p>
+
+<p class="say">「把这一层反向整个摊开，七十九点六毫秒。上面一行是师傅，下面两行是两个小工。师傅第一段红，就是刚才那十点一毫秒，等的是小核 1 上那条专家梯度规约。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：同一张图，指小核 1 那一行的空白处。</p>
+
+<p class="say">「可小核 1 这一层只忙了六成，在这一格并没有忙不过来。师傅等，是因为调度器把完成点排在了他眼前，那趟腿又还没跑完。从师傅停下来的那一刻往回追，谁等谁串成一条，最长的那条决定步时，叫关键路径。后面每一刀都先问一句：砍在关键路径上吗？不在的，省了也白省。」</p>
+
+<p class="say">「从哪下手先别急。六百七十三点五这个分子是怎么数出来的？快了零点零一秒，算不算数？下一节，先把数量准。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+❓ 台下可能问：「Muon 换回 AdamW 能快 9.7%，为什么非用 Muon？」—— 答：优化器是项目定下的条件，这一讲不讨论选不选，只讲在它之下怎么跑快；那一行只用来说明这个条件的代价。<br>
+⛔ <b>开场大表只念一条（滤长文档那行），不解释为什么</b>：每一条正文都会讲到。整段控制在 1 分钟。<br>
+⛔ <b>泡茶方向固定：水自己烧＝小工的通信，洗杯＝师傅的计算</b>：这里用来讲藏住／窝工；图上一律只说师傅和小工。<br>
+⛔ <b>不讲 XProf 怎么点、怎么读</b>：专题七讲过，被问到指回专题七 §2.3–§2.5。<br>
+⛔ <b>不在这一节说出关键路径是哪一条链</b>：第五节才查出来；这里只立「关键路径」这个概念。<br>
+⛔ <b>不讲屋顶线</b>：本讲关心的是「算」以外的那几段。<br>
+❓ 台下可能问：「峰值为什么是一千一百五十五？」—— 答：这是 MaxText 日志和项目报告用的常数；Google Cloud 公开文档写 v7x 每芯片 BF16 两千三百零七，除以两个设备是一千一百五十三点五，差千分之一点三。<br>
+❓ 台下可能问：「六百七十三点五是怎么数的？」—— 答：模型真正需要的运算量：扣掉跨文档的注意力和填充，第二节讲。<br>
+❓ 台下可能问：「为什么 MFU 能写成理想步时除以实测步时？」—— 答：有用计算 ÷ 峰值就是理想步时，代进 MFU 的定义一约就是这个比。<br>
+❓ 台下可能问：「五点二五秒和五点三一秒为什么不一样？」—— 答：五点二五是 profile 里那一步在设备上的时长，五点三一是主机日志第十三到二十步的平均；两个不是同一步，差的六十来毫秒在设备一步之外，这里只当量级（课件 fig-budget 的出处）。<br>
+❓ 台下可能问：「这颗芯片的账能代表整步吗？」—— 答：这一格的数据各设备负载接近，所以可以（为什么接近，第五节讲）；哪颗芯片代表关键路径，第四节专门讲。<br>
+❓ 台下可能问：「小核 1 为什么一开始就在做 reduce-scatter，主核却第六点一毫秒就要？」—— 答：完成点排在哪是调度器定的；这一层的数据说明不了为什么这么排，第七节回来讲。<br>
+❓ 台下可能问：「别的芯片也有专职跑腿的吗？」—— 答：不一定。有的芯片没有专职跑腿的，要从干活的计算单元里划一部分出来管通信，划走的就不干正活了；TPU 是每个师傅配两个专职小工。<br>
+❓ 台下可能问：「哪种芯片要划计算单元管通信？」—— 答：例如有的 GPU 训练实现里，会专门留出一部分流处理器跑跨卡通信；具体比例各家不同，本课不引数。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s一">第一节　一步的时间去哪了</a>　·　主图 <code>fig-lanes</code></p>
 </div>
 
-<h3 class="sec">讲稿 · 3 缩放这件事</h3>
+<h3 class="sec" id="c1">第二节　先把数量准：分子、尺子、测量陷阱（7′）</h3>
 <div class="say">
-  <span class="board">课件 §3。<b>这一节是整讲的核心，给足时间。</b></span>
 
-  <p>先把问题问出来：<b>E2M1 一共四个 bit，能表示的绝对值只有八个
-    ——&nbsp;这怎么可能算得准？</b></p>
+<p>🎯 <b>这一节只留一句：分子只数模型真正需要的；快没快，先跟同一份程序重跑的差比。</b></p>
 
-  <span class="pause">停一拍，答案要慢说：
-    <b>「答案不在那四个 bit 上，在<u>外面套的那层 scale</u>。
-    四个 bit 只负责形状，量级由 scale 给。」</b></span>
+<p><b>▍一　分子：只数模型真正需要的</b></p>
 
-  <p><b>然后立刻给尺度感</b>，别停在抽象：拿 7,168 × 18,432 一层权重走一遍
-    ——&nbsp;<b>per-tensor 是一亿三千万个数共用一个，
-    NVFP4 是每 16 个一个，那 7,168 切成 448 段。</b>
-    <em>两端差八百多万倍。</em></p>
+<p class="say">「做性能的人有个通病：以为在量 A，量到的其实是 B，最后得出一个关于 C 的结论。这一节防两样：分子里混进模型不需要的活，步时里混进噪声。」</p>
 
-  <span class="pause">⚠️ <b>这里必然有人混</b>，主动拆开：
-    <b>「一个 tensor 是整块矩阵，不是它的某一条边 ——&nbsp;
-    按 7,168 那一档叫 per-channel，不叫 per-tensor。」</b></span>
+<p class="board"><b>🖥 屏幕</b>：「一行拼着很多篇文档，注意力只在每篇里面做」（<code>fig-docmask</code>），先指左边的大三角，再指右边对角线上的小三角。</p>
 
-  <p><b>命名碰撞也要主动说</b>，不然学员在四份资料里看到四个名字会以为是四件事：
-    <em>micro-tensor scaling ／ microscaling(MX) ／ block scaling ／ 块量化，
-    再加上 sub-channel、group-wise ——&nbsp;<b>全是同一件事。</b></em></p>
+<p class="say">「训练里一行三万两千个 token，不是一篇文档，是拼起来的二十几篇。注意力里每个 token 只看它前面的，画出来是三角形；而且只在自己那篇里面看，就是右边对角线上这几个小三角。可模型自带的公式按左边那个大三角算，连填充的 token 也算成有用功。放到工坊里：师傅一直在动手，可有一半在给不会出厂的门刨木头。MFU 只认出厂的门。」</p>
 
-  <span class="pause">⛔ <b>中文这里特别容易踩，这句要说</b>：
-    <b>「『块』不蕴含二维。NVIDIA 自己给 block quantization 的定义
-    就是沿一个轴分块。」</b></span>
+<p class="board"><b>🖥 屏幕</b>：「静态公式数的分子，一半不是模型真正需要的」（<code>fig-numerator</code>），从上往下一行一行指。</p>
 
-  <p><b>两个格式的差别只在 scale 上</b>：
-    <em>MXFP4 每 32 个一个 E8M0（纯指数，只能是 2 的幂）；
-    NVFP4 每 16 个一个 E4M3（有尾数），外面再套一个整张量的 FP32。</em></p>
+<p class="say">「先说两个词：作业，是一次申请到同一批机器、在上面连着跑一串配置；格，是作业里的一个配置，连跑若干步取平均。图上是一格 20 层底座的账：按公式数是六百零八，扣掉跨文档的注意力四成多、扣掉填充百分之八，再补上公式漏掉的两小项，剩三百二十五，一半出头。第一节那一格也是这么扣的：按公式一千一百四十二点七，扣完剩六百七十三点五。」</p>
 
-  <span class="pause">⭐ <b>两级为什么存在，这句是关键，慢慢说</b>：
-    <b>「不是因为两级更高级 ——&nbsp;是因为 E4M3 最大只到 448，
-    盖不住整张量的量级跨度，所以要先用一个 FP32 把张量搬进它的量程。
-    外层管<u>范围</u>，内层管<u>局部量级</u>。」</b><br>
-    <em>接着反过来说：MXFP4 的 E8M0 范围大得离谱，所以它<b>不需要外层</b>。</em></span>
+<p class="say">「这几项扣法合成一句话：权重类的运算按有效 token 的比例算，注意力只算文档内的配对，视觉塔按实际图像块算，再补上公式漏掉的 MTP 输出头。重算不计：那是实现的选择，计进去，重算越多 MFU 越高，等于鼓励浪费。」</p>
 
-  <p><b>最后一步：那 16 个数怎么排。</b>
-    <em>直接读指令的分片形状 ——&nbsp;A 片 16×64，SFA 片 16×4，
-    64 ÷ 16 ＝ 4。<b>一行切四段，完全不跨行。</b></em></p>
+<p class="say">「口径一换，MFU 能差多少？公开的 DeepSeek V3，第四节拿它当参照。在同条件的一格上，它按公式算是百分之十八点六四，按真正需要的算是百分之十点三，只剩一半出头。它的公开配方报的百分之四十九是按公式算的，不能跟我们的百分之十一直接比。以后听到任何一个 MFU，第一句先问：分子怎么数的？」</p>
 
-  <span class="pause">⭐ <b>这一节的落点，必须说出口</b>：
-    <b>「它不需要『相邻的数值相近』这个假设 ——&nbsp;
-    只需要这 16 个数的量级别差太远。这是统计性质，不是语义性质。」</b><br>
-    <em>⛔ 按「相邻相近」去理解，会推出一堆错的优化直觉。</em></span>
+<p><b>▍二　换了数据，分子先变</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：§2.2 那张小表，指「有效分子」和「步时」两行。</p>
+
+<p class="say">「分子还跟着数据走。换一份打包更好的数据，填充从百分之十二点六降到百分之零点三六，核一行没改，有效分子多了百分之十八点九，步时只快百分之二点四。只看 MFU，会以为做了一个快两成多的优化。所以换了数据的两格，只比步时。」</p>
+
+<p><b>▍三　尺子：同一份程序重跑，差多少</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：「性能的尺子：同一份程序重跑，步时差多少」（<code>fig-ruler</code>），先指上一行挤成一团的蓝点，再指远处的两个红点，最后指下一行灰带（跨作业）。</p>
+
+<p class="say">「同一个作业里，同一份程序跑五次，最大差零点零零二秒，这就是尺子。一个真正生效的开关快了零点一四五秒，是尺子的七十二倍多，算数。不同作业之间，最大差零点零一八秒，尺子要放宽九倍。」</p>
+
+<p class="say">「我自问自答一下：假设一个改动让一步少了零点零一秒。同一个作业里比，是尺子的五倍，算数；拿两个作业比，连一把尺子都不到，说不清。所以比收益，尽量放在同一个作业里，对照和改动看同一段窗口。」</p>
+
+<p><b>▍四　测量本身会骗人</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：§2.4 那张五行的表，只指第一行和最后一行。</p>
+
+<p class="say">「这次真踩过五个坑，表里都有，挑两个。早上刚开工，手还没热：一个作业的第一格整格偏慢百分之三，所以读数取后面几步，对照也放进同一个作业里一起比。只盯着一个师傅看，就以为全工坊都是他那样：只录一颗芯片的 profile，我们读反过一次方向，第四节细讲。」</p>
+
+<p class="say">「分子数准了，尺子也有了。原样跑的那一格，一步十二点七秒里，主核有几成在等通信？下一节从编年史的第零站讲起。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不讲五个坑的来历</b>：表里只列读法，台上只配工坊画面；来历都是我们自己判错的经过，不讲。<br>
+⛔ <b>不在这里拆「49% 对 11%」</b>：只说不能直接比，第四节拆。<br>
+⛔ <b>零点零一秒是假设的数</b>：台上要说「假设」，不能说成实测。<br>
+❓ 台下可能问：「为什么跨作业比同一个作业散？」—— 答：素材里没拆，推断是机器、时段不同；所以收益放进同一个作业比。<br>
+❓ 台下可能问：「读数真的会晃这么多吗？」—— 答：有一篇论文题目就叫《什么都没做错，也会得出错数据》：只改程序链接时文件的顺序，「高一档编译优化更快」就能翻成「更慢」。<br>
+❓ 台下可能问：「另外三个坑是什么？」—— 答：抓 profile 那一步因为要记录多零点三秒；数据管线供不上时读数忽快忽慢；合成数据把图像槽塞满，视觉塔被放大五倍。表里都有读法。<br>
+❓ 台下可能问：「那篇论文是哪篇？」—— 答：Mytkowicz 等人 2009 年在 ASPLOS 上的论文，比的是 O3 对 O2；链接顺序、环境变量大小这类不起眼的设置，能让 O3 从「更快」变成「更慢」。<br>
+❓ 台下可能问：「合成数据为什么会放大视觉塔？」—— 答：那份合成数据每行有一万六千多个图像槽、全部塞满，视觉塔按槽算；真实数据每行图像少得多。改成跟真实数据同比例的槽数，「加视觉塔」从慢百分之二十七点五变成慢百分之五点六。<br>
+❓ 台下可能问：「实际算的块和要的配对差多少？」—— 答：某一步平均每个设备保留满因果百分之二十四点二的块，要的配对只占百分之十一点二；块是整块算的，约一半是被掩掉的部分（课件 §2.4 折叠）。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s二">第二节　先把数量准：分子、尺子、测量陷阱</a>　·　主图 <code>fig-ruler</code></p>
 </div>
 
-<h3 class="sec">讲稿 · 4 训练侧 —— 16×16 与链式法则</h3>
+<h3 class="sec" id="c2">第三节　第一段：20 层底座，12.7 秒到 2.7 秒（9′）</h3>
 <div class="say">
-  <span class="board">课件 §4。<b>前半（混合精度、FP8 scaling、QAG）还没写，
-    先按提纲带过；后半这一段有逐字稿。</b></span>
 
-  <span class="pause">⛔ <b>先建图景，别急着讲 16×16</b>：
-    <b>「一个线性层其实是三个矩阵乘：前向 y ＝ w·x，
-    反向之一 ∂x ＝ wᵀ·∂y，反向之二 ∂w ＝ ∂y·xᵀ。
-    注意第二个 ——&nbsp;<u>同一个权重，被转置着又用了一次</u>。」</b><br>
-    <em>实测：不给这个图景，后面整段听不懂。</em></span>
+<p>🎯 <b>这一节只留一句：瓶颈一路换类，字节 → 排法 → 小核队列 → 再回到排法；每砍掉一类，下一类就露出来。</b></p>
 
-  <p>然后问：<b>缩放必须沿点积那一维 ——&nbsp;可反向把点积维换了，怎么办？</b></p>
+<p><b>▍一　站 0：原样跑，一步十二点七秒</b></p>
 
-  <p><em>同一个权重，前向沿行切块量化，反向沿列切块量化，
-    <b>得到两份不一样的量化结果</b>。</em></p>
+<p class="board"><b>🖥 屏幕</b>：「前半程：20 层底座，13 站」（<code>fig-front</code>），先指最上面那根最长的条（站 0）。</p>
 
-  <span class="pause">⭐ <b>这句是这一节的核心，慢，且要说完整</b>：
-    <b>「这不是精度差一点，这是<u>链式法则被打破</u> ——&nbsp;
-    反向传播算的梯度，对应的已经不是前向那个函数了。你在给另一个函数求导。」</b></span>
+<p class="say">「编年史从生产配方原样跑起，先用 20 层底座：七十八层只留前二十层，每个设备每层要算的、要收发的，跟全量一样。一步十二点七四三秒，有效 MFU 百分之二点三，主核百分之五十九的时间在等通信。」</p>
 
-  <p><b>于是有了 16×16</b>：<em>一个正方形的块，<b>转置之后还是同一个块</b>，
-    前向反向拿到同一份量化权重。</em></p>
+<p class="board"><b>🖥 屏幕</b>：站 0 那张 profile 截图（<code>shot-s0</code>），先指两个红框①②，再指中间的绿框③。</p>
 
-  <span class="pause">⛔ <b>这一句必须说，否则学员会记反</b>：
-    <b>「16×16 是 256 个数共用一个 scale，<u>比 1×16 粗十六倍</u>。
-    它更粗，却更好 ——&nbsp;这里赢的不是精度，是<u>一致性</u>。」</b><br>
-    <em>⛔ 千万别讲成「二维更细所以更准」。</em></span>
+<p class="say">「这是那时候反向的一层。红框是师傅停在完成点上等：等专家权重收齐九十毫秒，等梯度规约一百五十六毫秒。绿框是真正在算的专家矩阵乘，一共六十三毫秒。等的是算的三倍九。」</p>
 
-  <p><b>硬件什么都没多干</b>：<em>Tensor Core 只认沿点积维的一维 scale，
-    所以软件算出那个 16×16 的 scale 之后，<b>复制十六份</b>喂进去。
-    硬件不知道有二维这回事。</em>
-    <b>所以二维不省存储 ——&nbsp;买的是「转置前后是同一份」。</b></p>
+<p class="say">「为什么等这么久？那时专家权重按 FSDP 切：每个设备只存每组专家的一小片，用之前要从所有设备把整组收齐。一层二百五十六个专家，权重合起来约十九点三 GB，前向、反向各收一次，再加上 FP32 的梯度规约，每层每个设备要收发约七十七 GB。按链路速度折成时间约四百毫秒，是专家矩阵乘的六七倍，怎么排都藏不住。」</p>
 
-  <span class="pause">⚠️ <b>有人会拿论文里的 4 来问</b>，提前拆开：
-    <b>「论文里那个 d ＝ 4 是<u>随机 Hadamard 变换的矩阵尺寸</u>，
-    不是块大小。结论是 16 比 4 收敛好、跟 128 差不多。」</b></span>
+<p class="say">「第一刀就减字节：换成按专家切，专家轴复用上下文并行那八份，每个设备整组保管自己那三十二个专家，token 挑中谁就把 token 送过去，挪 token 不挪权重。每层要收发的从约七十七 GB 降到约十二 GB，一刀快百分之四十五点四。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：站 1 之后同一位置的截图（<code>shot-ep8</code>），不指框，滚过去。</p>
+
+<p class="say">「换完以后同一个位置，这一层的等待从两百四十六毫秒降到三十四。」</p>
+
+<p><b>▍二　站 2–7：排法和优化器</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：回到「前半程：20 层底座，13 站」（<code>fig-front</code>），指站 2 那一行。</p>
+
+<p class="say">「接着搬来一套已经上线的注意力配置：注意力少重算一遍、每次算的块更大，注意力计算从一千九百七十五毫秒降到七百九十六，一步快百分之二十九。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：收集流水化前后那张截图（<code>shot-agp</code>），先指上图红框里空着的那一段，再指下图夹进去的两个绿框。</p>
+
+<p class="say">「主核还有四成多在等：上图红框这段，收集从放行到完成，中间一个矩阵乘都没有，师傅干等。让收集分成几块、一边收一边先做后面两个矩阵乘，快百分之七点五。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：站 7 前后那张截图（<code>shot-s7</code>），先指上图那排红框，再指下图。</p>
+
+<p class="say">「步尾还冒出一段优化器。Muon 每步要把动量矩阵正交化，正交化之前得换一种切法，让每个设备手里是几块完整的矩阵；当时编出来的程序沿几个设备轴分三步搬，上图这排红框就是师傅停着等，约五百毫秒。改成只沿一个轴搬一步，下图红框还在，可短了，只剩一百八十七毫秒；整个步尾从一千零九十四毫秒缩到六百四十四，一步快百分之十一点二。记住 Muon，第九节它还要出场。」</p>
+
+<p><b>▍三　站 8–12：小核队列满了</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：站 8 前后那张截图（<code>shot-skip</code>），先指①紫框变短，再指紧跟着冒出来的②红框。</p>
+
+<p class="say">「到三秒半左右又卡住了。注意力反向跳过空块，注意力核少算了三百四十毫秒，一步只快七十八。省下的不在关键路径上。关键路径在哪？更早约四秒那一格量过：小核 0 那条队列被占了步长的百分之八十八，里面一千二百毫秒不是通信，是给 token 重排的杂活。队列满了，通信提前发也排不上。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：站 9 前后那张截图（<code>shot-s9</code>），先指上图两颗小核上的红虚框②，再指下图同一位置空出来，最后指③橙框（师傅等的那段）。</p>
+
+<p class="say">「所以从小工身上拿走杂活。上图红框是 token 重排，两个小工都被它占着；把 token 排序挪回师傅这边，下图这一块空了，师傅等的从二十六毫秒降到十八毫秒，一步快百分之十一点三。」</p>
+
+<p class="say">「站 10 换预打包数据、站 11 缓冲只读写有效行，各快两三个点。最后一站拿公开模型 DeepSeek V3 的 profile 对照，下一节它当参照：师傅每层还多等十毫秒，于是重新分了小核的活，比如把一条规约固定在一颗小核上跑，免得两颗小核互相等，快百分之七点三，到二点七三一秒。」</p>
+
+<p><b>▍四　衔接①：换到半层底座</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚回页首编年史柱图（<code>fig-chron</code>），指第一块和第二块之间那道「衔接①」虚线和后面的灰框 5.476。</p>
+
+<p class="say">「20 层底座每个设备的负担只有一百二十八片全量的一半左右，所以换半层底座：七十八层主干留三十九层、视觉塔四十层留二十层，再加 MTP 头，也就是多预测几个 token 的附加输出层。正式训练规模层数是它的两倍、切参数的份数也是两倍，每个设备的参数和计算正好一样；激活不一样，要在全量上单独编。」</p>
+
+<p class="say">「同一份配置量两次：20 层底座二点七三一秒，半层底座五点四七六秒。不是变慢，是换了尺子，后面只跟半层底座比。到了半层底座，有效 MFU 百分之十一，高还是低？下一节找个参照。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+❓ 台下可能问：「token 排序挪回主核，主核活多了为什么还快？溢出了怎么办？」—— 答：主核上那段排序本身不长，挪走的是小核队列里堵住通信的那一千两百毫秒；缓冲留到均匀分配时的七点七五倍，万一溢出，那一步整步按不丢 token 的方式再算一遍（整步回放），不丢数据。<br>
+⛔ <b>逐站四件事的表在课件折叠里，台上不打开</b>：按顺序指五张截图（站 0、站 4 收集流水化、站 7、站 8、站 9），站 1 那张只滚过去、报一个数；站 3、5、6 不提；讲透的是站 0、站 7、站 8–9。<br>
+⛔ <b>不说那套注意力配置来自哪个模型</b>：只说「同项目一个已经上线的较小模型」。<br>
+⛔ <b>半层底座和 20 层底座的数不要相除</b>：五点四七六不是变慢了，是换了底座。<br>
+❓ 台下可能问：「为什么一开始不就按专家切？」—— 答：生产配方原样就是按 FSDP 切；那是一个合法的起点，问题是在每设备只有四千 token 的条件下，挪权重比挪 token 贵一个数量级。<br>
+❓ 台下可能问：「站 2 为什么能直接搬别的模型的配置？」—— 答：那套配置在同项目较小的模型上已经过了两道数值检查，这里只换性能相关的块大小和存什么。<br>
+❓ 台下可能问：「站 12 改的是哪三处？」—— 答：规约只钉一颗小核、路由权重的累加挪回主核、一个输出投影的权重梯度提前算；再把缓冲从 7.75 倍压到 4 倍，溢出那一步整步回放。<br>
+❓ 台下可能问：「站 1 只换更宽的通信路、不减字节行不行？」—— 答：同一批比过，只快百分之二十八点八，不如减字节的百分之四十五点四。<br>
+❓ 台下可能问：「照搬参照的分工为什么反而慢？」—— 答：参照的小核上只有通信；我们的小核还有一批两颗一起跑的数据重排，一颗钉上专家通信，另一颗也得陪着等（推断）。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s三">第三节　第一段：20 层底座，12.7 秒到 2.7 秒</a>　·　主图 <code>fig-front</code></p>
 </div>
 
-<h3 class="sec">讲稿 · 5 硬件视角</h3>
+<h3 class="sec" id="c3">第四节　拿参照比：差在条件，不在模型（7′）</h3>
 <div class="say">
-  <span class="board">课件 §5。<b>这一节接专题二，可以快，但三个点要清楚。</b></span>
 
-  <span class="pause">开门见山，别绕：
-    <b>「『硬件支持 FP4』加的是三样，<u>没有协处理器</u>：
-    乘法阵列认四 bit、MMA 通路里内嵌一级乘 scale、通用核多了几条转换指令。」</b></span>
+<p>🎯 <b>这一节只留一句：先把参照搬到你的条件下再比；单芯片的 profile 要按最忙的那颗读。</b></p>
 
-  <p><b>然后甩那个反例</b>，它比任何解释都有力：
-    <em>桌面那颗 GB10 <b>有 FP4 的 Tensor Core 指令，却缺那条转换指令</b>
-    ——&nbsp;能拿 FP4 算矩阵乘，却没法把数转成 FP4。</em>
-    <b>同一颗芯片上一个有一个没有 ——&nbsp;所以它们是两块独立的硬件。</b></p>
+<p><b>▍一　参照阶梯</b></p>
 
-  <span class="board">⚠️ 有人追出处就说清楚：<b>这条出自 NVIDIA 开发者论坛的实测报告，
-    不是官方规格书</b>。<em>只用它支撑定性判断，不支撑任何数字。</em></span>
+<p class="say">「换到半层底座，一步五点四七六秒，有效 MFU 大约百分之十一。总有人拿它跟别人的百分之四十九比。短跑有条规矩：顺风超过每秒两米不算纪录，不是你没跑这么快，是风帮了你。这一节就干一件事：把风拉平了再比。」</p>
 
-  <p><b>一句话总结分工</b>：<em>硬件负责「用」scale，软件负责「算」scale。</em></p>
+<p class="board"><b>🖥 屏幕</b>：「别人 49%、我们 11%」那张阶梯图（<code>fig-ladder</code>），先指第一行上面那句起点。</p>
 
-  <span class="pause">⛔ <b>这两句别说错</b>：<br>
-    <b>「scale 不是放进 Tensor Core 里，是放进 TMEM ——&nbsp;
-    TMEM 是 SM 上的一块内存，每 SM 256 KiB。」</b><br>
-    <b>「乘 scale 不额外消耗算力，但这不等于不花钱。」</b></span>
+<p class="say">「参照选公开的 DeepSeek V3。上游公开仓库里有一份 v7x 的配方，报百分之四十八点八五。第一步，在我们自己的六十四片 v7x 上照它复现：它报一步四点二四秒；调了两个开关以后，我们跑到四点一三秒，比它报的还快一点。起点追平了，后面每一格的差都不怪复现。」</p>
 
-  <p><b>三笔代价，都不在 FLOPs 头上</b>：
-    <em>① 占 TMEM ——&nbsp;<b>一个 128×256 的 FP32 累加器就吃掉一半，
-    真正卡住 tile 能开多大的往往是这一笔</b>；
-    ② 多一路搬运，而且必须摆成交错布局；
-    ③ 量化那一头是真花时间的 ——&nbsp;<b>只比 MMA 就会把它漏掉。</b></em></p>
+<p class="board"><b>🖥 屏幕</b>：同一张图，只指 1.49 和 1.41 那两行红条，最后指底下接起来的那一整根。</p>
 
-  <span class="board">⚠️ 顺带澄清一个名字：<b>「Transformer Engine」不是物理部件</b>，
-    芯片版图上找不到它。<em>被问到再说，不必主动展开。</em></span>
+<p class="say">「然后做公平测试：一次只改一个条件，一行一行往我们这边退，五项。最大的是专用实现换成通用实现，一点四九倍：专用实现是上游只给 DeepSeek V3 手写的代码路径，通用实现是我们的模型也走的那套，这一项还有一大半是那一格没开几项优化。其次是序列拉到三万二并切八段，一点四一倍。五项乘起来大约三点七倍，都是条件或配置，没有一项是模型结构。」</p>
+
+<p><b>▍二　同样条件下直接比</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：§4.2 那张小表，指右边一列「快 9.5%」「快 6.4%」。</p>
+
+<p class="say">「更直接的办法：把 DeepSeek V3 的结构放进我们的全部条件，两个选手站在同一条跑道、同一阵风里。结果我们的模型反而快：20 层底座上快百分之九点五，半层底座上快百分之六点四。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：「同样条件下，本讲的模型自己多花在哪、省在哪」（<code>fig-selfslow</code>），先指右边红条，再指左边绿条。</p>
+
+<p class="say">「我们也有多花的：最长的那根红条是 iHC：每个 token 在层与层之间带着四路残差、每层混一次，外加一次同步，约二百五十毫秒；视觉塔一百一十八、注意力一百一十六毫秒。也有省下的，最下面那根灰条是推出来的余项，推断大头在通信等待上，20 层底座的账里对方光收稠密权重就多等约两百毫秒，账闭上是我们快。这些数是按最忙的设备修正以后估的。为什么要修正？」</p>
+
+<p><b>▍三　看最忙的那颗芯片</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：「只录一颗芯片」那张图（<code>fig-busiest</code>），先指左边三根条的块数。</p>
+
+<p class="say">「我们第一次算这张账，像醉汉在路灯底下找钥匙：两份 profile 都只录了设备零，因为它好录。读出来，注意力那颗 kernel 我们九点三一毫秒、对方二点三七，看着是我们慢。再一数：我们那颗芯片那一步正好分到一整篇三万两千长的文档，算了六十六个块；对方那颗只算了八个，而对方那一步最忙的设备其实是四十六个，没被录到。一个师傅接了六十六件活，一个接了八件，比谁干的时间长，当然是前一个慢。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：同一张图，指右边两根条。</p>
+
+<p class="say">「得按件算：按各自算的块和运算量折算，每秒四百八十七万亿次对二百九十万亿次，我们约是对方的一点七倍，反而是我们快。每做完一层，所有师傅都要对一次账，谁也不能先开下一层，所以一步多久看活最多的那位师傅。拿到一颗芯片的 profile，先数它这一步干了多少活，再问它是不是最忙的那颗。」</p>
+
+<p class="say">「所以那张账里注意力多花的一百一十六毫秒，是按最忙的设备修正以后的估计，不是核慢，是数据：几乎每步都有一行接近满长的文档，总有一位师傅分到一整篇，一步就得等他。既然怪长文档，把长文档滤掉，注意力省下来，步时能快多少？」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+❓ 台下可能问：「专用实现换通用实现那一点四九倍都是实现差吗？」—— 答：不是。逐个算子拆开，多出来的五百六十一毫秒里约四百毫秒是那一格的通用实现没开几项 MoE 优化，我们的配置早就开了；真正属于两种实现的差只剩一百六十来毫秒。<br>
+❓ 台下可能问：「别人调好的开关能直接拿来用吗？」—— 答：不能。我们整套运行库开关放到 DeepSeek V3 上，它慢百分之一点七；关掉 bf16 传播，它快百分之二十三，我们反而慢百分之一点六（课件 §4.4）。借思路，不借开关。<br>
+❓ 台下可能问：「复现时调了哪两个开关？原样为什么慢？」—— 答：一个是叫 bf16 传播的编译选项（上游另一份配方里关着），一个是流水线内存开关取上游另一份配方的值；原样为什么慢百分之二十九，还没定位，这个我不确定。<br>
+⛔ <b>不比谁家的实现好</b>：「专用实现换通用实现慢一点四九倍」里七成是那一格没开配置；剩下的真差，被追问时说「上游那份专用实现有只算有效行的激活核、注意力投影融合核」，不展开（课件 §4.1 折叠有逐项表）。<br>
+⛔ <b>不把「坦白」折叠念成自我检讨</b>：台上只讲路灯和按件算，读错的细节在课件折叠里。<br>
+⛔ <b>顺风只用来开场</b>：说完「把风拉平」就回到阶梯，不再展开田径规则。<br>
+❓ 台下可能问：「每设备 token 减半那一步为什么不画？」—— 答：它改的是每步的活，不是条件的代价；MFU 从百分之三十六掉到二十六，是因为每步的计算变少了，固定开销占比变大。<br>
+❓ 台下可能问：「五项能直接相乘吗？」—— 答：各项在不同的配置上量的，相乘假设互不影响，所以写「约」、标推导。<br>
+❓ 台下可能问：「对方负载均衡那次同步是 DeepSeek V3 模型的问题吗？」—— 答：不是，是那条代码路径的实现：每层有一次同步的 all-reduce，跟模型结构无关。<br>
+❓ 台下可能问：「为什么关 bf16 传播在两边方向相反？」—— 答：推断：参照的提速来自它手动打包的集合通信能提前发，我们没有这种包，关了只剩代价。<br>
+❓ 台下可能问：「上游那个 49% 和我们的 11% 到底怎么对？」—— 答：口径先差约零点五五倍（第二节），再叠上 FP8 对 BF16、8K 单段对 32K 多文档；按阶梯一项一项拆，不要直接比两个百分比。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s四">第四节　拿参照比：差在条件，不在模型</a>　·　主图 <code>fig-busiest</code></p>
 </div>
 
-<h3 class="sec">🚧 讲稿 · 6 沉默的失败</h3>
+<h3 class="sec" id="c4">第五节　找关键路径：该省 578 毫秒，只快 148 毫秒（7′）</h3>
 <div class="say">
-  <span class="board">课件 §6。<b>只有提纲。但这是全讲风险最高的一节，不能砍。</b></span>
-  <p><b>三类，一类比一类隐蔽</b>：
-    <em>① 跑起来了、loss 也在降，只是降得慢或后期崩；
-    ② 开关没生效也不报错（QAG 那五道锁）；
-    ③ <b>链式法则被打破</b> ——&nbsp;连「开关没生效」都算不上，
-    一切正常，只是你在给另一个函数求导。</em></p>
-  <span class="pause">收口那句：
-    <b>「在数值这件事上，『没报错』什么都不能说明。」</b></span>
+
+<p>🎯 <b>这一节只留一句：省下的计算，只有超出它所盖住的那条通信的部分，才变成步时。</b></p>
+
+<p><b>▍一　现象</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：§5.1 那张小表，先指「按块数推，本该省」那一行。</p>
+
+<p class="say">「那就把超过八千 token 的文档滤掉。最忙的设备每步要算的块，从平均六十来个降到十几个，活少了一大半。按块数推，一步该快五百多毫秒。这是编年史的第十三站。」</p>
+
+<p>💬 <b>互动</b>：只露「本该省」那一行，问「开场念过，实际只快了一百四十八。你猜剩下的四百多毫秒去哪了？」等台下猜几种，再指「实测步时」那一行。</p>
+
+<p class="board"><b>🖥 屏幕</b>：§5.1 那张小表，指「实测步时」那一行。</p>
+
+<p class="say">「同一个作业里，对照五点四四八秒，滤完五点三秒，百分之二点七。是滤完以后 MoE 的负载变差、别处慢了吗？没有，反而更均衡了。往后的改动都在这份滤完的数据上比。」</p>
+
+<p><b>▍二　一重一轻</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：「注意力省下来的时间，大半变成了等专家权重的通信」（<code>fig-heavylight</code>），先指上一行的蓝和红，再指下一行的蓝和红。</p>
+
+<p class="say">「挑两颗芯片对着看，同一个配置，一颗正好是这一步注意力最重的，也就是最忙的那颗，一颗很轻，两份不是同一步，只当量级。滤掉长文档，就是想让最重的那颗也变得像轻的那颗，所以拿轻的那颗当滤完以后的替身。轻的那颗，注意力少了六百七十二毫秒，可它等专家权重通信的时间多了五百四十一毫秒。省下的大半，变成了等。」</p>
+
+<p><b>▍三　关键路径</b></p>
+
+<p class="say">「先算一道小账，分钟数是编的。师傅一轮的活十分钟，小工同时跑腿七分钟，一轮十分钟。师傅提速到六分钟，一轮变几分钟？」</p>
+
+<p>💬 <b>互动</b>：先别切图，等台下报一个数。</p>
+
+<p class="board"><b>🖥 屏幕</b>：「同时干的两件事，一轮花的是长的那件」（<code>fig-maxsum</code>），先指第一行，再指第二行灰的，最后指第三行的红块。</p>
+
+<p class="say">「很多人第一反应是六。其实是七：师傅六分钟干完，小工七分钟才回来，等一分钟。省了四分钟，只兑现三分钟。要是只提速到八分钟，还比小工长，省的全兑现。所以兑现的，是省下的减去新露出来的等待：四减一，三。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：动画「注意力一直在缩，一层却不跟着短」（<code>anim-cover</code>），<b>先闭嘴，等它转完一圈</b>（21 秒；会自动停两次，每次点「开始」接着放，停的时候也别说话）。</p>
+
+<p class="say">「回到我们。每一层，小工都要把这一层的专家权重收进来，再把专家梯度汇总回去，就是这根橙条。注意力长的时候，橙条大半藏在注意力底下；注意力一短，师傅算完了，腿还没跑完，只能干等。橙条一点没变短。」</p>
+
+<p class="say">「所以省下的注意力，只有超出橙条的那一截能兑现：六百七十二减五百四十一，大约一百三十毫秒，跟实测的一百四十八同一量级；图上那个一百九十五是两颗芯片整步的差，多出的几十毫秒落在别处。这根橙条就是现在的关键路径。不先动它，砍什么计算，师傅都只是换个地方等。」</p>
+
+<p><b>▍四　收尾：瓶颈会搬家</b></p>
+
+<p class="say">「这个现象这次见过三次：这一回；站 8 的注意力跳块，少算三百四十毫秒，只快七十八；还有同项目一个较小的模型，注意力省一千零八十七毫秒，一步只省三十九。《目标》那本小说把瓶颈比作徒步队伍里最慢的孩子，整队只能跟着他；帮他分掉背包，整队就快了，可接着就轮到下一个最慢的。每压缩一次关键路径，都要重新找一遍。」</p>
+
+<p class="say">「回头看前半段，关键路径已经搬过三次家：先是字节，每层七十七 GB 怎么排都藏不住；再是小核的队列，token 重排把小工堵满；现在是这根橙条，通信排在哪、能不能叠在计算底下。」</p>
+
+<p class="say">「关键路径找到了，下一节就砍它。可这根橙条为什么这么长，能不能缩？」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不讲滤长数据怎么造</b>：只说「滤掉超过八千 token 的文档」。<br>
+⛔ <b>别讲成阿姆达尔定律</b>：阿姆达尔是一条线上几段相加；这里是两条线并排、取长的。被问到就这样区分。<br>
+⛔ <b>这一节不再讲泡茶</b>：第一节讲过了；fig-maxsum 的工坊小账更直接（分钟数是编的）。<br>
+❓ 台下可能问：「图上和动画结尾那个 195 毫秒是什么？」—— 答：两颗芯片整步的差；省下的注意力减去新露出的等待约 130，多出的 60 来毫秒落在别处，两颗不是同一步，只当量级。<br>
+❓ 台下可能问：「第一节那个 5.31 秒跟这里的 5.3 是什么关系？」—— 答：5.31 是另一个作业重跑滤完那份配置的读数，第一节的解剖样本用它；比收益只用同一个作业里的 5.448 → 5.3。<br>
+❓ 台下可能问：「重的那颗不是也在等吗？」—— 答：重的那颗也等了五百多毫秒，那是这条链本来就露在外面的一截；轻的那颗多出来的五百四十一，才是原来被注意力盖住、现在露出来的。<br>
+❓ 台下可能问：「另外两次是什么？」—— 答：一次是站 8；另一次在同项目一个较小的模型上，注意力省一千零八十七毫秒，一步只省三十九。<br>
+❓ 台下可能问：「578 和 672 是一回事吗？」—— 答：不是。578 是滤数据前按块数推的「该省」；672 是同一配置里一重一轻两颗芯片的注意力差，用来看省下的时间去哪了。<br>
+❓ 台下可能问：「为什么不直接录滤完以后那一格的 profile？」—— 答：录了，多芯片同一步的 profile 已经取回，还在拆；这里先拿一重一轻两颗芯片当替身看量级。<br>
+❓ 台下可能问：「为什么不直接看最忙的那颗？」—— 答：最忙那颗看不出来，因为它的注意力本来就比链长；要拿轻的那颗对比，才看得见链露出来。<br>
+❓ 台下可能问：「滤长文档会不会改变训练数据分布？」—— 答：会，这是性能实验用的数据；正式训练用什么数据不由这一讲定。这里只用它来证明关键路径在哪。<br>
+❓ 台下可能问：「一百三十和一百四十八为什么对不上？」—— 答：一个是 profile 里两颗芯片一步的差，一个是日志里八步的平均差，口径不同，只对量级。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s五">第五节　找关键路径：该省 578 毫秒，只快 148 毫秒</a>　·　主图 <code>fig-heavylight</code></p>
 </div>
 
-<h3 class="sec">别讲什么</h3>
-<div class="warn">
-  <span class="k">这一讲最容易跑偏的四个方向</span>
-  <b>① 别把 §3 讲成格式罗列。</b> 那一节的主线是「scale 要多密」，
-  格式差异只是它的一个切面。<br>
-  <b>② 别在 §4 讲成「二维更准」。</b> ⛔ 它更粗，赢在一致性 ——&nbsp;
-  这是全讲最容易记反的一句。<br>
-  <b>③ 别把出处台账念出来。</b> 那是给课后回查用的，
-  <em>台上只在被追问时报一个来源名。</em><br>
-  <b>④ 别越界讲 TPU 那一侧。</b> ⚠️ 目前写完的内容<b>全是 Blackwell</b>；
-  TPU 的低精度是另一套（QAG 在专题二那条线上），<b>这一讲还没并排写</b> ——&nbsp;
-  <em>被问到就直说「这一讲这一版只讲了 NVIDIA 侧」。</em>
+<h3 class="sec" id="c5">第六节　关键路径卡在哪：链路、排队，和一加一大于二（8′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：链卡在链路上，要缩只能少搬字节；「一加一大于二」先查口径。</b></p>
+
+<p><b>▍一　链为什么这么长</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：「那条链卡在芯片之间的链路上」（<code>fig-linkbw</code>），先指五个点，再指那条虚线。</p>
+
+<p class="say">「是小工不够吗？把这一类通信按五种搭法分别量：收集还是规约、FP32 还是 BF16、一颗小核还是两颗。按字节和耗时画出来，五个点全落在一条线上：每秒都是每设备一百八十六 GB。耗时只跟字节走，跟谁来搬、怎么分装都没关系。」</p>
+
+<p class="say">「放回工坊：小工去别的师傅那儿取料，走的是芯片之间的过道，过道就那么宽。多派一个小工，过道不会变宽；让两颗小核一起收，反而慢了百分之一点二。搬一 GB 大约五点四毫秒，两个小工一起搬还是五点四，东西减一半才是二点七。卡我们的是路，不是人手；按公开规格推，路已经用到九成多，这是推断。要缩这条链，只有少搬字节。」</p>
+
+<p><b>▍二　砍一刀</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：「反向每层快的 21 毫秒，全是等待」（<code>fig-perlayer</code>），只指第三组「主核在等」。</p>
+
+<p class="say">「编年史第十四站就砍在这儿。专家梯度原来按 FP32 规约，一个数四个字节；改成 BF16，两个字节，字节减半；再加两条运行库开关。三样一起开，一步从五点三一秒到四点四一秒，快了百分之十六点九。看反向每一层：师傅算的一点没少，等的从二十九点五毫秒降到八点五。」</p>
+
+<p class="say">「整步合起来，反向段师傅等通信从一千一百二十七毫秒降到二百四十七。梯度改 BF16 动了精度，要先过专题八那一关，单独标出、单独批；只改排法的改动，过两道轻检查就行，第十节讲。」</p>
+
+<p class="say">「这一刀我们一开始也读错过：改完以后，专家梯度规约从固定在小核 1，变成两颗小核同时跑，每层墙钟正好减半，于是写成了『两颗小核并行，所以快一倍』。后来把五种组合摆在一张图上，单核双核一样快，减半全是字节减半。解释听着越顺，越要换个配置量一下。」</p>
+
+<p><b>▍三　一加一大于二？</b></p>
+
+<p class="say">「回头算个账：单测的时候，梯度 BF16 快百分之六点五，两条开关合起来快百分之五点七，加起来十二；合开却快了十七。热身第三问就是这个。」</p>
+
+<p>💬 <b>互动</b>：问「你先怀疑什么？」等台下说出「测的条件不一样」之类，再切图。</p>
+
+<p class="say">「不管先怀疑什么，先排掉一个小坑：两刀本来就不该直接相加，第二刀只能在剩下的那截上再砍一个比例，按乘法算也不到百分之十二。那十七是哪来的？」</p>
+
+<p class="board"><b>🖥 屏幕</b>：「一加一大于二？拿同一份数据量的单项去推，就不大于了」（<code>fig-additive</code>），从上往下四行，②一句带过（只把加法换成乘法几乎不变），重点指③和④。</p>
+
+<p class="say">「差在量的地方不一样。两个单项是在原数据上量的，合开是在滤掉长文档的数据上量的。原数据上注意力很长，正好把这条链盖住了大半，在那儿砍链当然量得少。换到新数据重测，梯度 BF16 单项就有百分之十二点四；拿同一份数据的单项相乘去推，合开该到四点三四秒，实测四点四一秒，没有大于二，比推出来的还慢一点。以后听到一加一大于二，先问：按加法还是乘法算的？单项和合开是不是同一份数据？」</p>
+
+<p><b>▍四　缩不了，就藏</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：停在 §6.4 小标题（静态图在动画下面的折叠里，台上不打开）。</p>
+
+<p class="say">「在现在的切法下，再少搬字节就都要改精度了。不改精度能做的，是藏。这条链一步在小核上跑一点三九秒，比师傅一整步的计算短得多，原理上能全藏住，可它还露出零点三八秒。砍完第十四站这一刀以后，剩下的露出主要来自排队：它跟 token 收发挤在同一个小工的队列里，先来先做，排在后面就晚到了；而前向里另一个小工几乎闲着。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：动画「看红色从哪来」（<code>anim-queue</code>），<b>先闭嘴，等它转完一圈</b>（24 秒；会自动停两次，每次点「开始」接着放）。</p>
+
+<p class="say">「好比超市只开了一个收银台，两类顾客混在一条队里，旁边的收银员却闲着。用两个现成开关把它们分给两个小工，各排一队，在四点四一秒上又快百分之三点一，这就是后面第十六站的主体。链本身一点没变短，变短的是它排队等的时间。<br>
+下一节换一类等，跟链长不长无关：加一道一个数都不改的屏障，为什么能快百分之六点九？」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不念两条开关的名字</b>：只说「两条让编译器排通信更自由的运行库开关」。<br>
+⛔ <b>互动之前别露出 fig-additive</b>：图的标题就是答案，先问再切。<br>
+⛔ <b>不讲 FP8 收集、量化通信的细节</b>：都改精度、要单独批，课件 §6.4 有一句。<br>
+⛔ <b>不说这就是辛普森悖论</b>：没有出现方向反转，只是两边条件不同；台上只说「量的地方不一样」。<br>
+⛔ <b>超市只说「一个收银台、另一个闲着」</b>：别说「一条队比几条队快」那句常识，方向是反的；谁排在谁后面，以动画字幕为准。<br>
+❓ 台下可能问：「186 GB/s 是规格的多少？」—— 答：公开规格是每芯片 6 条 ICI 链路、每条双向 200 GB/s；这两类通信走两个轴共 4 条，入向约 400；一颗芯片两个设备合计约 372，到九成多。一颗芯片里两块计算晶粒怎么分链路没公开，只对量级。<br>
+❓ 台下可能问：「分两队那一刀数值变了吗？」—— 答：离线比过，编出来的求和顺序不变；上卡逐位还在核。<br>
+❓ 台下可能问：「梯度改 BF16 会不会影响收敛？」—— 答：会改精度，所以要走对齐流程（专题八），单独批；这一讲只讲它对步时的作用。<br>
+❓ 台下可能问：「两条开关单测各多少？」—— 答：在滤掉长文档的新数据上，同一个作业里各快百分之二点七和四点一；另外五条编出来的程序跟对照一样，等于没开（第八节）。<br>
+❓ 台下可能问：「新数据上那个 12.4% 是同一个作业吗？」—— 答：不是，另一个作业，它的对照比这边的对照快零点零零三秒，在跨作业尺子零点零一八秒以内。<br>
+❓ 台下可能问：「分到两颗小核为什么能一位不差？」—— 答：只改了谁在哪颗小核上跑、排的先后，求和顺序不变；离线比过编译产物。上卡逐位还在核。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s六">第六节　关键路径卡在哪：链路、排队，和一加一大于二</a>　·　主图 <code>fig-additive</code></p>
+</div>
+
+<h3 class="sec" id="c6">第七节　同样的活，排法不同：调度（8′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：活一样多，排法不同，主核等的就不同；先看通信排在哪，再看谁快。</b></p>
+
+<p><b>▍一　一道屏障，快 6.9%</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：停在 §7.1 小标题。</p>
+
+<p class="say">「先看一个奇怪的改动：在优化器之前加一道屏障，意思是告诉编译器，优化器那段的通信别往前挪。一个数值都不改，一行计算都没少。一步从五点三一一秒到四点九四六秒，快了百分之六点九。注意，这是回到五点三一一的对照上单独加的，不是叠在上一节那一刀上。什么都没少算，怎么会快？」</p>
+
+<p class="board"><b>🖥 屏幕</b>：「快在哪一段」那张分段图（<code>fig-phases</code>），指「反向循环」那一行。</p>
+
+<p class="say">「切开一步看，快的几乎全在反向循环：两千九百五十毫秒降到两千五百九十九，少了三百五十一，每层从七十九点七毫秒降到七十点三。可反向里小工的活一点没少，师傅的计算也没少，少的是等。活一样多、等得少了，只能是排法变了。工坊里排班的是工头，在这里就是编译器的调度器。」</p>
+
+<p><b>▍二　为什么：提前做，占了地方</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：动画「一道屏障」（<code>anim-barrier</code>），<b>先闭嘴放第一幕</b>，它第一次停在第 9 秒（紫色那块数据占满全程、反向里一片红）再开口。</p>
+
+<p class="say">「没有屏障的时候，工头很勤快：优化器要用的一次参数收集不依赖任何梯度，他就让小工提前到前向之前收了。收进来七点一 GiB，一路堆到优化器段才用，整个反向都占着显存。好比一早把一大批优化器才用的材料搬进车间，车间堆满了，反向那些该提前送来的料反而没地方放。」</p>
+
+<p class="say">「第一节那条第六点一毫秒就让师傅停下的规约，也是完成点排得太早：结果到优化器才用，完成点却排在反向里。放行和完成点之间夹着的那段计算，我们叫括号。括号里夹的计算越多，通信越藏得住。可括号拉得越长，通信的输出缓冲就要在显存里占得越久；显存紧，调度器就不敢拉长括号，师傅只好停下来等，这一步是推断。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：同一支动画点「开始」接着放，第 14 秒停住（紫块挪回优化器段）。</p>
+
+<p class="say">「加了屏障，这块数据挪回优化器段，跨过反向一直占着的数据少了大约六 GiB。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：再点「开始」，第 17 秒停在计数器出来那一下。</p>
+
+<p class="say">「看计数器：括号里夹着的计算（融合计算和 kernel 加起来），从八百零一个变成一千二百六十一个。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到加屏障前后的同一层截图（<code>shot-bar</code>），指上下两图的红框。</p>
+
+<p class="say">「截图里同一层，师傅停下来等的从九段二十九毫秒变成八段二十毫秒，这一层从七十九点八毫秒缩到七十点五。以后看到『提前做』，问三件事：用不用得上？要用时到没到？占不占地方？这一次坏在第三条。」</p>
+
+<p><b>▍三　一颗核快了，步时反而慢</b></p>
+
+<p class="say">「反过来的例子：把 iHC 那几步融成一个 kernel，这一摊计算每步省约一百八十毫秒，一步却慢了一百毫秒。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：「一颗核快了，步时反而慢」（<code>fig-fused</code>），先指上面一行红线之间夹着的注意力反向，再指下面一行只剩融合核。</p>
+
+<p class="say">「开了它以后，一条梯度规约的完成点被提到注意力反向之前，原来盖着它的大核被挪走了，每层等的从十点一毫秒变成十六毫秒，各层加起来多露二百一十七毫秒，比省下的还多。核快不快之前，先看它周围的通信排到哪去了。」</p>
+
+<p><b>▍四　短文段到头</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚回页首编年史柱图（<code>fig-chron</code>），指第二块末尾那两根（站 15、16）。</p>
+
+<p class="say">「编年史第十五站：屏障，加上一个中间结果存下来不重算、一批 all-to-all 交给小工，三样叠在站十四上合起来快百分之六，省两百六十来毫秒，比屏障单独省的三百六十多毫秒还少：推断是站十四已经把链砍短了，屏障能救的等待也少了，到四点一四七秒。」</p>
+
+<p class="say">「第十六站把上一节的分两队叠上去，叠在站十五上只剩百分之二点四，这是跨作业比的，四点零四九秒，短文段到头。站十五里交给小工的那一样值得记一句：把一批 all-to-all 从师傅手上挪给小工，小工跑得并不比师傅快，一步只少六十四毫秒。挪地方，不等于省。<br>
+调度器一个排法就能左右百分之七。可调度器、编译器、运行库本身也是变量：只换一个软件版本，同一份配方能慢百分之十二点七。下一节先讲这个前提，再回编年史。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不说「调度器有 bug」</b>：提前做在大多数程序里是对的；这里是显存余量紧时，提前做反而挤掉了重叠。<br>
+❓ 台下可能问：「另外两样调度改动是什么？」—— 答：一样是把一个中间结果存下来、反向不再重算，省了两百多毫秒，可专家权重那条链一毫秒没短，一步只快百分之三点六；另一样是把优化器那批 all-to-all 交给小工，师傅还得等它一百八十七毫秒，小工跑它要三百六十一，一步只少六十四毫秒。另外，限制同时在飞的通信条数，括号被压短，反而慢百分之三点六（课件 §7.3）。<br>
+❓ 台下可能问：「融合核在别的配置上也慢吗？」—— 答：同一颗核在 20 层底座上是误差内，在这里慢百分之二；换了条件，结论就要重测。<br>
+❓ 台下可能问：「对照是同一个作业吗？」—— 答：不是，对照来自另一个作业的同配置；两份 profile 的前向循环一样长，说明两次分配的硬件速度一样，可以比。<br>
+❓ 台下可能问：「为什么说调度器不敢拉长通信？」—— 答：推断。拉长一条异步通信，要在更长时间里扛住它的输出缓冲；我们只核了两头：余量少了六 GiB、括号变短了，没读调度器的源码。<br>
+❓ 台下可能问：「屏障会不会影响数值？」—— 答：不会，它只改调度，不改任何计算。<br>
+❓ 台下可能问：「融合核能救回来吗？」—— 答：调块大小、只开前向或只开反向都救不回来；要改的是调度，比如约束那条规约的完成点排在注意力反向之后，是开发项。<br>
+❓ 台下可能问：「存中间结果放得下吗？」—— 答：每层多存一份，半层底座时峰值多一点七 GiB，放得下；同样芯片数跑全部层数时放不下，所以只在放得下的配置上用，站 15 起一直带着。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s七">第七节　同样的活，排法不同：调度</a>　·　主图 <code>fig-phases</code></p>
+</div>
+
+<h3 class="sec" id="c7">第八节　编译器和运行库会变（6′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：编译器和运行库也是变量；升级先普查，看见的那处在代码里兜住；一切以编出来的程序为准。</b></p>
+
+<p><b>▍一　只换版本，慢 12.7%</b></p>
+
+<p class="say">「这一节是旁线，讲完回到编年史。性能一出问题，老练的人第一句先问：最近变了什么？同一份代码，编出来的程序未必固定。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：「同一颗核，换个运行库版本，热循环长了五倍」（<code>fig-bisect</code>），先停在图上，口头报两个秒数。</p>
+
+<p class="say">「复现另一份小参照配方的时候（不是第四节那份），一步一秒多，只换了一件事：软件镜像换成新版本。镜像就是装着编译器和运行库的那一整套软件环境。配方、代码、开关一个不动，一步从一点三四六秒变成一点五一七秒，慢百分之十二点七。代码没变，那就去比编出来的东西：差在小核上跑的一个 kernel，每次执行从一点七毫秒变成五点四，慢了三倍多。本讲的模型只在 token 溢出、整步回放那一步用到它，可同样的事随时会落到你自己的 kernel 上。」</p>
+
+<p class="say">「同一份配方复现的时候还撞过一个坑，跟版本无关：第一次复现慢了百分之二十五，代码一行没错。那份代码按『当前后端是不是 TPU』决定一颗核走不走解释模式；我们在 CPU 机器上离线编译，这颗核就被编成了一个九十六趟的解释循环。改成按目标设备判断，一行就对上了。在哪台机器上编，编出来就不一样。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：同一张图，先指灰条，再指红条，最后指最下面两根绿条。</p>
+
+<p class="say">「把这颗核单独拿出来，新旧两个版本各离线编一次：kernel 里反复跑的那个循环，每跑一趟从四十一个指令包变成一百九十八个，长了约五倍；循环外还有固定开销，所以整颗 kernel 慢三倍多。从指令数推，编译器不再给这个循环做流水：原来前一件还没做完、后一件已经开工，现在做完一件才开下一件。我们不等上游改，在代码里把循环展开八次，让编译器手里一次有八件活可以交错着排，新旧版本都编回来了。」</p>
+
+<p><b>▍二　默认行为也会变</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：「配置一个字没改，版本一换：那批 all-to-all 换了地方」（<code>fig-a2a</code>），只指上两行，看紫块在哪条车道；下两行（强行挪回小工放不下、再加屏障才放得下）在备答里。</p>
+
+<p class="say">「还有一种变化更隐蔽：同一份程序里九十七条 all-to-all，旧版本默认交给小工，新版本默认留在师傅手上同步跑，每步多三百多毫秒。配置一个字没改，工头换了个人，排班习惯就变了。升级以后两头一起做：普查有没有别处也变了，看见的那一处在代码里兜住。」</p>
+
+<p><b>▍三　看产物，不看名字</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：停在 §8.3 小标题，不展开，口头念。</p>
+
+<p class="say">「所以这一讲反复用一招：看编出来的程序，不看开关叫什么。一组开关里五条编出来跟没开一样，上卡前就知道；两个名字不同的开关，产物一比是同一件事，上卡步时也一样。」</p>
+
+<p class="say">「看产物还有两条边界。第一条，全局开关的收益，常常不在你以为的那颗核上：把片上暂存上限放大，本意是帮注意力核，离线估它只省千分之二点五；上卡整步快百分之二点三，按类一拆，注意力核反而慢了九毫秒，快的是别处的矩阵乘融合和同步等待。这一格就是长文段的第十八站。」</p>
+
+<p class="say">「第二条，离线数指令只看得见计算，看不见搬运：把注意力反向核的块改大，离线预测快三个多点，上卡反而慢六个多点。产物是上卡之前的筛子，不是判决。」</p>
+
+<p class="say">「编译器和运行库，跟数据、配置一样，是要写进实验记录的条件。下一节换一份数据，看这一路的刀还灵不灵。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+❓ 台下可能问：「强行把 all-to-all 挪回小工呢？」—— 答：显存多八 GiB，放不下；是第七节那道屏障一起兜住的，步时只多兑现六十四毫秒。<br>
+❓ 台下可能问：「为什么不退回旧版本？」—— 答：很多大项目的规矩是让性能变差的改动要么修、要么退；我们退不回去，新框架要新运行库，所以选修，退回去也要重新验证数值；只修看见的那一颗核，下一颗还会冒出来，所以要普查。<br>
+⛔ <b>不说参照配方是谁的</b>：只说「一份更快的配方」。<br>
+⛔ <b>不讲编译器内部为什么不流水了</b>：只讲看得见的现象（热循环变长、不再流水）和兜底办法。<br>
+⛔ <b>不念开关名、不讲注意力核内部怎么改</b>：只说「片上暂存上限」「把块改大」。<br>
+❓ 台下可能问：「暂存大了为什么矩阵乘会快？」—— 答：推断是编译器能给矩阵乘用更大的分块；没读底层指令，未证实。<br>
+❓ 台下可能问：「那离线指令数模型还能用吗？」—— 答：只改计算、不改数据怎么搬的改动，它预测得准一些；改了块形状、改了搬运的，必须上卡。<br>
+❓ 台下可能问：「我们的模型受这颗核影响吗？」—— 答：正常训练步不用它，走主核上的排序；只有 token 溢出、整步回放的那一步会用到。<br>
+❓ 台下可能问：「展开八次会不会改数值？」—— 答：每个元素的计算不变，只改循环怎么展开；上卡逐位比在做。<br>
+❓ 台下可能问：「两个名字一个机制，怎么判的？」—— 答：两份优化后的程序逐条比，去掉调试信息以后只剩核里内嵌的源码位置不同，指令和核的个数完全一样；显存和上卡步时也一样。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s八">第八节　编译器和运行库会变</a>　·　主图 <code>fig-bisect</code></p>
+</div>
+
+<h3 class="sec" id="c8">第九节　换到长文：关键路径又搬家（18′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：关键路径一换，刀就重新排名；少搬字节之前，先查有没有白搬的；Pallas 核报的耗时会改调度，以上卡为准；Python 循环会被展开，编译慢在这儿。</b></p>
+
+<p><b>▍一　衔接②：换成长文</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚回页首编年史柱图（<code>fig-chron</code>），指第二块和第三块之间那道「衔接②」虚线和灰框 5.553，再指后面第一根（站 17）。</p>
+
+<p class="say">「回到编年史。第二段滤掉长文档以后的短文，一行拼三十几篇，注意力几乎都被文档掩码掉了，量不出长上下文的真实负担。所以第二次换底座：换成长文，八成多的行是一整篇。同一个配置量两次：短文五点三一一秒，长文五点五五三秒，慢百分之四点六；有效 MFU 却从百分之十一跳到十七点八，因为分子大了。有效 MFU 高，不等于快。短文上调好的那套开关整个搬过来，就是第十七站，一刀快百分之十三点五。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：长文那张截图（<code>shot-long</code>），指绿框、紫框。</p>
+
+<p class="say">「瓶颈也换了：在叠了前几刀的配置上比，长文多出的七百四十八毫秒，几乎全落在注意力的前向、反向两个 kernel 上，就是截图里绿框、紫框这两个。最慢的孩子换人了。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：「换一份数据，原来的几刀重新排名」（<code>fig-flip</code>），只指融合核、暂存上限两组，每组先指上一行再指下一行。</p>
+
+<p class="say">「原来的刀就重新排名：融合核在短文上慢百分之二，长文上快百分之一点一；片上暂存上限，就是主核旁边那一小块快存储能用多大，在短文上几乎没用，长文上成了三把刀里收益最大的一刀。它本想帮的注意力 kernel 自己几乎没快，快的在别处，推断是矩阵乘能分更大的块。暂存上限就是第十八站。长文上又查出一件大的，在优化器里。」</p>
+
+<p><b>▍二　优化器里白搬的字节</b></p>
+
+<p class="say">「第十八站那一格，优化器段占一步的一成六。Muon 第二次出场：先把动量矩阵正交化，再加到 FP32 的主权重上，就是混合精度另存的那份三十二位权重。正交化要每个设备拿整块矩阵，所以动量要先换一种切法送过去，算完再换回来。把一块专家权重的 BF16 动量算作一份，按设计只搬两趟：一份过去，一份回来。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：动画「优化器里白搬的字节」（<code>anim-muon</code>），<b>先闭嘴看第一幕</b>：4 秒那次停住不开口，点「开始」；13 秒第二次停在计数器跳到五份那一下，再开口。</p>
+
+<p class="say">「实际是这样搬的：去的时候，BF16 动量一份，FP32 主权重也跟过去两份；回来的时候，加完的 FP32 新主权重两份。一块实际搬了五份，按设计只要两份，是两倍半；一份是每设备一点七八 GiB，三块一步多搬十六 GiB。代码只在正交化前后写了切法，没说结果回到哪；相加放在哪边，编译器自己挑，它挑了正交化那边。好比给一件大家具刷漆，该把漆桶拎到家具旁边，结果是把整件家具抬进调漆间，刷完再抬回来。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：点「开始」放第三幕，19 秒停在「−6.3%」那一下，念下面这段；念完再往下滚到正式修法（站 21）修前修后那张截图（<code>shot-s19</code>），指上图那排红框和下图空出来的位置。</p>
+
+<p class="say">「动画最后这个负百分之六点三，就是修法：把每块参数自己的切法告诉优化器，结果先钉回去再相加。截图里修好的就是它：修之前，师傅停在这些搬 FP32 的 all-to-all 上；修完一条都没有了。第六节说少搬字节都要改精度；这一笔不用改，因为它本来就不该搬。少搬字节之前，先查有没有白搬的。」</p>
+
+<p><b>▍三　后面九站</b></p>
+
+<p class="say">「第二十站少重算一步，快百分之二点一。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：§9.3 的动画「省了计算，收集露出来」（<code>anim-agwin</code>），边放边念。</p>
+
+<p class="say">「这里有条旁线：第七节那颗 iHC 融合核，放到同样少重算的配置上，师傅又少算一百九十毫秒，一步却慢了百分之七点八。反向重算前要先把这一层的专家权重再收一遍；原来三条收集的括号里夹着七到十五毫秒的计算，现在调度器把放行排到紧挨着完成，只剩不到一毫秒，师傅每条停下来等将近四毫秒。」</p>
+
+<p class="say">「各层加起来，整步收集的露出从六十四毫秒涨到五百六十，比省下的还多。省了计算，还要看原来被它盖住的通信，现在露没露出来。这颗核没进编年史。回到主线：第二十一到二十四站又快百分之三多，到四点零九四秒，到定稿为止最快的一站。」</p>
+
+<p class="say">「最后三站不为提速，是精度修正。每天拿参照跑短跑比 loss，发现差越跑越偏，一路查到归一化层：一个数舍了两次，改回三十二位，第二十五站。接着定了规矩：除了梯度 BF16，精度写法都回到参考实现的写法。前向三处改回，慢百分之零点二，第二十六站；梯度那组六处里便宜的四处改回，慢百分之零点一，第二十七站。」</p>
+
+<p class="say">「梯度那一组还有两处很贵，先没改。一处是路由的梯度：改回三十二位，它自己的计算反而少了，可编译器把下一层专家权重的收集和 token 的收集合成了一次，权重收集被拖晚，露出多了一百一十八毫秒，一步慢百分之三。又是第七节那条：先看通信排到哪去了。」</p>
+
+<p class="say">「定稿四点一一六秒，有效 MFU 百分之二十四点二，这是定稿时的推荐配置；当时对外报的是跑两百步的长跑，四点一九二秒、百分之二十三点七，零次回放、一个 token 都没丢。定稿之后又抠了两步，下面讲。」</p>
+
+<p><b>▍四　回头再查那颗核：括号为什么空了</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到 §9.5 小标题，停在第一段。</p>
+
+<p class="say">「定稿之后的第一步是路由先挑 top-k 再收集，四点零八八秒。我们在这上面回头又查了一次那颗融合核：单加它，四点五二二秒，慢百分之十点六。拼好的那条专家权重收集，每步露出从四十一点五毫秒涨到二百九十点五。核让师傅少算了，括号却空了。调度器凭什么这么排？」</p>
+
+<p class="say">「调度器排括号之前，得先知道每样活要多久。编译器自己生成的计算它会估；Pallas 手写的核在它眼里是黑盒，它只看核自己报的耗时，就是运算量和读写字节，公开接口叫 CostEstimate。不报的核，按几乎不花时间算。这颗融合核报了。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：「调度器手里的每颗核要多久」（<code>fig-ceratio</code>），先指中间深色竖线，再指右边红点、左边蓝点。</p>
+
+<p class="say">「先查报得准不准：没有一样准。专家矩阵乘估长两三倍，融合核只有实测的一半到四分之三。第一个念头顺理成章：估不准，校准就好。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：动画「核报不报耗时，括号里排不排计算」（<code>anim-cebracket</code>），取消「连续播放」，每停一次念一句；前四停念这一段。</p>
+
+<p class="say">「看调度器自己排的时间线，括号里的毫秒全是它的估计。（停①）对照：括号里排进十点四毫秒。（停②）换上融合核、报了耗时，只剩零点四八，师傅干等。（停③）把它报的耗时调准，还是空的。（停④）什么都不报，回来十一点九。差在报没报，不在准不准。上卡也一样：不报那格快百分之三点八，这就是定稿之后的第二步，已批准进推荐配置；几格校准全都变慢，最多慢百分之九点四。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：「层调度器：每一层里最大的那颗计算，和一条通信配成一对」（<code>fig-celayer</code>），先指左边第一层那块紫色，再指左下时间线里紧挨着的开始、结束两条线；然后指右边。</p>
+
+<p class="say">「原因在编译器里一个『层调度器』。它先挑贵的指令当候选：通信，加上报了耗时、超过一个门槛的 Pallas 核，门槛默认极低。候选按依赖一层层剥开，同一层里挑最大的那颗计算，给一条通信当搭档，把通信的结束点钉在它旁边。没被钉的结束点，本来会放到最晚、贴着用数据的地方。」</p>
+
+<p class="say">「融合核一报耗时就成了候选，跟收集在同一层，又是这层最大的，结束点就被钉在层体最前面。权重要到后面的矩阵乘才用，师傅却在融合核旁边停下来等。不报，它进不了候选，结束点回到矩阵乘旁边。调准了照样是候选，所以调准没用。这些在编译产物里能直接读到。所以推荐配置不报耗时，是绕开了缺陷，不是原理上对了。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：回到动画，点「开始」放第五幕（停⑤、停⑥）；再滚到门槛曲线（<code>fig-cethresh</code>），指最低点 3 ms 和右边灰框。</p>
+
+<p class="say">「正路是三件一起做：所有核照实报；门槛提到三毫秒，把小核挡在外面；收集的延迟估计乘零点三二，校到接近实测。（停⑤）光照实报、门槛不动，融合核又成了搭档，又塌了。（停⑥）门槛提到三毫秒，收集没了搭档，结束点回到用数据的地方。曲线上三毫秒最好，判据预测快百分之六点三。」</p>
+
+<p class="say">「上卡只快了百分之一，三点九零七到三点八六八秒，逐位相同，已批准进推荐配置。等待合计几乎没变，一千零一十三到一千零三毫秒：一条规约少露二百五十四，专家收集多露约二百九十。推断是两条在小核同一条车道上抢。搭档调对以后，瓶颈挪到了小核车道的容量上；判据没把这条车道装全，就把收益算多了。」</p>
+
+<p class="say">「这条线怎么扫的：每格只在 CPU 上编，看最终程序里谁是谁的搭档，再拿实测的核时长按程序顺序回放，排个名；模型用四层代替三十九层，一格七十秒。所以自己写 Pallas 核，耗时估计要么填准，要么不填；填了要看它会不会成了通信的搭档。这次填准了也没救回来，报和不报两格都要上卡比，不能只看调度器自己估的时长。」</p>
+
+<p><b>▍五　编译一次要等半小时</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到 §9.6，指编译阶梯图（<code>fig-aot</code>）第一行那根最长的橙条。</p>
+
+<p class="say">「这一讲每一刀都要先离线编译、看产物。可一格 128 片全量，独占一台编译机要一千五百二十二秒，二十五分钟；挤着编要半个多小时。时间几乎全在编译器里，跟程序大小走。奇怪的是解码器用 scan 写的，层数翻倍循环体不变，128 片还是比半层慢两倍多。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：动画「Python 循环 vs JAX 循环」（<code>anim-loop</code>），边放边念。</p>
+
+<p class="say">「JAX 先把函数在 Python 里跑一遍、记下每个运算。Python 的 for 真跑五遍，就记五份；JAX 的循环只记一份，编译器也只编一份。这个模型有两处是 Python 展开的：视觉塔二十层一层层调，优化器每个参数单独一套，牛顿迭代五步又是 for。视觉塔每多一层，优化器就多一整套。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：回到阶梯图，从上往下指每一行，最后指最后一行两根一样长的绿条。</p>
+
+<p class="say">「先把两个程序分两个进程同时编，产物逐字节相同。再下三刀：牛顿迭代改循环，同形参数叠起来批量，视觉塔改 scan。最后一格两分半，128 片和半层一样快。代价有两样：视觉塔 scan 让显存峰值挪到 loss 段，多约四点五 GiB，还放得下；第一刀上卡慢百分之二点二，不采用。最后只开后两刀，一格三分钟上下，上卡快百分之零点五、不逐位，三百步对推荐配置在噪声里，已批准进推荐配置。」</p>
+
+<p class="say">「有的刀动了数值：修白搬字节那一刀，从第二步起 loss 差了约五乘十的负四次方。快了，还是同一个模型吗？下一节讲准入。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+❓ 台下可能问：「站 25 是怎么查出来的？」—— 答：逐组改回三十二位、对半排查，落在归一化层：前向先把结果舍成 BF16、再乘一个 BF16 的缩放，一个数舍了两次；两处恢复三十二位后偏差回到执行噪声量级，步时不变。<br>
+❓ 台下可能问：「另一处贵的是什么？」—— 答：专家权重梯度改回三十二位，慢百分之四：按专家算权重梯度的 kernel 输出 BF16，要单独转一次 FP32 才能交给 FP32 的规约，剩下的是规约字节翻倍；让那颗 kernel 直接输出 FP32 要改代码，推断能降到一点五左右。<br>
+❓ 台下可能问：「站 26 改的是哪几处？」—— 答：前向三处精度写法改回跟参考实现一致；实测起作用的只有输出层以三十二位输出那一处，另两处在这条注意力路径上本来就不生效；同作业对照四点零九九、四点一零四秒，慢百分之零点二。<br>
+❓ 台下可能问：「站 21 到 24 各快多少？」—— 答：正式修法 −0.8%，空转的计算步 −0.8%，逐层转类型 −0.3%（为省三 GiB 显存），先拼后收 −1.9% 且逐位不变。<br>
+❓ 台下可能问：「先上线的局部修法不是更快吗（−7.3%）？」—— 答：两个数量在不同配置上，不能直接比；局部修法是第十九站，正式修法更稳、不依赖编译器碰巧挑哪边，第二十一站在站二十之上换上去又快 0.8%。<br>
+❓ 台下可能问：「正式修法和局部修法差多少？」—— 答：正式修法单独量快百分之六点三，正交化本身一位没动；局部修法快百分之七点三。修之前优化器段一个窗口里停一百四十八毫秒，反向结束到一步结束从九百四十七缩到六百五十四毫秒。<br>
+❓ 台下可能问：「长文的路由更不均，会不会把长文这段的结论推翻？」—— 答：会影响 MoE 那段有多大，最差层负载比到二点三，这是长文结论最大的不确定性；但每一刀都是同作业对照量的，方向可信，大小要跟着复测。<br>
+⛔ <b>不念配置项名、不讲正交化的系数</b>：只说「迭代五轮、每轮几次矩阵乘」。<br>
+⛔ <b>不说「编译器有 bug」</b>：代码没写结果回到哪个切法，编译器挑哪边都合法；这是我们自己代码里的性能 bug，修也修在自己代码里。<br>
+⛔ <b>长文那一段只讲现象和规矩</b>：长文数据的路由更不均，MoE 也跟着变，这是长文结论最大的不确定性，被问再说。<br>
+❓ 台下可能问：「为什么融合核长文上就快了？」—— 答：推断：它本身省的那一百来毫秒计算，在短文上被露出的等待吃回去了；长文上注意力长，等待被盖住，省的就兑现了。<br>
+❓ 台下可能问：「修好白搬以后为什么不逐位？」—— 答：改的是在哪一边相加，融合跟着变，相加之后那几步 FP32 运算的末位会动；CPU 上正交化的输出逐位相同。第十节讲怎么判。<br>
+❓ 台下可能问：「为什么调度器把放行排得这么晚？」—— 答：▍四讲的就是：融合核报了耗时就成了收集的搭档，结束点被钉在它旁边。9.3 那一格本身没单独去掉估计重测，按同一条规则解释。<br>
+❓ 台下可能问：「判据为什么算多了这么多？」—— 答：它原来只让钉在单颗小核上的通信占车道；把同时用两颗小核的集合通信也放进车道，专家收集的露出就对上了（推荐配置预测三百一十、实测约三百一十七毫秒），可又算不进规约被盖住的那截，反过来算成慢百分之三。真实在两种之间。<br>
+❓ 台下可能问：「舍入扫描有增删，为什么还接受编译那两刀？」—— 答：三处（视觉塔 GELU 反向一处、正交化两处）都是代码写了舍成 BF16、融合一变被省掉的集合跟着变，算法没变；三十步噪声量级、三百步对推荐配置负九乘十的负六次方，按先例接受。<br>
+❓ 台下可能问：「收集的延迟估计调大或调小呢？」—— 答：调大一倍只救回约六分之一；按实测调短到三分之一，上卡反而慢百分之五点八。管用的是融合核不报耗时。<br>
+❓ 台下可能问：「不报耗时会不会改数值？」—— 答：耗时估计只进调度器，报、调准、不报三格三十步逐位相同；融合核本身对原写法不逐位，按第十节两道轻检查判，课件 9.5 折叠里有数。<br>
+⛔ <b>只讲层调度器的行为，不念开关名、门槛的原始数值、编译器内部的名字</b>：说「门槛默认极低」「提到三毫秒」就够；也不说「编译器有 bug」，说「这条启发式只看单颗核」。<br>
+⛔ <b>不念调度器换算耗时的公式和常数</b>：只说「运算量、读写字节换算成时长」。<br>
+⛔ <b>门槛曲线不报「快百分之几」</b>：判据绝对值偏低约 15%，只排名。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s九">第九节　换到长文：关键路径又搬家</a>　·　主图 <code>fig-flip</code></p>
+</div>
+
+<h3 class="sec" id="c9">第十节　快了，还是同一个模型吗：准入（6′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：比改动前后之前，先查同一份程序自己跑几次一不一样，再查两边起点是不是同一份权重。</b></p>
+
+<p><b>▍一　同一份程序，两种结果</b></p>
+
+<p class="say">「这一节不是一站，是一道关卡：上一节修白搬字节那一刀，loss 从第二步起差了一点。快了，还是同一个模型吗？判它之前，先排两样：同一份程序自己跑两次一不一样、两边起点是不是同一份权重。上一讲有一条：程序一字不差，结果就逐位相同。先看第一样，拿另一份编好的程序（不是甲也不是乙），同一批机器、同一批数据跑了十二次，十一次逐位相同，一次从第九步起不一样。程序一个字没变，结果变了，先怀疑什么？」</p>
+
+<p>💬 <b>停 5 秒，不点人</b>，接着往下讲。</p>
+
+<p class="board"><b>🖥 屏幕</b>：先指「同一份程序，结果不止一种」（<code>fig-race</code>）下半Ⓑ里「对照 ＋ 一个转置开关」那一行；再往下放动画「同一份程序，跑出两种结果」（<code>anim-race</code>），<b>先闭嘴，等它转完一圈</b>（21 秒）。</p>
+
+<p class="say">「程序、机器、数据三样都没变，剩下的解释是竞争。两件事谁先做完没有定死，哪次谁快，结果就跟着变。好比你还在从一格货架上取上一批料，别人已经把新料塞进了同一格。竞争不报错，也不是每次都出现，所以一格只改一样，每格跑好几次，数坏了几次。有竞争的配置不当候选，哪怕它更快。」</p>
+
+<p><b>▍二　起点对齐，再逐处比</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：「第 0 步就不同」（<code>fig-init</code>），先指左边两块方块不一样，再指右边一样。</p>
+
+<p class="say">「第二个要先排除的，来自一条试过的支线，给专家权重换一种切法（乙），跟站 1 不是一回事。只换切法，第零步 loss 就差零点零零四五。第零步还没更新过参数，差在初始化：默认的随机数按每个设备那一份各自生成，切法一换，初始权重就不一样了。换成跟切分无关的生成方式，第零步、第一步逐位相同。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到 §10.3 那张「强制舍入」小表（<code>tab-round</code>）。</p>
+
+<p class="say">「起点对齐了，才轮到第六节说过的两道轻检查。第一道比舍入：编译器会省掉一些写了的舍入，两边省的地方不一样，所以先都强制真舍再逐处比；换切法那一对现在零处不同。第二道短跑比 loss：没有 GPU 参照，就拿只改执行方式的副本跟对照的差当尺子，副本就是只关掉通信和计算重叠的调度、算法不变；差在尺子以内、正负来回，没有一边倒的偏移就过。」</p>
+
+<p class="say">「回到甲，白搬那一刀：第零、第一步逐位相同，起点是同一份权重；它做的是第二道，从第二步起差约五乘十的负四次方；副本那对三百步平均约四乘十的负四次方，同一量级，这是推断，当旁证，按规矩接受。」</p>
+
+<p><b>▍三　定稿以后，再验一遍</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：§10.4 那张三行小表（<code>tab-v300</code>），先指第三行，再指第一行。</p>
+
+<p class="say">「一刀一刀各自过了关，叠在一起还要再验一遍。定稿以后同一个作业跑三条三百步的曲线，比逐步 loss 的带符号平均。第三行只差性能改动：负一点七乘十的负六次方，注意是负六次方，比站 25 那个负五次方还小一个数量级，在噪声里。第一行定稿对起点，负三点五乘十的负五次方，超了我们自己定的二乘十的负五次方那条线。」</p>
+
+<p class="say">「差从哪来？几乎全来自刻意保留的三处 BF16，主要是梯度整体 BF16：只开它一项就是负三乘十的负五次方，而且不随步数长。超线了怎么办？这是精度判断，把账摊开交给负责数值的人：差多少、从哪来、方向是 loss 略低、没有持续漂移，这三处改回三十二位要慢百分之六点六。最后接受了，长训继续盯。」</p>
+
+<p class="say">「过了准入的刀，才算数。最后一节，收成一张清单。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+❓ 台下可能问：「那份跑十二次的程序有什么特别？」—— 答：开着一个试过、没进推荐配置的转置开关；上半那张图是早期一份程序第一步就 NaN 时同一套查法，只有把一批 all-to-all 交给小核那一格好了。<br>
+❓ 台下可能问：「那个转置开关为什么会分叉？」—— 答：根因还没找到。一度怀疑是矩阵乘直接读小核异步收集回来的缓冲，改成先拷一份再读，十四次里还是四次分叉，这个嫌疑作废；只开在一部分权重上也分叉。所以它不进推荐配置。<br>
+❓ 台下可能问：「白搬那一刀为什么没做第一道舍入扫描？」—— 答：它上线时只做了第二道短跑比 loss；第一道的做法是拿乙那一对演示的，白搬那一刀的扫描没有单独记，这一点我不确定。<br>
+⛔ <b>竞争的机理只说到「一块刚空出来的内存，两个人同时在用」</b>：这是静态分析找到的最可能的一对，没在硬件上证实，要说「推断」。<br>
+⛔ <b>不念开关名</b>：只说「强制异步」「关预取」「限并发」「一个转置开关」。<br>
+⛔ <b>不说换切法会放大竞争</b>：转置开关单开 12 次 1 次、跟换切法一起 18 次 4 次，这个样本量下分不出。<br>
+❓ 台下可能问：「NaN 跟竞争什么关系？」—— 答：NaN 是竞争把一个数读坏的极端情况；多数时候竞争只让末位不同，不报错，所以要逐位比才看得见。<br>
+❓ 台下可能问：「为什么不一直用跟切分无关的初始化？」—— 答：比对时用它；生产要不要换是另一件事，这次没量它的代价。<br>
+❓ 台下可能问：「强制舍入会拖慢吗？」—— 答：同一个作业里关 4.42、4.43 秒，开 4.41、4.41 秒，没看到代价；生产仍然不开。<br>
+❓ 台下可能问：「只改执行方式的副本是什么？」—— 答：算法不变，只关掉让通信和计算重叠的调度；它带来的差，就是这个设置下执行方式本身的噪声。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s十">第十节　快了，还是同一个模型吗：准入</a>　·　主图 <code>fig-race</code></p>
+</div>
+
+<h3 class="sec" id="c10">第十一节　拿回去用（5′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：拿到一个慢的训练，先问三件事：数量准不准？关键路径在哪？这一刀砍没砍在关键路径上？</b></p>
+
+<p><b>▍一　回到开头</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚回课件最上面那张「20 件事」的蓝框。</p>
+
+<p class="say">「回到开头那张表。该省五百多毫秒、只快一百四十八：剩下的本来就压在专家权重那条链底下。一加一大于二：两个单项是在不同数据上量的。核快了步时慢：一条规约被排到了没东西盖的地方。同一份程序跑出两种结果：竞争。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：§11 导语，滚到 <code>anim-chron</code>，放动画，边放边念下面这句（25 秒；两道虚线处和终点各自动停一次，每次点「开始」接着放；投屏前确认已取消「连续播放」）。</p>
+
+<p class="say">「从头说：二十层的原始代码一步十二点九秒，优化到层数翻倍的三十九层只要三点九秒；在生产图像比例的长图文上，有效 MFU 从推导的百分之四点三到二十五点九；编译从约半小时到三分钟。中间换过两次底座，动画两道虚线就是，高低不能跨着比。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：动画上面那张「同一个底座……从原始代码到定稿」小表（<code>tab-mile</code>）。</p>
+
+<p class="say">「三段不能首尾相除，可把首尾放到同一个底座上就能比。20 层底座、同一份长文数据、同一个作业里，原始代码一步十二点九一四秒，定稿两点二二八秒，快五点八倍。第一段贡献四点六倍，后两段各一成多：大头在前几刀的字节和队列上，后面是一点点抠出来的。」</p>
+
+<p class="say">「开场那个差距还没要完：按生产图像比例的长图文，理想的一步约一点零二秒，现在三点九二三秒，还差约三点九倍，下一步还得接着抠。还要坦白一句：这些数都是一行一整篇长文档；长短混拼、全是短文档的数据，都还要优化。」</p>
+
+<p><b>▍二　一张清单</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：§11.1 那张十四行的清单，只指第一、二、六、七行，其余不念。</p>
+
+<p class="say">「这张表不是让大家背的，是拿到一个慢训练的第一天，按顺序用的。最要紧的四条：先找关键路径再动手；先把数量准，比收益放进同一个作业；一加一大于二先查口径；活一样多，先看通信排在哪，再看谁快。顺序别反。其余的大家会后对着表看。」</p>
+
+<p><b>▍三　收尾</b></p>
+
+<p class="say">「热身那两问，问的就是关键路径在哪、口径对不对。再加一道，压成三句：数量准不准？关键路径在哪？这一刀砍没砍在关键路径上？」</p>
+
+<p class="say">「最后一道题，不用举手，心里过一遍：有人说，我把一个核写快了一倍，profile 里那颗核的时间真的减半了。用三问过一遍：快一倍是跟谁比的，在同一个作业里量的吗？那颗核在关键路径上吗？它快了以后，旁边的通信排到哪去了？三个问题都答完，才算快了。」</p>
+
+<p class="say">「如果今天只能带走一句话，就是这一句：不在关键路径上的，省了也白省。<br>
+跑准了，是上一讲；跑快了，是这一讲。快了以后，长跑会不会出事，中途停机、偶尔冒出来的非有限值、回放那一步的显存，那是下一讲：跑得稳。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不逐条念清单</b>：只念四条，其余会后看。<br>
+⛔ <b>不把十二点七和四点一一六相除</b>：中间换过两次底座；要说首尾倍数，只用同一底座那张表的五点八倍。<br>
+⛔ <b>最后那道题不要台下作答</b>：讲师自己把三问过一遍就收，停五秒。<br>
+❓ 台下可能问：「24.18% 离业界多远？」—— 答：口径先对齐（第二节）、条件先对齐（第四节）再比；同样条件下公开模型反而慢。按长文的分子，有效 MFU 25% 要三点九七七秒：定稿时从短格的四点一一六秒还要再降约百分之三点四，按长跑口径四点一九二秒约百分之五点一；定稿之后三步，短格三点八六八秒、对外的两百步长跑三点九四一秒都已经过线，长跑比线快约百分之零点九（约三十五毫秒）。<br>
+❓ 台下可能问：「最后这份配置在 128 片全量上放得下吗？」—— 答：离线编过，放得下（128 片还没上卡）。显存要在 128 片全量上单独编（3.4 讲过半层底座不能代表显存）；128 片版本只多加一项视觉塔逐层重算：现在的推荐配置（定稿之后两步）正常步八十八点五七 GiB，离显存余量线还有四点六七 GiB，定稿（站 27）时是四点二五 GiB（余量线是上限减去留给运行时的那一截，不是 HBM 上限本身），这一项在半层底座上的代价约百分之一；另外三个省显存的开关一起带上反而慢百分之十一点五，不带。<br>
+❓ 台下可能问：「下一步还能砍哪？」—— 答：空块跳了（站 22）、类型转换挪进了循环（站 23）、两份权重先拼后收（站 24）；再往下要么少搬字节（改精度，要单独批），要么改调度和核的代码，让收集早点放行。<br>
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s十一">第十一节　拿回去用</a>　·　主图 <code>anim-chron</code></p>
+</div>
+
+<h3 class="sec">🚧 这份讲义还薄的地方</h3>
+<div class="say">
+  <ul>
+    <li>[ ] <b>第五节「一重一轻」两颗芯片不是同一步</b>：只当量级；多芯片同一步的 profile 拆完后更新读数。</li>
+    <li>[ ] <b>长文上「分两颗小核 −0.7%」的对照是跨作业的</b>：只看方向，复测后入账。</li>
+    <li>[ ] <b>只在讲义里模拟讲过六遍，没真人讲过</b>：时间表是估的，第一次讲完按实际用时回来改；第一节（开场大表＋热身互动）最可能超时，超了先压开场念的条数。</li>
+    <li>[ ] <b>第十节准入</b>：竞争的机理只有静态分析的推断，硬件上没证实；有结论后更新备答。</li>
+  </ul>
 </div>
 
 </main>

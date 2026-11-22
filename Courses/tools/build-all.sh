@@ -44,7 +44,7 @@ if [ "${1:-}" != "--lint" ]; then
   step "专题二 L200 讲义"
   python3 topic02-build-L200-lecture.py
 
-  # ⭐ 专题九在轮到它之前就开工了 —— 材料是讲专题二时问出来的，
+  # ⭐ 专题十五（精度与量化，原专题九）在轮到它之前就开工了 —— 材料是讲专题二时问出来的，
   #    当场写进了它该属于的那一讲。它的 CSS 从专题二 L300 / 专题一讲义抽，
   #    **所以必须排在那两步之后**。
   # ⛔⛔ 2026-09-10 更正：这两行原来写着「源是 md，页面由 md2course.py 转出来，
@@ -150,11 +150,21 @@ python3 topic04-build-lecture.py
   # ⛔ 必须排在教材之后 —— 讲义要读成品 topic-08.html 对账（图 id、小节、封面时长）。
   python3 topic08-build-lecture.py
 
-  step "专题九 教材"
-  python3 topic09-build.py
+  # 专题九「GPU→TPU 训练性能优化」（2026-11-21 起；11-22 前叫「专题八之二」，脚本和资源仍用 topic08b_* 前缀）。
+  # 课件封面时长读讲义地板、讲义又要对课件的图 id，所以顺序是：图 → 讲义 → 课件 → 讲义再跑一次（第二次对账才是准的）。
+  step "专题九 教材 ＋ 讲义"
+  rm -f fig8b-*.svg fig8b-*.src.html
+  for s in topic08b-fig-*.py; do python3 "$s"; done
+  python3 topic08b-build-lecture.py || true
+  python3 topic08b-build.py
+  python3 topic08b-build-lecture.py
 
-  step "专题九 讲义"
-  python3 topic09-build-lecture.py
+  # 专题十五「精度与量化」（2026-11-22 前是专题九，给训练性能优化让出编号）。
+  step "专题十五 教材"
+  python3 topic15-build.py
+
+  step "专题十五 讲义"
+  python3 topic15-build-lecture.py
 
   # ⭐ 专题二外传（L100，主线 17 分钟 ＋ §三 可跳 2 分钟）。CSS 从 L300 抽，**必须排在它之后**。
   #   ⛔ 五张图先生成 —— topic02x-build.py 找不到 svg 会直接 assert 挂掉，

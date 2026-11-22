@@ -2,7 +2,7 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import course_ai_trainer as AIT
 # -*- coding: utf-8 -*-
-"""专题九 · 精度与量化 —— 教材。
+"""专题十五 · 精度与量化 —— 教材。
 
 ════════════════════════════════════════════════════════════════
 ⭐ 这一讲为什么会在轮到它之前就开工
@@ -28,7 +28,7 @@ import course_ai_trainer as AIT
    编出来的内容看着最合理，也最难被自己发现（第一原则）。
    没写的就渲染成 🚧 占位，把大纲条目原样列出来，让读者一眼看见边界。
 
-⭐ 大纲在 `Courses/专题09-精度与量化.md`，那份是**计划**；
+⭐ 大纲在 `Courses/专题15-精度与量化.md`，那份是**计划**；
    这份是**成品**。两边的 🚧 标记要一致 —— 改了一边记得对一下另一边。
 
 ════════════════════════════════════════════════════════════════
@@ -43,7 +43,7 @@ import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "WebPages", "topic-02-L300.html")
-OUT = os.path.join(HERE, "..", "WebPages", "topic-09.html")
+OUT = os.path.join(HERE, "..", "WebPages", "topic-15.html")
 
 _src = io.open(SRC, encoding="utf-8").read()
 
@@ -74,13 +74,13 @@ def _sub(text, pattern, repl, what):
 
 
 _head = _src[:_src.index("</style>") + len("</style>")]
-_head = _sub(_head, r"<title>.*?</title>", "<title>专题九 · 精度与量化</title>", "<title>")
+_head = _sub(_head, r"<title>.*?</title>", "<title>专题十五 · 精度与量化</title>", "<title>")
 _head = _sub(_head, r'<meta property="og:title" content="[^"]*">',
             '<meta property="og:title" content="精度与量化 · 每往下压一档，省一半显存和带宽">', "og:title")
 _head = _sub(_head, r'<meta property="og:description" content="[^"]*">',
             '<meta property="og:description" content="代价是数值上的安全边际 —— 这一课讲这条边界具体在哪。">', "og:description")
 _head = _sub(_head, r'<meta property="og:url" content="[^"]*">',
-            '<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-09.html">', "og:url")
+            '<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-15.html">', "og:url")
 # ⛔ og:image 曾经指向一个不存在的文件（img/og-topic-02.jpg），整条摘掉。
 # ⭐⭐ 这一条**故意不用 _sub**：它是「有就清掉」，不是「必须换成什么」。
 #   2026-09-07 实测：源模板那条已经先修好了，于是这里没得摘 —— _sub 当场断言失败。
@@ -115,9 +115,9 @@ a('''
 
 <!-- ══════════ HERO ══════════ -->
 <div class="hero"><div class="wrap">
-  <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 深入 ／ 专题九
+  <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 深入 ／ 专题十五
     ／ <b>精度与量化</b>
-    <a class="lecbtn" href="topic-09-lecture.html">📝 讲义（授课稿）</a></div>
+    <a class="lecbtn" href="topic-15-lecture.html">📝 讲义（授课稿）</a></div>
   <div class="wip" style="max-width:820px;margin:0 0 14px;padding:10px 16px;border:2px solid #f9ab00;border-radius:10px;background:#fef7e0;color:#3c2f00;font-size:15.5px;line-height:1.7">🚧 <b style="color:#b06000">正在构建中</b>：这一讲还没写完。目前写完的是 §3（缩放）、§4 的后半（FP4 训练）、§5（硬件视角），带完整出处；§0、§1、§2、§6 还是大纲，页面上照原样标出来了。</div>
   <h1>精度与量化</h1>
 
@@ -146,7 +146,7 @@ a('''
     AI Infra 架构师</p>
 </div></div>
 
-''' + AIT.note("topic-09-lecture.html") + '''
+''' + AIT.note("topic-15-lecture.html") + '''
 
 <div class="wrap">
   <div class="note warn"><span class="t">🚧 这一讲写了一半，而且哪一半写了是标出来的</span>
@@ -241,7 +241,7 @@ a('''
 ''')
 
 # ── §3：从专题二迁过来的「缩放」那一段 ─────────────────────────
-a(io.open(os.path.join(HERE, "topic09-seg-scaling.html"), encoding="utf-8").read())
+a(io.open(os.path.join(HERE, "topic15-seg-scaling.html"), encoding="utf-8").read())
 
 a('''
 </div></section>
@@ -270,7 +270,7 @@ a('''
 ''')
 
 # ── §4 后半：量化算式 ＋ 三个 GEMM ＋ 16×16 ──────────────────
-a(io.open(os.path.join(HERE, "topic09-seg-training.html"), encoding="utf-8").read())
+a(io.open(os.path.join(HERE, "topic15-seg-training.html"), encoding="utf-8").read())
 
 a('''
 </div></section>
@@ -282,7 +282,7 @@ a('''
     <b>「硬件支持 FP4」这句话，落到硅上到底是什么？</b></p>
 ''')
 
-a(io.open(os.path.join(HERE, "topic09-seg-hardware.html"), encoding="utf-8").read())
+a(io.open(os.path.join(HERE, "topic15-seg-hardware.html"), encoding="utf-8").read())
 
 a('''
   <div class="note warn"><span class="t">🚧 这一节还差两块</span>
@@ -321,7 +321,7 @@ a('''
     <b>凡是推的都单独标了。</b></p>
 ''')
 
-a(io.open(os.path.join(HERE, "topic09-seg-sources.html"), encoding="utf-8").read())
+a(io.open(os.path.join(HERE, "topic15-seg-sources.html"), encoding="utf-8").read())
 
 a('''
 </div></section>
@@ -330,7 +330,7 @@ a('''
   <p style="color:var(--gray)">
     ← 回 <a href="index.html">课程总纲</a>　·
     这一讲的硬件背景在 <a href="topic-02.html">专题二 · TPU 与 GPU</a>　·
-    <a href="topic-09-lecture.html">📝 讲义</a></p>
+    <a href="topic-15-lecture.html">📝 讲义</a></p>
 </div>
 
 </body></html>''')
@@ -339,4 +339,4 @@ a('''
 import course_links as _CL
 _h8 = _CL.linkify_arxiv("\n".join(out))
 io.open(OUT, "w", encoding="utf-8").write(_h8)
-print("ok  topic-09.html  %s 字符" % format(os.path.getsize(OUT), ","))
+print("ok  topic-15.html  %s 字符" % format(os.path.getsize(OUT), ","))

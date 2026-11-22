@@ -899,7 +899,7 @@ code{white-space:normal !important;overflow-wrap:anywhere;word-break:break-all}
   <nav class="tabs">
     <a href="''' + DECK + '''">课件</a>
     <a href="topic-08-lecture.html" class="on">讲义</a>
-    <a href="topic-09.html">专题九（精度与量化）</a>
+    <a href="topic-09.html">专题九（训练性能优化）</a>
     <a href="index.html">课程总纲</a>
   </nav>
 </div></div>
