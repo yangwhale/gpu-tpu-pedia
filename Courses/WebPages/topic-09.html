@@ -1158,7 +1158,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <table class="t9"><thead><tr><th colspan="2">先认几个词（全讲都用；工坊比方接专题五）</th></tr></thead><tbody>
   <tr><td><b>设备</b></td><td>v7x 一颗芯片里有两个设备；后面说「每设备」都指它</td></tr>
   <tr><td><b>主核 ＝ 师傅</b></td><td>每个设备一个，做矩阵乘、注意力这些正活（TensorCore）</td></tr>
-  <tr><td><b>小核 ＝ 小工</b></td><td>每个设备两颗（SparseCore），本职是稀疏计算；编译器可以把设备之间的通信交给它跑（「跑腿」），它也做 token 排序这类杂活</td></tr>
+  <tr><td><b>小核 ＝ 小工</b></td><td>每个设备两颗（SparseCore），本职是稀疏计算；编译器可以把设备之间的通信交给它跑（「跑腿」），它也做 token 收发、数据搬运这类杂活</td></tr>
   <tr><td><b>藏住 ／ 露出</b></td><td>通信跑的时候主核有别的活干，不花步时 ／ 主核停下来干等，算进步时</td></tr>
   <tr><td><b>作业 ／ 格</b></td><td>作业：一次申请到同一批机器、连着跑一串配置；格：作业里的一个配置，连跑若干步取平均。比收益尽量放在同一个作业里（第二节）</td></tr>
   <tr><td><b>缓冲倍数</b></td><td>按「token 平均分给各专家」算出每个专家收多少，再预留几倍的空位；装不下的那一步整步重跑一次，叫回放</td></tr>
@@ -1491,7 +1491,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>在算的那部分为什么也慢（算得慢、算了不需要的），第二节起讲；这一讲主要管那四成在等。</p>
 
   <h3 id="s1-3">1.3　师傅和小工：主核、小核，和「藏住」</h3>
-  <p>专题五的工坊接着用：<b>主核是师傅</b>，做正活；<b>小核是跑腿的小工</b>，每个师傅身边两个，把工具送来（all-gather）、把修改意见交回（reduce-scatter），兼着给 token 排序、搬运。</p>
+  <p>专题五的工坊接着用：<b>主核是师傅</b>，做正活；<b>小核是跑腿的小工</b>，每个师傅身边两个，把工具送来（all-gather）、把修改意见交回（reduce-scatter），兼着跑 token 收发和少量数据搬运（token 排序从站 9 起挪回了主核）。</p>
 
   <table class="t9 mini" id="tab-lanes"><caption>一步里同时有四条车道在跑</caption><thead><tr><th>车道</th><th>上面跑什么</th><th>比方</th></tr></thead><tbody><tr><td>主核在算</td><td>矩阵乘、注意力、各种胶水、优化器</td><td>师傅干活</td></tr><tr><td>主核同步集合</td><td>主核自己跑、跑完才能往下走的集合通信（例如一些 all-to-all）</td><td>师傅停下手，亲自去对账</td></tr><tr><td>小核 0</td><td>交给它的集合通信、token 的排序和搬运；排成一条队，先来先做</td><td>小工甲</td></tr><tr><td>小核 1</td><td>同上，另一条队</td><td>小工乙</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>v7x 每个主核（TensorCore）配两颗小核（SparseCore）：每颗芯片 2 个主核、每个主核配 2 颗小核（专题七 §6 的出处注）。</p><p>集合通信交给小核跑，主核发出去以后可以接着算别的；什么交给小核、交给哪一颗，由编译器和运行库决定（第八节会看到这个决定会随版本变）。</p></details>
@@ -1656,7 +1656,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s2-1">2.1　分子：只数模型真正需要的</h3>
   <p>一行 32K 个 token 是拼起来的好些篇。每个 token 只看同一篇里、自己前面的，画出来是对角线上的小三角；静态公式却按一整个大三角算，填充也当有用功。</p>
-<figure class="fbox fwide" id="fig-docmask"><svg viewBox="0 0 1400 726" width="100%" role="img" aria-label="左边是一行 32768 个 token 当成一整篇文档时的因果注意力：一个大三角，每个 token 看它前面所有 token。右边是同一行实际拼着 8 篇文档（示意），注意力只在每篇里面做：只剩对角线上 8 个小三角，面积占大三角的 17%。真实数据一行平均约 28 篇文档，文档内配对只占整行因果的 8.4% 到 11.2%。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-docmask"><svg viewBox="0 0 1400 726" width="100%" role="img" aria-label="左边是一行 32768 个 token 当成一整篇文档时的因果注意力：一个大三角，每个 token 看它前面所有 token。右边是同一行实际拼着 8 篇文档（示意），注意力只在每篇里面做：只剩对角线上 8 个小三角，面积占大三角的 17%。真实数据一行平均约 28 篇文档（在线打包；预打包约 32），文档内配对只占整行因果的 8.4% 到 11.2%。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一行拼着很多篇文档，注意力只在每篇里面做</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">方块里每个点 ＝ 一对 (看的 token, 被看的 token)；涂色的才是要算的；示意用 8 篇文档，长度是编的</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -1690,7 +1690,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="2" y="652" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="679" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">静态公式按大三角数，模型要的只是对角线上那几个小三角</tspan></text>
 </svg><figcaption><b>左边是公式数的，右边是模型要的。</b><span class="capmore"><br><em>示意图的文档长度是编的；真实数据的比例在右下。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 示意：8 篇文档的长度是编的（加起来 32768），小三角占大三角的 17.1% 由脚本现算。</p>
-<p>📌 实测：真实图文数据一行平均约 28 篇文档；文档内配对占整行因果的比例，在线打包的数据是 8.4%，离线预打包的数据是 11.2%（第 5–9 步）。</p>
+<p>📌 实测：真实图文数据一行平均约 28 篇文档（在线打包；预打包约 32）；文档内配对占整行因果的比例，在线打包的数据是 8.4%，离线预打包的数据是 11.2%（第 5–9 步）。</p>
 <p>📌 实际算的比要的多：注意力核按 1024 × 1024 的块算，块里只要有一个点要算，整块都算。预打包数据某一步平均每个设备保留满因果的 24.2% 的块，要的配对只有 11.2%（本课推导：两者不是同一个分母的精确比，只说明一半左右的块是半掩的）。</p></details></figure>
 <figure class="fbox fwide" id="fig-numerator"><svg viewBox="0 0 1400 598" width="100%" role="img" aria-label="一根横条从静态公式数的分子 608.55 TFLOP 开始，减掉跨文档的注意力 41.7%、减掉填充 8.2%，加上静态公式漏计的 MTP 输出头 2.8%、视觉塔按实际图像块 0.6%，得到有效分子 325.18 TFLOP，只有原来的 53%。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">静态公式数的分子，一半不是模型真正需要的</text>
@@ -1739,7 +1739,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <p>有效分子 ＝（权重类运算 ＋ 静态公式漏计的 MTP 输出头）× 有效 token 比例 ＋ 注意力 × 文档内配对比例 ＋ 视觉塔按实际图像块。</p>
   <table class="t9"><thead><tr><th>扣什么／加什么</th><th>为什么</th></tr></thead><tbody>
-  <tr><td>扣跨文档的注意力</td><td>一行约 28 篇文档，注意力只在文档内做因果</td></tr>
+  <tr><td>扣跨文档的注意力</td><td>一行约 28–32 篇文档（在线打包约 28、预打包约 32），注意力只在文档内做因果</td></tr>
   <tr><td>扣填充</td><td>填充 token 不训练，可照样被送进专家、照样算</td></tr>
   <tr><td>加 MTP 输出头</td><td>每个 token 都真算，静态公式漏了</td></tr>
   <tr><td>加视觉塔，按实际图像块</td><td>空槽位、跨图的注意力不算</td></tr>
@@ -1831,12 +1831,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s2-4">2.4　测量本身会骗人</h3>
 
-  <table class="t9 mini" id="tab-traps"><caption>测量本身会骗人：这次调优里真踩过的五个坑</caption><thead><tr><th>坑</th><th>当时读到什么</th><th>怎么躲</th></tr></thead><tbody><tr><td>作业的第一格整体偏慢</td><td>有一次整格慢 3%</td><td>第一格不拿来当比较基准（放一个预热用的对照），读数窗口往后取</td></tr><tr><td>抓 profile 的那一步</td><td>主机步时多约 0.3 秒</td><td>窗口避开抓 profile 和写盘那两步</td></tr><tr><td>数据管线供不上</td><td>一格报 1.379 秒；前面几步其实约 2 秒，抓 profile 那一停，管线攒够了缓冲才快起来</td><td>先看逐步步时平不平，不平先别读</td></tr><tr><td>合成数据把图像槽塞满</td><td>「加视觉塔」读成慢 27.5%；按真实数据的槽数只慢 5.6%</td><td>合成数据的形状要跟真实数据对齐</td></tr><tr><td>只录了一颗芯片</td><td>读出「注意力核每单位运算慢 2.3 倍」</td><td>按最忙的设备读（第四节）</td></tr></tbody></table>
-  <details class="figsrc"><summary>出处与口径</summary><p>实测：前四条都出自这次调优的作业日志；第四条是一份合成图文数据每行有 16384 个图像槽、全部塞满，把每槽数改成跟真实数据同比例（2048）以后重测。</p><p>每一条当时都让我们读错过一次方向，所以这里不讲来历，只列读法。</p><p>数据管线那一条的后话：一个约 2 秒一步的 9 层配置（倒序阶梯里用的截层），每台加载主机只开 1 个加载进程时，整步被一台主机拖住（它每步等数据约 636 毫秒）；开到 4 个，步时 2.037 → 1.374 秒、2.044 → 1.133 秒。加载进程数不能超过每台主机分到的数据文件数，超了先报错，其余主机卡在集合通信上，半小时后才报切片故障。</p></details>
+  <table class="t9 mini" id="tab-traps"><caption>测量本身会骗人：这次调优里真踩过的五个坑</caption><thead><tr><th>坑</th><th>当时读到什么</th><th>怎么躲</th></tr></thead><tbody><tr><td>作业的第一格整体偏慢</td><td>有一次整格慢 3%</td><td>第一格不拿来当比较基准（放一个预热用的对照），读数窗口往后取</td></tr><tr><td>抓 profile 的那一步</td><td>主机步时多约 0.3 秒</td><td>窗口避开抓 profile 和写盘那两步</td></tr><tr><td>数据管线供不上</td><td>一格报 1.379 秒；前面几步其实约 2 秒，抓 profile 那一停，管线攒够了缓冲才快起来</td><td>先看逐步步时平不平，不平先别读</td></tr><tr><td>合成数据的图像槽太多</td><td>「加视觉塔」读成慢 27.5%；按真实数据的槽数只慢 5.6%</td><td>合成数据的形状要跟真实数据对齐</td></tr><tr><td>只录了一颗芯片</td><td>读出「注意力核每单位运算慢 2.3 倍」</td><td>按最忙的设备读（第四节）</td></tr></tbody></table>
+  <details class="figsrc"><summary>出处与口径</summary><p>实测：前四条都出自这次调优的作业日志；第四条是一份合成图文数据每行有 16384 个图像槽（只填了约 0.7%，真实数据填约 77%），视觉塔按槽算、空槽也算；把每行槽数改成跟真实数据同比例（2048）以后重测。</p><p>每一条当时都让我们读错过一次方向，所以这里不讲来历，只列读法。</p><p>数据管线那一条的后话：一个约 2 秒一步的 9 层配置（倒序阶梯里用的截层），每台加载主机只开 1 个加载进程时，整步被一台主机拖住（它每步等数据约 636 毫秒）；开到 4 个，步时 2.037 → 1.374 秒、2.044 → 1.133 秒。加载进程数不能超过每台主机分到的数据文件数，超了先报错，其余主机卡在集合通信上，半小时后才报切片故障。</p></details>
 
 <details class="foldfig"><summary><b>算的块比要的多：块里只要有一个点要算，整块都算</b></summary>
 
-  <p>注意力核按 1024 × 1024 的块算。预打包数据某一步，平均每个设备保留了满因果 24.2% 的块，而文档内真正要的配对只占 11.2%。块是整块算的，所以实际执行的里头约一半是被掩掉的部分。这一截在有效分子里不计，算在「算得慢」那一侧。</p>
+  <p>注意力核按 1024 × 1024 的块算。预打包数据某一步，平均每个设备保留了满因果 24.2% 的块，而文档内真正要的配对只占 11.2%。块是整块算的，实际执行的里头有相当一部分是被掩掉的（两个数不在同一个窗口：同一步的配对占比约 16.6%，按它算约三分之一）。这一截在有效分子里不计，算在「算得慢」那一侧。</p>
   <p>本课推导：两个比例的分母都是满因果，但一个按块、一个按配对，只说明量级。</p>
 
 </details>
@@ -3178,7 +3178,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="s9-3">9.3　少重算一步；再砍一截，收集露出来</h3>
   <p class="station">站 20 · 注意力的输出投影存下来、反向少重算一步（跟站 15 存下的那一个不是同一步）· 4.342 → 4.251 秒（同作业 −2.1%）</p>
   <p>同一个改动在短文上慢 3.7%，长文上快了（推断：长文上重算注意力更贵）。</p>
-  <p><b>旁线：那再砍一截呢？</b>第七节那颗融合核放到一个同样少重算的配置上（那一格对照 4.351 秒，在换专家切法的支线上；主线上同类配置单开是 +0.6%），主核又少算约 190 毫秒，一步却<b>慢了 7.8%</b>（不进编年史）。</p>
+  <p><b>旁线：那再砍一截呢？</b>第七节那颗融合核放到一个同样少重算的配置上（那一格对照 4.351 秒，在换专家切法的支线上；主线上没存输出投影的配置（站 19）上单开是 +0.6%），主核又少算约 190 毫秒，一步却<b>慢了 7.8%</b>（不进编年史）。</p>
 <figure class="fbox fwide" id="anim-agwin">
 <video src="media/topic08b-agwin.mp4?v=709d5fa4" autoplay loop muted playsinline data-pauses="5.70,12.90,16.05"
        aria-label="省了计算，收集露出来。动画分师傅（主核）和小工（小核）两条车道，图例：蓝＝师傅在算，橙＝小工跑腿，红＝师傅停着等。没开融合核：放行以后，师傅还有 7 到 15 毫秒的活。gate、up、down 三条收集各有一对竖线，标着放行、完成；括号里分别夹 7.2 ms、9.0 ms、15.2 ms 计算，收集藏在底下。开了融合核：计算少了，放行却排到紧挨着完成；师傅少算约 190 毫秒（整步）。三条括号只夹 0.4 ms、0.7 ms、0.7 ms，分别要等 3.7 ms、3.8 ms、3.9 ms。小工跑腿一样长，师傅每条停下来等将近 4 毫秒。各层都这样，加起来比省的还多；一步 4.351 → 4.692 秒（+7.8%）。省了计算，先看原来被它盖住的通信露没露出来。"></video>
@@ -3248,9 +3248,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="687" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="687" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="714" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">计算变短了，原来盖着的通信就露出来：省了计算，还要看放行和完成之间还剩什么</tspan></text>
-</svg><figcaption><b>两条红线之间：上面夹着一长段蓝，下面几乎只剩红。</b><span class="capmore"><br><em>各层取中位；橙条长度示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（profile，一颗芯片的一个主核，各层取中位；拆的是融合核另带一项小改动的那一格，4.693 秒、+7.9%，那项小改动单开只慢 1.7%）：三条重新收集的括号里夹的主核计算 7.2 / 9.0 / 15.2 → 0.4 / 0.7 / 0.7 ms；设备一步 4258 → 4606 ms，主核计算少约 190 ms。</p>
+</svg><figcaption><b>两条红线之间：上面夹着一长段蓝，下面几乎只剩红。</b><span class="capmore"><br><em>各层取中位；橙条长度示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（profile，一颗芯片的一个主核，各层取中位；拆的是融合核另带一项小改动的那一格，4.690 秒（对照 4.347，复测是 4.693）、+7.9%，那项小改动单开只慢 1.7%）：三条重新收集的括号里夹的主核计算 7.2 / 9.0 / 15.2 → 0.4 / 0.7 / 0.7 ms；设备一步 4258 → 4606 ms，主核计算少约 190 ms。</p>
 <p>实测（编译产物，指令顺序）：括号里夹的核 4/5/6 → 1/2/3 个。融合核本身是真核。小核上集合通信的总忙时只多约 88 ms：活没多，是放行的位置变了。</p>
-<p>实测：对照在三个作业里是 4.347 / 4.347 / 4.351 秒；换一个底座重测，4.421 → 4.768 秒，也是 +7.8%（两次都在换专家切法的支线底座上；主线上同一颗核是 +0.6%）。显存不是原因（带融合核那一格峰值反而低约 4 GiB）。</p>
+<p>实测：对照在三个作业里是 4.347 / 4.347 / 4.351 秒；换一个底座重测，4.421 → 4.768 秒，也是 +7.8%（两次都在换专家切法的支线底座上；主线上没存输出投影的配置上同一颗核是 +0.6%）。显存不是原因（带融合核那一格峰值反而低约 4 GiB）。</p>
 <p>原因见 9.5：融合核报了耗时，就成了层调度器给收集挑的搭档，收集的完成点被钉在它旁边；在定稿之后的配置上去掉这颗融合核的估计，括号恢复，一步比不加融合核的对照还快 3.8%（实测）。这一格本身没有单独去掉估计重测，按同一条规则解释。限制同时在飞的收集条数，两种取值编出来跟原来一字不差（空操作）。</p></details></figure>
   <p>反向重算前要先把这一层的专家权重再收一遍。原来这三条收集的括号里夹着 7 到 15 毫秒的计算，藏得住。</p>
 <details class="foldfig"><summary><b>括号塌了，露出多少</b></summary>
@@ -3301,7 +3301,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 <details class="foldfig"><summary><b>128 片全量版本的两个显存旁证：省显存的开关不是越多越好</b></summary>
 
-  <p>视觉塔逐层重算：半层底座上步时 +1.0%，换来全量上放得下。另外三个省显存的开关一起带上，半层底座上慢 11.5%，全量的峰值却几乎不降，所以不带。省显存要先在全量上看峰值卡在哪一段，再挑对症的那一项。</p>
+  <p>视觉塔逐层重算：半层底座上步时 +1.0%，换来全量上放得下。三个省显存的开关（含视觉塔逐层重算）一起带上，半层底座上慢 11.5%，全量峰值只比单开视觉塔重算低约 0.2 GiB，所以不带。省显存要先在全量上看峰值卡在哪一段，再挑对症的那一项。</p>
 
 </details>
 
@@ -4368,7 +4368,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <span class="sub">（25 秒，Manim 渲染，可一步一步看。颜色＝这一刀打在哪类瓶颈上（同开场的编年史图）；第二道虚线处是站 13 那套配置量两次（5.311 → 5.553），不是从站 16 跳上去。）</span></figcaption></figure>
 <details class="foldfig"><summary><b>全部工作一张表：兑现的、没兑现的、下一步</b></summary>
 
-  <table class="t9 mini" id="tab-work"><caption>全部工作一张表：兑现的、没兑现的、下一步</caption><thead><tr><th></th><th>改动（按类）</th><th>收益或变化</th><th>在哪讲</th></tr></thead><tbody><tr><td>① 兑现了</td><td>专家通信：换切法（按专家切），搬来已上线的注意力配置</td><td>−45.4%；−29.0%</td><td>第三节</td></tr><tr><td></td><td>计算侧：新版分组矩阵乘核、收集流水化、缓冲只读写有效行等</td><td>每站 −2.0% 到 −7.5%</td><td>第三节</td></tr><tr><td></td><td>优化器：Muon 只沿一个轴搬一段；修掉白搬 FP32 主权重</td><td>−11.2%；−6.3%（正式修法单量，先上的局部修法 −7.3%）</td><td>第三、九节</td></tr><tr><td></td><td>小核队列：token 排序挪回主核；收集限 2 条在飞＋分两颗小核</td><td>−11.3%；−3.1%（限 2 单开 −2.2%）</td><td>第三、六节</td></tr><tr><td></td><td>梯度 BF16 ＋ 两条运行库开关；优化器前一道屏障</td><td>−16.9%；−6.9%（单量）</td><td>第六、七节</td></tr><tr><td></td><td>长文注意力：短文那套开关整包搬、片上暂存上限、空块不再空转</td><td>−13.5%、−2.3%、−0.8%</td><td>第九节</td></tr><tr><td></td><td>路由：先挑 top-k 再收集</td><td>−0.9%</td><td>开篇总览</td></tr><tr><td></td><td>调度器：融合核不报耗时；照实报 ＋ 门槛 3 ms</td><td>−3.8%；−1.0%</td><td>9.5</td></tr><tr><td></td><td>编译：两进程 ＋ 同形批量 ＋ 视觉塔 scan</td><td>128 片一格 1522 → 181 秒；步时 −0.5%</td><td>9.6</td></tr><tr><td></td><td>精度修正：归一化与梯度写法改回参考实现</td><td>持平到 +0.2%（不为提速）</td><td>第九节</td></tr><tr><td>② 没兑现或变慢</td><td>融合核照原样（带耗时估计）</td><td>+7.8%（9.3）、+10.6%（9.5）</td><td>9.3、9.5</td></tr><tr><td></td><td>按实测把各类核的耗时估计校准准</td><td>+4.8% 到 +9.4%</td><td>9.5</td></tr><tr><td></td><td>门槛 4 ms；牛顿迭代改 JAX 循环</td><td>+2.5%；+2.2%</td><td>9.5、9.6</td></tr><tr><td></td><td>两颗小核一起收同一条；注意力前向计算块改小；三个省显存开关一起开</td><td>+1.2%；+2.3%；+11.5%</td><td>第六、九节</td></tr><tr><td>③ 下一步</td><td>全是短文档的数据（每篇只占对角线上的小三角，块里大半被掩掉）</td><td>新版还没测，第一优先</td><td>页首</td></tr><tr><td></td><td>长短文档混拼：按长度分桶</td><td>还没测</td><td>页首</td></tr><tr><td></td><td>减少同一时段挤在小核车道上的通信</td><td>多半要改代码</td><td>9.5</td></tr><tr><td></td><td>128 片全量上卡</td><td>离线编过、放得下，还没上卡</td><td>第九节</td></tr></tbody></table>
+  <table class="t9 mini" id="tab-work"><caption>全部工作一张表：兑现的、没兑现的、下一步</caption><thead><tr><th></th><th>改动（按类）</th><th>收益或变化</th><th>在哪讲</th></tr></thead><tbody><tr><td>① 兑现了</td><td>专家通信：换切法（按专家切），搬来已上线的注意力配置</td><td>−45.4%；−29.0%</td><td>第三节</td></tr><tr><td></td><td>计算侧：新版分组矩阵乘核、收集流水化、缓冲只读写有效行等</td><td>每站 −2.0% 到 −7.5%</td><td>第三节</td></tr><tr><td></td><td>优化器：Muon 只沿一个轴搬一段；修掉白搬 FP32 主权重</td><td>−11.2%；−6.3%（正式修法单量，先上的局部修法 −7.3%）</td><td>第三、九节</td></tr><tr><td></td><td>小核队列：token 排序挪回主核；收集限 2 条在飞＋分两颗小核</td><td>−11.3%；−3.1%（限 2 单开 −2.2%）</td><td>第三、六节</td></tr><tr><td></td><td>梯度 BF16 ＋ 两条运行库开关；优化器前一道屏障</td><td>−16.9%；−6.9%（单量）</td><td>第六、七节</td></tr><tr><td></td><td>长文：短文那套开关整包搬、片上暂存上限、空块不再空转</td><td>−13.5%、−2.3%、−0.8%</td><td>第九节</td></tr><tr><td></td><td>路由：先挑 top-k 再收集</td><td>−0.9%</td><td>开篇总览</td></tr><tr><td></td><td>调度器：融合核不报耗时；照实报 ＋ 门槛 3 ms</td><td>−3.8%；−1.0%</td><td>9.5</td></tr><tr><td></td><td>编译：两进程 ＋ 同形批量 ＋ 视觉塔 scan</td><td>128 片一格 1522 → 181 秒；步时 −0.5%</td><td>9.6</td></tr><tr><td></td><td>精度修正：归一化、前向、梯度写法改回参考实现</td><td>持平到 +0.2%（不为提速）</td><td>第九节</td></tr><tr><td>② 没兑现或变慢</td><td>融合核照原样（带耗时估计）</td><td>+7.8%（9.3）、+10.6%（9.5）</td><td>9.3、9.5</td></tr><tr><td></td><td>按实测把各类核的耗时估计校准准</td><td>+4.8% 到 +9.4%</td><td>9.5</td></tr><tr><td></td><td>门槛 4 ms；牛顿迭代改 JAX 循环</td><td>+2.5%；+2.2%</td><td>9.5、9.6</td></tr><tr><td></td><td>两颗小核一起收同一条；注意力前向计算块改小；三个省显存开关一起开</td><td>+1.2%；+2.3%；+11.5%</td><td>第六、九节</td></tr><tr><td>③ 下一步</td><td>全是短文档的数据（每篇只占对角线上的小三角，块里大半被掩掉）</td><td>新版还没测，第一优先</td><td>页首</td></tr><tr><td></td><td>长短文档混拼：按长度分桶</td><td>还没测</td><td>页首</td></tr><tr><td></td><td>减少同一时段挤在小核车道上的通信</td><td>多半要改代码</td><td>9.5</td></tr><tr><td></td><td>128 片全量上卡</td><td>离线编过、放得下，还没上卡</td><td>第九节</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>本课归纳：收益优先对同作业对照量；屏障一行是跨作业（见 7.1），各行在不同底座上，不能相乘，也不能互相比大小。</p></details>
 
 </details>
