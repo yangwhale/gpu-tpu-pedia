@@ -3242,7 +3242,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="482.0" y1="516" x2="482.0" y2="552" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
 <text class="svgsm" x="496" y="536" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只夹 0.7 ms，停下来等 3.6–3.9 ms</tspan></text>
 <text class="svgsm" x="30" y="592" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整步：主核计算少约 190 ms，专家权重收集露出 64 → 560 ms；只加融合核，一步 4.351 → 4.692 秒（+7.8%）</tspan></text>
-<text class="svgsm" x="30" y="628" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">把这类收集的延迟估计调大一倍：三条收集括号里夹的矩阵乘 1/2/3 → 2/3/5 个（对照是 4/5/6）；4.693 → 4.630 秒，342 毫秒只救回 63</tspan></text>
+<text class="svgsm" x="30" y="628" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">把这类收集的延迟估计调大一倍：三条收集括号里夹的 Pallas 核 1/2/3 → 2/3/5 个（对照是 4/5/6）；4.693 → 4.630 秒，342 毫秒只救回 63</tspan></text>
 <rect x="0" y="687" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="687" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="687" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -3341,7 +3341,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="deept"><b>调度器怎么知道一样活要多久</b>　Pallas 核自己报</p>
   <p>排括号之前，调度器得先估每样活多久。编译器自己生成的计算它会估；用 Pallas（JAX 里手写 TPU kernel 的工具）写的核是黑盒，只能看写核的人在公开接口 <code>pl.CostEstimate</code> 里填的运算量、读写字节，换算成时长。<b>不填的核，按几乎不花时间算。</b>这颗融合核填了。</p>
   <p><b>第一步，查报得准不准。</b>拿对照那一格的 profile 一颗一颗对：没有一样准，而且有长有短。</p>
-<figure class="fbox fwide" id="fig-ceratio"><svg viewBox="0 0 1400 698" width="100%" role="img" aria-label="调度器排通信重叠时用的每颗核的耗时，按核自己报的运算量和读写字节换算，再除以实测（每个主核单次）。横轴是对数刻度，中间竖线是估得正好。专家矩阵乘和专家权重梯度 6 颗偏长 2.3 到 2.9 倍；主干注意力两颗偏长 2.2 到 2.5 倍；视觉塔注意力两颗反而偏短，0.34 到 0.47；融合核 4 颗偏短，0.50 到 0.74；小核上的专家权重收集不是核，调度器自己按公式估，偏长约 3.2 倍。另有 3 颗核不报耗时，调度器按几乎不花时间算，实测各 0.3 到 0.6 毫秒。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-ceratio"><svg viewBox="0 0 1400 698" width="100%" role="img" aria-label="调度器排通信重叠时用的每颗核的耗时，按核自己报的运算量和读写字节换算，再除以实测（每个主核单次）。横轴是对数刻度，中间竖线是估得正好。专家矩阵乘和专家权重梯度 6 颗偏长 2.3 到 2.9 倍；主干注意力两颗偏长 2.2 到 2.5 倍；视觉塔注意力两颗反而偏短，0.34 到 0.47；融合核 4 颗偏短，0.50 到 0.74；小核上的专家权重收集不是核，调度器自己按公式估，偏长约 2.0 倍。另有 3 颗核不报耗时，调度器按几乎不花时间算，实测各 0.3 到 0.6 毫秒。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">调度器手里的「每颗核要多久」：没有一样是准的</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每个点 ＝ 一颗核：调度器按它报的耗时换算出的时长 ÷ 实测（对数刻度）；深色竖线 ＝ 估得正好，右边估长了，左边估短了</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
@@ -3388,8 +3388,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <circle cx="778.9" cy="391.0" r="8.0" fill="#1a73e8" fill-opacity="0.85"/>
 <text class="svgsm" x="1204" y="392" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只有实测的 0.50–0.74</tspan></text>
 <text class="svgsm" x="496" y="454" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">小核上的专家权重收集（不是核）</tspan></text>
-<circle cx="1124.7" cy="445.0" r="8.0" fill="#d93025" fill-opacity="0.85"/>
-<text class="svgsm" x="1204" y="454" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">偏长约 3.2 倍</tspan></text>
+<circle cx="1012.1" cy="445.0" r="8.0" fill="#d93025" fill-opacity="0.85"/>
+<text class="svgsm" x="1204" y="454" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">偏长约 2.0 倍</tspan></text>
 <text class="svgsm" x="496" y="516" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不报耗时的核（3 颗）</tspan></text>
 <line x1="593.1950974934764" y1="511" x2="524" y2="511" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
 <text class="svgsm" x="1204" y="516" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按几乎 0 算</tspan></text>
@@ -3712,98 +3712,99 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>同一条规则：只改估计、不动门槛，原来不报耗时的 token 搬运核补上估计以后也成了候选，收集的搭档前移到搬运核和小的矩阵乘上（编译产物里读得到），括号被排短。</p>
 </details>
 
-  <p><b>最后是正路。</b>所有核照实报耗时，门槛提到 3 毫秒：耗时短的核全挡在外面，专家权重收集（64 片拓扑上）没有搭档，完成点贴着用数据的矩阵乘；小核收集的延迟估计乘 0.32（调度器估 16.2 毫秒、实测约 8.1，物理上乘 0.5 就对上；0.32 是判据扫出来更好的值，推断是在补没建模的小核车道排队）。融合核照实报也只有零点几毫秒，进不了候选，第二步「不报」就不需要了。门槛从默认扫到 10 毫秒：</p>
-<figure class="fbox fwide" id="fig-cethresh"><svg viewBox="0 0 1400 746" width="100%" role="img" aria-label="所有核照实报耗时、小核收集的延迟估计乘 0.32 以后，把 Pallas 核入选候选的门槛从默认一路提到 10 毫秒，客观判据预测的整步（4 层模型按实测核时长回放，只用来排名）。64 片拓扑：默认 3337，0.75 到 1 毫秒是一个平台 2988 上下，3 毫秒最好 2709，6 毫秒以上不再变化 2945，跟现在的推荐配置 2922 差不多。128 片拓扑：默认 3344，3 毫秒最好 2696，6 毫秒以上 2936，推荐配置 2915。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <p><b>最后是正路。</b>所有核照实报耗时，门槛提到 3 毫秒：耗时短的核全挡在外面，专家权重收集（64 片拓扑上）没有搭档，完成点贴着用数据的矩阵乘；小核收集的延迟估计乘 0.32（调度器估 16.2 毫秒，物理上乘 0.5 得 8.1、对上实测约 8.2；0.32 是判据扫出来更好的值，推断是在补没建模的小核车道排队）。融合核照实报也只有零点几毫秒，进不了候选，第二步「不报」就不需要了。门槛从默认扫到 10 毫秒：</p>
+<figure class="fbox fwide" id="fig-cethresh"><svg viewBox="0 0 1400 768" width="100%" role="img" aria-label="所有核照实报耗时、小核收集的延迟估计乘 0.32 以后，把 Pallas 核入选候选的门槛从默认一路提到 10 毫秒，客观判据预测的整步（4 层模型按实测核时长回放，只用来排名）。64 片拓扑：默认 3337，0.75 到 1 毫秒是一个平台 2988 上下，3 毫秒最好 2709，6 毫秒以上不再变化 2945，跟现在的推荐配置 2922 差不多。128 片拓扑：默认 3344，3 毫秒最好 2696，6 毫秒以上 2936，推荐配置 2915。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">把门槛提到 3 毫秒：耗时短的核挡在门外，收集的完成点回到用数据的地方</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴 ＝ Pallas 核入选候选的门槛（按估计时长）；纵轴 ＝ 客观判据预测的 4 层模型整步（毫秒，只排名，不是 39 层步时）；所有核照实报耗时，收集延迟估计 ×0.32</text>
-<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">64 片拓扑</text>
-<rect x="119.80000000000001" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="140" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">128 片拓扑</text>
-<rect x="247.44000000000003" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="268" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">当时的推荐配置（融合核不报）</text>
-<rect x="0" y="102" width="1400" height="520" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整步预测（离线编译 ＋ 实测核时长回放；3 ms 那格上卡 −1.0%）</tspan></text>
-<line x1="190" y1="536.6666666666666" x2="1250" y2="536.6666666666666" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="182" y="541" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">2700</text>
-<line x1="190" y1="435.33333333333337" x2="1250" y2="435.33333333333337" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="182" y="440" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">2900</text>
-<line x1="190" y1="334.0" x2="1250" y2="334.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="182" y="339" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">3100</text>
-<line x1="190" y1="232.66666666666663" x2="1250" y2="232.66666666666663" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="182" y="237" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">3300</text>
-<text class="svgsm" x="200" y="588" fill="#202124" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">默认</tspan></text>
-<text class="svgsm" x="294" y="588" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">0.2 ms</text>
-<text class="svgsm" x="389" y="588" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">0.5 ms</text>
-<text class="svgsm" x="483" y="588" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">0.75 ms</text>
-<text class="svgsm" x="578" y="588" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">1 ms</text>
-<text class="svgsm" x="672" y="588" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">1.5 ms</text>
-<text class="svgsm" x="767" y="588" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">2 ms</text>
-<text class="svgsm" x="861" y="588" fill="#202124" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3 ms</tspan></text>
-<text class="svgsm" x="956" y="588" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">4 ms</text>
-<text class="svgsm" x="1050" y="588" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">6 ms</text>
-<text class="svgsm" x="1145" y="588" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">8 ms</text>
-<text class="svgsm" x="1240" y="588" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">10 ms</text>
-<rect x="1020.909090909091" y="172" width="249.090909090909" height="400" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1145" y="192" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6 ms 以上：没有核够格当搭档</tspan></text>
-<line x1="200" y1="425.8079999999999" x2="1240" y2="425.8079999999999" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 4"/>
-<text class="svgsm" x="206" y="417" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">当时的推荐配置 ≈ 2919</tspan></text>
-<line x1="200.0" y1="214.02133333333325" x2="294.54545454545456" y2="341.65066666666667" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="294.54545454545456" y1="341.65066666666667" x2="389.0909090909091" y2="336.3306666666666" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="389.0909090909091" y1="336.3306666666666" x2="483.6363636363636" y2="385.88266666666675" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="483.6363636363636" y1="385.88266666666675" x2="578.1818181818182" y2="390.49333333333334" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="578.1818181818182" y1="390.49333333333334" x2="672.7272727272727" y2="444.85866666666675" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="672.7272727272727" y1="444.85866666666675" x2="767.2727272727273" y2="444.85866666666675" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="767.2727272727273" y1="444.85866666666675" x2="861.8181818181819" y2="532.2586666666667" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="861.8181818181819" y1="532.2586666666667" x2="956.3636363636364" y2="476.2720000000001" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="956.3636363636364" y1="476.2720000000001" x2="1050.909090909091" y2="412.4320000000001" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="1050.909090909091" y1="412.4320000000001" x2="1145.4545454545455" y2="412.4320000000001" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="1145.4545454545455" y1="412.4320000000001" x2="1240.0" y2="412.4320000000001" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<circle cx="200.0" cy="214.0" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="294.5" cy="341.7" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="389.1" cy="336.3" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="483.6" cy="385.9" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="578.2" cy="390.5" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="672.7" cy="444.9" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="767.3" cy="444.9" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="861.8" cy="532.3" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="956.4" cy="476.3" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="1050.9" cy="412.4" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="1145.5" cy="412.4" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<circle cx="1240.0" cy="412.4" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
-<line x1="200.0" y1="210.47466666666656" x2="294.54545454545456" y2="348.2879999999999" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="294.54545454545456" y1="348.2879999999999" x2="389.0909090909091" y2="332.024" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="389.0909090909091" y1="332.024" x2="483.6363636363636" y2="381.62666666666667" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="483.6363636363636" y1="381.62666666666667" x2="578.1818181818182" y2="385.7306666666666" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="578.1818181818182" y1="385.7306666666666" x2="672.7272727272727" y2="439.0320000000001" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="672.7272727272727" y1="439.0320000000001" x2="767.2727272727273" y2="439.0320000000001" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="767.2727272727273" y1="439.0320000000001" x2="861.8181818181819" y2="538.4906666666666" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="861.8181818181819" y1="538.4906666666666" x2="956.3636363636364" y2="483.7706666666666" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="956.3636363636364" y1="483.7706666666666" x2="1050.909090909091" y2="417.3466666666667" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="1050.909090909091" y1="417.3466666666667" x2="1145.4545454545455" y2="417.3466666666667" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<line x1="1145.4545454545455" y1="417.3466666666667" x2="1240.0" y2="417.3466666666667" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
-<circle cx="200.0" cy="210.5" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="294.5" cy="348.3" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="389.1" cy="332.0" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="483.6" cy="381.6" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="578.2" cy="385.7" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="672.7" cy="439.0" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="767.3" cy="439.0" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="861.8" cy="538.5" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="956.4" cy="483.8" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="1050.9" cy="417.3" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="1145.5" cy="417.3" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<circle cx="1240.0" cy="417.3" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
-<text class="svgsm" x="845" y="544" fill="#0d652d" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3 ms 最好：2709 / 2696</tspan></text>
-<text class="svgsm" x="530" y="368" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.75–1 ms 平台</tspan></text>
-<text class="svgsm" x="214" y="219" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">默认：短核都进来当搭档</tspan></text>
-<rect x="0" y="672" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="672" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="672" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="699" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">门槛太低，耗时短的核回来当搭档；3 ms 刚好把它们全挡在外面；再高，连注意力核也挡掉</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴 ＝ Pallas 核入选候选的门槛（按估计时长）；纵轴 ＝ 客观判据预测的整步（4 层编译、层循环按 37 圈折算，毫秒；只排名，不是上卡步时）；所有核照实报耗时，收集延迟</text>
+<text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">估计 ×0.32</text>
+<rect x="0" y="85" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="96" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">64 片拓扑</text>
+<rect x="119.80000000000001" y="85" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="140" y="96" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">128 片拓扑</text>
+<rect x="247.44000000000003" y="85" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="268" y="96" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">当时的推荐配置（融合核不报）</text>
+<rect x="0" y="124" width="1400" height="520" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="124" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="126" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="154" x2="1400" y2="154" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="144" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整步预测（离线编译 ＋ 实测核时长回放；3 ms 那格上卡 −1.0%）</tspan></text>
+<line x1="190" y1="558.6666666666666" x2="1250" y2="558.6666666666666" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="182" y="563" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">2700</text>
+<line x1="190" y1="457.33333333333337" x2="1250" y2="457.33333333333337" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="182" y="462" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">2900</text>
+<line x1="190" y1="356.0" x2="1250" y2="356.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="182" y="361" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">3100</text>
+<line x1="190" y1="254.66666666666663" x2="1250" y2="254.66666666666663" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="182" y="259" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">3300</text>
+<text class="svgsm" x="200" y="610" fill="#202124" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">默认</tspan></text>
+<text class="svgsm" x="294" y="610" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">0.2 ms</text>
+<text class="svgsm" x="389" y="610" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">0.5 ms</text>
+<text class="svgsm" x="483" y="610" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">0.75 ms</text>
+<text class="svgsm" x="578" y="610" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">1 ms</text>
+<text class="svgsm" x="672" y="610" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">1.5 ms</text>
+<text class="svgsm" x="767" y="610" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">2 ms</text>
+<text class="svgsm" x="861" y="610" fill="#202124" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3 ms</tspan></text>
+<text class="svgsm" x="956" y="610" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">4 ms</text>
+<text class="svgsm" x="1050" y="610" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">6 ms</text>
+<text class="svgsm" x="1145" y="610" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">8 ms</text>
+<text class="svgsm" x="1240" y="610" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">10 ms</text>
+<rect x="1020.909090909091" y="194" width="249.090909090909" height="400" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="1145" y="214" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6 ms 以上：没有核够格当搭档</tspan></text>
+<line x1="200" y1="447.8079999999999" x2="1240" y2="447.8079999999999" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 4"/>
+<text class="svgsm" x="206" y="439" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">当时的推荐配置 ≈ 2919</tspan></text>
+<line x1="200.0" y1="236.02133333333325" x2="294.54545454545456" y2="363.65066666666667" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="294.54545454545456" y1="363.65066666666667" x2="389.0909090909091" y2="358.3306666666666" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="389.0909090909091" y1="358.3306666666666" x2="483.6363636363636" y2="407.88266666666675" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="483.6363636363636" y1="407.88266666666675" x2="578.1818181818182" y2="412.49333333333334" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="578.1818181818182" y1="412.49333333333334" x2="672.7272727272727" y2="466.85866666666675" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="672.7272727272727" y1="466.85866666666675" x2="767.2727272727273" y2="466.85866666666675" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="767.2727272727273" y1="466.85866666666675" x2="861.8181818181819" y2="554.2586666666667" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="861.8181818181819" y1="554.2586666666667" x2="956.3636363636364" y2="498.2720000000001" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="956.3636363636364" y1="498.2720000000001" x2="1050.909090909091" y2="434.4320000000001" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="1050.909090909091" y1="434.4320000000001" x2="1145.4545454545455" y2="434.4320000000001" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="1145.4545454545455" y1="434.4320000000001" x2="1240.0" y2="434.4320000000001" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="200.0" cy="236.0" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="294.5" cy="363.7" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="389.1" cy="358.3" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="483.6" cy="407.9" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="578.2" cy="412.5" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="672.7" cy="466.9" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="767.3" cy="466.9" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="861.8" cy="554.3" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="956.4" cy="498.3" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="1050.9" cy="434.4" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="1145.5" cy="434.4" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="1240.0" cy="434.4" r="6.0" fill="#1a73e8" fill-opacity="0.85"/>
+<line x1="200.0" y1="232.47466666666656" x2="294.54545454545456" y2="370.2879999999999" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="294.54545454545456" y1="370.2879999999999" x2="389.0909090909091" y2="354.024" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="389.0909090909091" y1="354.024" x2="483.6363636363636" y2="403.62666666666667" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="483.6363636363636" y1="403.62666666666667" x2="578.1818181818182" y2="407.7306666666666" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="578.1818181818182" y1="407.7306666666666" x2="672.7272727272727" y2="461.0320000000001" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="672.7272727272727" y1="461.0320000000001" x2="767.2727272727273" y2="461.0320000000001" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="767.2727272727273" y1="461.0320000000001" x2="861.8181818181819" y2="560.4906666666666" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="861.8181818181819" y1="560.4906666666666" x2="956.3636363636364" y2="505.7706666666666" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="956.3636363636364" y1="505.7706666666666" x2="1050.909090909091" y2="439.3466666666667" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="1050.909090909091" y1="439.3466666666667" x2="1145.4545454545455" y2="439.3466666666667" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="1145.4545454545455" y1="439.3466666666667" x2="1240.0" y2="439.3466666666667" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="200.0" cy="232.5" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="294.5" cy="370.3" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="389.1" cy="354.0" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="483.6" cy="403.6" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="578.2" cy="407.7" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="672.7" cy="461.0" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="767.3" cy="461.0" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="861.8" cy="560.5" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="956.4" cy="505.8" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="1050.9" cy="439.3" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="1145.5" cy="439.3" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<circle cx="1240.0" cy="439.3" r="6.0" fill="#e8710a" fill-opacity="0.85"/>
+<text class="svgsm" x="845" y="566" fill="#0d652d" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3 ms 最好：2709 / 2696</tspan></text>
+<text class="svgsm" x="530" y="390" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.75–1 ms 平台</tspan></text>
+<text class="svgsm" x="214" y="241" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">默认：短核都进来当搭档</tspan></text>
+<rect x="0" y="694" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="694" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="694" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="721" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">门槛太低，耗时短的核回来当搭档；3 ms 刚好把它们全挡在外面；再高，连注意力核也挡掉</tspan></text>
 </svg><figcaption><b>看最低点在 3 ms；左边默认最差，右边灰框里谁都不够格。</b><span class="capmore"><br><em>客观判据的整步预测，只用来排名；3 ms 那格上卡只快 1.0%，见正文。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>预测：客观判据按最终程序的指令顺序回放，主核每条指令用 profile 实测的时长，两颗小核各一条先来先做的车道跑实测的通信时长，算每条通信的括号和露出。在八格上校验过：gate/up 收集的预测露出 42.6 / 280 / 3.4 ms，对上卡实测 41.5 / 290.5 / 不到 14；整步排序两头对得上，中间有两处相邻互换；绝对值偏低约 15%，所以只用来排名，不报快多少。</p>
 <p>4 层模型：1 层稠密 ＋ 3 层 MoE、视觉塔 2 层，反向层体的搭档跟 39 层完全相同，编一格约 70 秒；每个点一格，只编不上卡。39 层复核（64 片拓扑）：3 ms ＋ ×0.32 3163，4 ms 3201，3 ms 不调延迟 3220，推荐配置 3375，排序跟 4 层一致。128 片拓扑那条借用 64 片 profile 的通信时长表，形状可信，绝对值不可信。</p>
 <p>每档门槛下专家权重收集的搭档（编译产物）：默认是融合核；0.2–0.5 ms 是 token 搬运核加矩阵乘；0.75–1 ms 是矩阵乘，跟推荐配置相同；1.5–2 ms 是矩阵乘加注意力反向；3 ms 起，64 片拓扑上没有搭档，完成点贴着用数据的地方；128 片（×0.32）在 3–5 ms 时搭档仍是注意力反向，6 ms 起才没有。照实报以后专家矩阵乘、专家权重梯度约 1.4–2.7 ms，所以被 3 ms 挡在外面。换模型、换芯片数，大核的绝对时长会变，门槛要重扫。</p>
@@ -4343,7 +4344,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="320" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="320" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="320" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="347" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大头在前几刀的字节和队列上（第一段 4.62 倍），后两段各一成多</tspan></text>
+<text class="svglbl" x="20" y="347" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大头在第一段（4.62 倍）：专家并行那一刀和搬来的注意力配置，后两段各一成多</tspan></text>
 </svg><figcaption><b>看黑条和最下面那根灰条：同一个底座上量的，能直接相除。</b><span class="capmore"><br><em>每根灰条后面的倍数是对上一根。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测：20 层底座、长文数据、同一个作业。三段终点的配置截到 20 层（半层底座上原始代码放不下，要 103.24 GiB）。</p>
 <p>这几个数跟编年史里的读数不是同一个底座、同一份数据，只在这张图里互相比。生产图像比例的长图文上同样做一组：12.899 → 2.253 秒，快 5.73 倍（第十一节正文）。</p></details></figure>
 <details class="foldfig"><summary><b>页首的 4.3% 怎么来的、同底座首尾比各是多少</b></summary>
