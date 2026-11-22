@@ -541,7 +541,7 @@ BODY += sec("s三", "三", "第一段：20 层底座，12.7 秒到 2.7 秒") + '
   <p class="station">编年史 · 站 0–12 · 64 片 v7x，20 层底座</p>
   <p class="lead">编年史从生产配方原样跑起，先用 20 层底座、短文数据（三份数据的读数见开头的读数对照表）：一步 «FRONT_BASE_S» 秒、有效 MFU «FRONT_BASE_MFU_T»%，13 站以后 «FRONT_END_S» 秒、«FRONT_END_MFU»%。瓶颈一路换了三类。</p>
 __FIG_FRONT__
-  <p class="deept"><b>同一把时间尺子看六格</b>　起点、两段末尾、两次换底座（profile 截图）</p>
+  <p class="deept"><b>同一把时间尺子看六格</b>　起点、三段末尾、换底座和换数据（profile 截图）</p>
 __SHOT_OV__
   
   <h3>3.1　先砍字节（站 0–3）</h3>
@@ -1388,7 +1388,7 @@ FIGS = {
     "__FIG_VMEM__": ("fig-vmem", "fig8b-vmem.svg", "topic08b-fig-tool.py",
         '<b>第一行是本想帮的注意力核：红的，慢了一点；绿的都在别处。</b><br><em>同一颗芯片、同一步前后相减。</em>'),
     "__FIG_FLIP__": ("fig-flip", "fig8b-flip.svg", "topic08b-fig-tool.py",
-        '<b>每把刀看上下两行：短文和长文，方向或大小都变了。</b><br><em>各自对同作业对照。</em>'),
+        '<b>每把刀看上下两行：短文和长文，方向或大小都变了。</b><br><em>长文那格只看方向。</em>'),
     "__FIG_BISECT__": ("fig-bisect", "fig8b-bisect.svg", "topic08b-fig-tool.py",
         '<b>红条是新版本，热循环每趟的指令包是旧版本的约五倍；最下面一行是代码里兜住以后。</b><br><em>「指令包」是编译器排好的一拍指令，条越长热循环越长。同一颗核单独离线编译。</em>'),
     "__FIG_MUON__": ("fig-muon", "fig8b-muon.svg", "topic08b-fig-long.py",

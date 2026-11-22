@@ -26,7 +26,7 @@ def fig_ladder():
     n = len(N.LADDER_STEPS)
     PH = 110 + 58 * (n + 1)
     py = f.panel(0, y0, W, PH, "DeepSeek V3，64 片 v7x（实测；最后一行是推导）", BL)
-    f.t(30, py + 52, "起点：公开配方复现 %.3f 秒（README 报 %.2f 秒、%.2f%%）" % (N.UP_REPRO_S, N.UP_README_S, N.UP_README_MFU), INK, True, 15)
+    f.t(30, py + 52, "起点：公开配方复现 %.3f 秒（README 报 %.2f 秒、%.2f%%）；第一行从关掉 BF16 中间结果传播的 4.198 秒那格起" % (N.UP_REPRO_S, N.UP_README_S, N.UP_README_MFU), INK, True, 15)
     X0, U = 520, 520.0          # 每个 ln 单位 520 px
     xs, segs = X0, []
     for i, ((name, a, b, where), x) in enumerate(zip(N.LADDER_STEPS, N.LADDER_X)):
