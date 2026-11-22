@@ -66,7 +66,7 @@ def fig_muon():
     yb = f.src(yb + 10,
                "实测（离线编译产物）：沿操作数往上追，那两条 FP32 的 all-to-all，一条的输入就是参数本身，另一条在相加之后把新参数送回来。"
                "小核上每条 FP32 的 %.1f ms、BF16 的 %.1f ms；三块九条合计 %.1f ms，主核停着等其中 %.1f ms（profile 第 11 步）。" % (N.MU_SC_MS[1], N.MU_SC_MS[0], N.MU_A2A_MS, N.MU_A2A_WAIT_MS),
-               "实测（离线编译产物，整步，每设备）：all-to-all 字节 %.2f → %.2f GiB，其中 FP32 的（38 条，含专家以外的权重）%.2f → %.0f；FP32 的 all-gather %.2f → %.2f GiB（另一类按头切开的叶子原来用「全收再切」搬 FP32，合计约 %d GiB，一并去掉）。" % (N.MU_A2A_STATIC + N.MU_F32_A2A + N.MU_F32_AG + (N.MU_GATE_AG_GIB,)),
+               "实测（离线编译产物，整步，每设备）：all-to-all 字节 %.2f → %.2f GiB，其中 FP32 的（38 条，含专家以外的权重）%.2f → %.0f；FP32 的 all-gather %.2f → %.2f GiB（另一类按头切开的叶子原来用「全收再切」搬 FP32，一并去掉；整步 all-gather 合计少约 %d GiB）。" % (N.MU_A2A_STATIC + N.MU_F32_A2A + N.MU_F32_AG + (N.MU_GATE_AG_GIB,)),
                "实测（同一作业两格，第 5–9 步）：%.3f → %.3f 秒。修法：把每块参数自己的切法传给优化器，BF16 结果先钉回这个切法，再转 FP32、再相加；正交化本身一位没动。" % (N.MU_CTL, N.MU_S),
                "实测：第 0、1 步 loss 逐位相同，从第 2 步起两边末位不同（正式修法差约 5e-4；站 19 那版局部修法第 2 步 1.1e-4）；按「不改算法的性能改动不要求逐位」接受（第十节）。")
     f.save("fig8b-muon.svg", yb + 14)

@@ -856,3 +856,8 @@ HW_MFU_FINAL = 36.5             # 11.3：定稿硬件 MFU（实际执行的矩�
 FINAL_PROFILE_S = 4.122         # 11.3：定稿时间账那次多芯片 profile 的步时
 FULL128_NORMAL_GIB, FULL128_HEADROOM_GIB = 88.99, 4.25   # 9.4：128 片全量正常步离线峰值与余量（作者调优记录）
 RAW_HALF_MEM_GIB = 103.24                                # 第十一节 / fig-mile：原始代码放到半层底座要的显存（放不下）
+HERO_START_MFU_T = "%.2f" % HERO_START_MFU
+F0_BWD_GB = 19.3 + 38.7                          # 3.1：反向一层重收权重 ＋ FP32 规约梯度 ≈ 58 GB
+F0_BWD_MS = F0_BWD_GB / 186 * 1000               # ≈ 312 ms（借第六节实测链路速度）
+F0_BWD_X = F0_BWD_MS / 63                        # ≈ 5 倍（对反向一层专家矩阵乘 63 ms）
+assert abs(F0_BWD_MS - 312) < 2 and abs(F0_BWD_X - 4.95) < 0.05
