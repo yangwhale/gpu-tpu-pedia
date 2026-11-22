@@ -175,7 +175,7 @@ HARD = ("""
   </ol>
   <details class="foldfig"><summary><b>常用的五种提速手段为什么用不上</b>：加大 batch、短序列、换回 AdamW、FP8、权重留到反向，各自量过的代价</summary>
   <table class="t9 ftab"><thead><tr><th>常用的提速手段</th><th>为什么用不上</th><th>量过的代价</th></tr></thead><tbody>
-  <tr><td>加大每卡 batch</td><td class="fimp">每颗芯片的 token 数被项目定在 8192（＝ 2 个设备 × 4096）</td><td>每芯 token 8192 放到 24576，有效 MFU 从 17.4% 到 25.9%（＋8.5 个点；另一份配方上量的，跟页首的 25.9% 无关）</td></tr>
+  <tr><td>加大每卡 batch</td><td class="fimp">每颗芯片的 token 数被项目定在 8192（＝ 2 个设备 × 4096）</td><td>每芯 token 8192 放到 24576，有效 MFU 涨约一半（＋8.5 个点，从 17.4% 起；另一份配方上量的）</td></tr>
   <tr><td>短序列配方（4K、不开上下文并行）</td><td class="fimp">32K 和上下文并行 8 本身就是条件</td><td>每芯 token 相同，4K 换成 32K ＋ 上下文并行 8：步时 1.133 → 2.198 秒（另一份配方上量的；第四节阶梯上同一项 ×1.41，两格配置不同）</td></tr>
   <tr><td>换回 AdamW</td><td class="fimp">优化器本身就是条件</td><td>Muon 换回 AdamW，步时 −9.7%（另一格配置上量的）</td></tr>
   <tr><td>FP8</td><td class="fimp">改数值精度，要单独拍板，没批</td><td>公开模型的阶梯上 FP8 改 BF16 慢 ×1.34；本模型没量过</td></tr>
