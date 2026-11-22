@@ -149,7 +149,7 @@ def fig_fused():
     yb = f.src(yb + 10,
                "实测（编译产物与 profile，同一分配两格）：对照里这条梯度规约放行到完成之间夹 %d 条指令（含注意力反向核）；开核以后只夹融合核 1 条，每层等待 %.1f → %.1f ms，各层合计约 +%d ms；前向一条权重收集的完成点排到矩阵乘前面，约 +%d ms；同步 all-reduce 多等约 +%d ms。" % (N.FUSE_INSTR[0], N.FUSE_LAYER_WAIT[0], N.FUSE_LAYER_WAIT[1], N.FUSE_BWD_MS, N.FUSE_FWD_MS, N.FUSE_AR_MS),
                "实测：核本身是真核（编译产物里是自定义调用，没有退化成循环），这一摊计算加布局重排每步少约 %d ms；小核两条车道的总活没变。" % N.FUSE_SAVE_MS,
-               "实测：同一颗核在 20 层底座上是误差内（%.1f%%）：换了条件，结论就要重测。调块大小、只开一半都救不回来；要改的是调度，不是核。" % N.FUSE_OTHER_PCT)
+               "实测：同一颗核在 20 层底座上是误差内（%.1f%%）：换了条件，结论就要重测。调块大小、只开一半推断也救不回来（没上卡测）；要改的是调度，不是核。" % N.FUSE_OTHER_PCT)
     f.save("fig8b-fused.svg", yb + 14)
 
 

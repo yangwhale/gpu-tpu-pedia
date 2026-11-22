@@ -362,7 +362,7 @@ SCK_TCWAIT = (22.0, 132.2)         # 主核等它做完（ms/步）
 # 版本二分：同一颗核离线单独编译，热循环每个向量乘摊到几条指令包
 # 默认行为变了：all-to-all
 A2A_FORCE_GIB = 8.1                # 新版本上强行交给小核，峰值多 8.1 GiB
-A2A_BAR_SAVED_GIB = 3.0            # 优化器前加屏障以后全交给小核，还省约 3 GiB
+A2A_BAR_SAVED_GIB = 2.0            # 优化器前加屏障以后全交给小核：90.60 → 88.61 GiB，省约 2 GiB（只加屏障那格是省 3.0）
 # 看产物：两个名字、一个机制
 TWIN_GIB = 90.57
 TWIN_S = 5.120
@@ -405,7 +405,7 @@ assert [round((b / a - 1) * 100, 1) for _n, _p, (a, b) in PRED_VS_REAL] == [6.3,
 DL_W1 = (2.037, 2.044); DL_W4 = (1.374, 1.133); DL_WAIT_MS = 636   # 9 层的倒序阶梯配置；那台主机每步等数据 636 ms
 LONG_CTL_1, LONG_CTL_3 = LONG_CTL[1], LONG_CTL[3]
 PAIR_FRAC_SHORT, PAIR_FRAC_LONG = 0.057, 0.971   # 注意力有效配对占满因果的比例：短文 / 长文（数据重放）
-STACK_SAVE_MS, STACK_RS_MS, STACK_AR_MS, STACK_NET_MS = 156, 121, 82, 25   # 长文、暂存上限之上再叠融合核：省的计算 / 露出规约 / 同步 AR / 整步净省
+STACK_SAVE_MS, STACK_RS_MS, STACK_AR_MS, STACK_NET_MS = 156, 121, 82, 25   # 长文、暂存上限之上再叠融合核（连同一项布局改动）：最忙芯片 profile 的省的计算 / 露出规约 / 同步 AR / 净省；整步 4.672 → 4.657 s
 assert STACK_SAVE_MS == 81 + 40 + 22 + 13
 PRED_OK = (-12.4, -10.0)                     # 只改计算、不改搬运的一次核改动：预测前向 / 单芯片真机前向（9.12 → 8.21 ms）
 assert abs((8.21 / 9.12 - 1) * 100 - PRED_OK[1]) < 0.1
