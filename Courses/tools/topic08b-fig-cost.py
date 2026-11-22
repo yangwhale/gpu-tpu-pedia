@@ -141,7 +141,7 @@ def fig_cecells():
                % ((N.CE_CTL, N.CE_PCT["cal"], N.CE_PCT["agm"], N.CE_PCT["calagm"], N.CE_PCT["fk"], N.CE_PCT["fkm"], -N.CE_PCT["fk0"], N.CE_PCT["calfk0"])
                   + (N.CE["ctl"][1], round(N.CE["ctl"][0] * 1000), N.CE["cal"][1], round(N.CE["cal"][0] * 1000),
                      N.CE["calagm"][1], round(N.CE["calagm"][0] * 1000), N.CE["fk0"][1], round(N.CE["fk0"][0] * 1000))))
-    y0 = f.header("把估计调准了，调度器算的整步对上了实测，上卡却慢了",
+    y0 = f.header("把估计调准了，调度器估的整步落到实测附近，上卡却慢了",
                   "Ⓐ 条 ＝ 上卡实测步时对对照变化了百分之几（绿＝快，红＝慢）；Ⓑ 空心圈 ＝ 调度器自己估的整步，实心点 ＝ 上卡实测，同一行连一条线",
                   [(GR, "变快"), (RD, "变慢"), (GY, "空心：调度器估的；实心：实测")])
     # Ⓐ
