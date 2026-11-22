@@ -884,7 +884,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h1>GPU→TPU 训练性能优化</h1>
   <div class="hook">
     公开的 Hy4（770B 总参、49B 激活的多模态 MoE），在 64 片 TPU v7x（128 个设备）上、三条定死的条件下训练：从 20 层 12.9 秒（原始代码）优化到层数翻倍的 39 层 3.9 秒；有效 MFU 4.3% → 25.9%，过了 25%；编译约半小时 → 3 分钟。<br>
-    <small style="font-size:14px;line-height:1.6;display:inline-block;color:var(--gray)">两端都是长图文；首尾只能在同一底座上比，20 层同一个作业里原始代码慢 5.73 倍（三份数据的读数见<a href="#tab-data">读数对照表</a>）。4.3% 是推导值，推导式和以前纯文字长文上的读数见<a href="#s十一">第十一节</a>。编译指独占一台编译机、128 片一格：1522 → 181 秒。</small><br>
+    <small style="font-size:14px;line-height:1.6;display:inline-block;color:var(--gray)">两端都是长图文；首尾只能在同一底座上比，20 层同一个作业里原始代码慢 5.73 倍（三份数据的读数见<a href="#tab-data">读数对照表</a>）。4.3% 是推导值，推导式和以前以文字为主的长文上的读数见<a href="#s十一">第十一节</a>。编译指独占一台编译机、128 片一格：1522 → 181 秒。</small><br>
     <small style="font-size:14px;line-height:1.6;display:inline-block;color:var(--gray)"><b>局限一句话</b>：页首的数只量在长图文上；长短文档混拼、全是短文档两种数据还没测，后者是下一步第一优先（<a href="#s十一">第十一节</a>）。</small><br>
     <em>不在关键路径上的，省了也白省。</em>
   </div>
@@ -1128,7 +1128,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="680" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="680" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="707" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前两刀砍掉一大半，后面每站只抠几个百分点；换底座后每段从自己的起点重新量</tspan></text>
-</svg><figcaption><b>先看两条灰带：灰带两边各自从头量，不能跨着比。</b><span class="capmore"><br><em>曲线前两段是短文、第三段是纯文字长文的读数；各数据的终点见读数对照表。第三段的段内倍数含定稿之后三步。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（作者私有编年史总表与调优记录，64 片 v7x）：台阶旁的百分比是这一站对上一站，优先用同一个作业里的对照；跨作业的（如第 16 站）在编年史正文里写明。</p>
+</svg><figcaption><b>先看两条灰带：灰带两边各自从头量，不能跨着比。</b><span class="capmore"><br><em>曲线前两段是短文、第三段是以文字为主的长文，没画长图文；各数据的终点见读数对照表。第三段的段内倍数含定稿之后三步。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（作者私有编年史总表与调优记录，64 片 v7x）：台阶旁的百分比是这一站对上一站，优先用同一个作业里的对照；跨作业的（如第 16 站）在编年史正文里写明。</p>
 <p>段内倍数：第一段 12.743 ÷ 2.731，第二段 5.476 ÷ 4.049，第三段 5.553 ÷ 3.868（本课推导）。</p>
 <p>定稿之后三步：路由先挑 top-k 再收集（同作业对照 4.120 → 4.082 秒）；融合核去掉报给调度器的耗时估计（4.088 → 3.931 秒，绕开了调度器挑锚点的问题）；调度门槛（同一台机器对照 3.907 → 3.868 秒，对照已含编译组合，编译组合本身 −0.5%、在噪声带边上；调度部分 30 步逐位）。三步都改了舍入，做过两道轻检查。终点是 30 步口径；同一配置 200 步长跑 3.941 秒、有效 25.22%（第 5–199 步，0 次回放、0 丢 token），比上一步的长跑 4.018 秒快 1.9%，长跑第一次过 25%。</p>
 <p>灰叉画在它所在底座上的实测步时，百分比对它自己的对照：预取下一层权重 4.948 → 5.388 秒；融合核照原样 4.351 → 4.692 秒；核耗时按实测校准 4.088 → 4.474 秒。</p>
@@ -1194,7 +1194,6 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>必须开上下文并行 8，每个设备只有 4096 token。</b>每层要收的专家权重不随 token 变；token 少，这笔通信就摊不薄。</li>
     <li><b>用 Muon 优化器。</b>每步先用几轮矩阵乘把动量矩阵「正交化」，再加到权重上；正交化要每个设备拿整块矩阵，所以还要跨卡搬动量。AdamW 那种逐元素更新的便宜做法用不上。</li>
   </ol>
-  <p class="fnote">子块：注意力按 1024 × 1024 切成的小块；静态公式：模型自带的分子公式，按整行因果和全部 token 算（第二节）。</p>
   <details class="foldfig"><summary><b>常用的五种提速手段为什么用不上</b>：加大 batch、短序列、换回 AdamW、FP8、权重留到反向，各自量过的代价</summary>
   <table class="t9 ftab"><thead><tr><th>常用的提速手段</th><th>为什么用不上</th><th>量过的代价</th></tr></thead><tbody>
   <tr><td>加大每卡 batch</td><td class="fimp">每颗芯片的 token 数被项目定在 8192（＝ 2 个设备 × 4096）</td><td>每芯 token 8192 放到 24576，有效 MFU 从 17.4% 到 25.9%（＋8.5 个点；另一份配方上量的，跟页首的 25.9% 无关）</td></tr>
@@ -1215,21 +1214,22 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <div class="wrap">
 <div class="foundbox" id="found">
   <div class="ft">开场：这次调优查清的 20 件事</div>
-  <p class="fsub">先看收益最大的 5 件（按收益排），只列现象和数，正文逐件讲；其余 15 件在下面的折叠里。</p>
+  <p class="fsub">先看收益最大的 5 件（按那一刀的收益排），正文逐件讲；其余 15 件在下面的折叠里。</p>
   <table class="t9 ftab"><thead><tr><th>现象</th><th>多大</th><th>在哪讲</th></tr></thead><tbody>
-<tr><td>原样跑，一步 12.743 秒</td><td class="fimp">主核 59.3% 在等；反向一层等 246 毫秒、专家矩阵乘 63</td><td><a href="#s三">第三节 · 站 0</a></td></tr>
-<tr><td>两项单测各快 6.5% 和 5.7%</td><td class="fimp">一起开快 16.9%：一加一大于二？</td><td><a href="#s六">第六节 · 站 14</a></td></tr>
-<tr><td>优化器里每块专家权重搬了设计的 2.5 倍</td><td class="fimp">修掉快 6.3%（局部修法 −7.3%），不改精度</td><td><a href="#s九">第九节 · 站 19</a></td></tr>
-<tr><td>一道只改调度的屏障</td><td class="fimp">快 6.9%，小核的活一点没少</td><td><a href="#s七">第七节 · 站 15</a></td></tr>
-<tr><td>定稿后同一颗融合核：去掉耗时估计；把估计校准准</td><td class="fimp">去掉快 3.8%；校准后全部变慢</td><td><a href="#s九">第九节 · 9.5</a></td></tr>
+<tr><td>原样跑（短文 12.743 秒），主核 59.3% 在等专家权重收发</td><td class="fimp">换切法那一刀 −45.4%</td><td><a href="#s三">第三节 · 站 1</a></td></tr>
+<tr><td>两项改动单测各快 6.5% 和 5.7%，一起开</td><td class="fimp">−16.9%：一加一大于二？</td><td><a href="#s六">第六节 · 站 14</a></td></tr>
+<tr><td>优化器里每块专家权重搬了设计的 2.5 倍</td><td class="fimp">修掉 −7.3%（局部修法；正式修法单独 −6.3%），不改精度</td><td><a href="#s九">第九节 · 站 19</a></td></tr>
+<tr><td>一道只改调度、不改数值的屏障</td><td class="fimp">−6.9%，小核的活一点没少</td><td><a href="#s七">第七节 · 站 15</a></td></tr>
+<tr><td>一颗融合核不报耗时</td><td class="fimp">快 3.8%；把耗时估准，反而慢 9.4%</td><td><a href="#s九">第九节 · 9.5</a></td></tr>
 </tbody></table>
   <details class="foldfig"><summary><b>其余 15 件</b>：按编年史排</summary>
+  <p class="fnote">子块：注意力按 1024 × 1024 切成的小块；静态公式：模型自带的分子公式，按整行因果和全部 token 算（第二节）。</p>
   <table class="t9 ftab"><thead><tr><th>现象</th><th>多大</th><th>在哪讲</th></tr></thead><tbody>
 <tr class="fgrp"><td colspan="3"><b>先把数量准（全程都用）</b>　<span>2 处</span></td></tr>
 <tr><td>同一次运行：静态口径 18.64%，有效口径 10.30%</td><td class="fimp">「别人 49%、我们 11%」不等于慢四倍</td><td><a href="#s二">第二节</a></td></tr>
 <tr><td>四格各开一条空操作开关，编出来跟对照一模一样</td><td class="fimp">连对照 5 格 5.309–5.311 秒，差 0.04%：性能的尺子</td><td><a href="#s二">第二节</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>从头到尾，同一个底座上直接比</b>　<span>1 处</span></td></tr>
-<tr><td>原始代码和定稿放进同一个作业（纯文字长文）</td><td class="fimp">12.914 → 2.228 秒，快 5.80 倍；长图文上 5.73 倍</td><td><a href="#s十一">第十一节</a></td></tr>
+<tr><td>原始代码和定稿放进同一个作业（以文字为主的长文）</td><td class="fimp">12.914 → 2.228 秒，快 5.80 倍；长图文上 5.73 倍</td><td><a href="#s十一">第十一节</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>第一段 · 20 层底座</b>　<span>1 处</span></td></tr>
 <tr><td>注意力反向跳块，少算约 340 毫秒</td><td class="fimp">步时只快 78 毫秒</td><td><a href="#s三">第三节 · 站 8</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>第二段 · 半层底座，短文</b>　<span>4 处</span></td></tr>
@@ -1386,12 +1386,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </div>
 
 <div class="wrap" id="tab-data">
-  <table class="t9"><thead><tr><th>读数对照（步时 · 有效 MFU）</th><th>20 层起点（原始代码）</th><th>20 层终点（定稿，同一个作业）</th><th>39 层终点（定稿之后三步）</th></tr></thead><tbody>
+  <table class="t9"><thead><tr><th>读数对照（步时 · 有效 MFU）</th><th>20 层起点（原始代码）</th><th>20 层终点（定稿，同一个作业）</th><th>39 层终点（半层底座，含定稿之后三步）</th></tr></thead><tbody>
   <tr><td><b>短文</b></td><td>12.743 秒 · 2.30%</td><td>—</td><td>—</td></tr>
-  <tr><td><b>纯文字长文</b></td><td>12.914 秒 · 4.17%†</td><td>2.228 秒 · 24.16%</td><td>3.868 秒 · 25.74%</td></tr>
+  <tr><td><b>长文（以文字为主）</b></td><td>12.914 秒 · 4.17%†</td><td>2.228 秒 · 24.16%</td><td>3.868 秒 · 25.74%</td></tr>
   <tr><td><b>长图文</b></td><td>12.899 秒 · 4.25%†</td><td>2.253 秒 · 24.35%</td><td>3.923 秒 · 25.88%</td></tr>
   </tbody></table>
-  <p style="color:var(--gray);font-size:14px">页首用的是长图文那一行（标准口径）。† 推导值：原始代码自己不打有效 MFU，借同一个作业里定稿那格的有效分子。短文没做同底座首尾比；39 层终点都是 30 步平均。</p>
+  <p style="color:var(--gray);font-size:14px">页首用的是长图文那一行（标准口径）。† 推导值：原始代码自己不打有效 MFU，借同一个作业里定稿那格的有效分子。短文那格是编年史站 0（另一个作业、取第 20–35 步、分子不同），只作参考，没做同底座首尾比。39 层终点是 30 步短格（取第 13–20 步）；同配置 200 步长跑 25.22%（第九节）。中间各站换过底座和数据，例如第一节的 5.31 秒是半层底座、短文。</p>
 </div>
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>一步的时间去哪了</h2></div>
   <p class="station">工具 · 解剖样本取自编年史站 13（半层底座、短文，一步 5.31 秒）</p>
@@ -1909,8 +1909,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>先看颜色：红＝砍通信字节（最上面），蓝＝排法与 kernel，橙＝给小核队列减负，灰＝数据；越往下一刀越小。</b><span class="capmore"><br><em>每一站叠在上一站之上。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测：站 0 有效 MFU 2.30%，站 12 12.25%（站 10 换了预打包数据，分子从 325.18 变成 386.56 TFLOP，有效 MFU 从这一站起跳一档）。</p>
 <p>站 2 合了两步：小核分工、token 分两块、先算 top-k（单测 +0.3%，在噪声内，站 5 时去掉）和搬来已上线的注意力配置 ＋ 层调度器（−29.0%）。前 7 站取第 20–35 步，从站 7 起第 5–9 步。站 0 的有效 MFU 2.30% 用这几步自己的有效分子（本课推导：2.30% × 12.743 × 1155 ≈ 338 TFLOP，跟第二节第 5–9 步的 325.18 不是同一批步）。</p></details></figure>
   <p class="deept"><b>同一把时间尺子看六格</b>　起点、两段末尾、两次换底座（profile 截图）</p>
-<figure class="fbox fwide shot" id="shot-ov"><img src="media/topic08b-shot-ov.webp" loading="lazy" alt="六个节点的一整步，同一把时间尺子：三段路、两次换底座。每张窗宽 13 秒；括号是芯片上被录下的那一步的实测长度；起点 12.7 秒 → 第一段末 2.9 秒；换半层底座 5.4 秒 → 4.0 秒；换长文 5.5 秒 → 4.2 秒" style="width:100%;height:auto;border:1px solid #dadce0;border-radius:6px">
-<figcaption><b>六个节点的一整步，同一把时间尺子：三段路、两次换底座</b><ol class="shotkey" style="margin:.3em 0 .2em 1.2em;padding:0;list-style:none"><li>每张窗宽 13 秒；括号是芯片上被录下的那一步的实测长度</li><li>起点 12.7 秒 → 第一段末 2.9 秒；换半层底座 5.4 秒 → 4.0 秒；换长文 5.5 秒 → 4.2 秒</li></ol><details class="figsrc"><summary>出处与口径</summary><p>实测：XProf，一颗芯片。图里每段标题和括号都是被录下的那一步，跟编年史里的多步均值略有出入。第一段最后一站没录 profile，图上 2.9 秒那一格是前一站，编年史第一段终点是 2.731 秒。换底座时一步里要算的东西也变了，只比每段自己的起点和终点。</p></details></figcaption></figure>
+<figure class="fbox fwide shot" id="shot-ov"><img src="media/topic08b-shot-ov.webp" loading="lazy" alt="六个节点的一整步，同一把时间尺子：三段路、两次换底座。每张窗宽 13 秒；括号是芯片上被录下的那一步的实测长度；起点 12.7 秒 → 第一段末 2.9 秒（录下的单步；30 步平均 2.731 秒）；换半层底座 5.4 秒 → 4.0 秒；换长文 5.5 秒 → 4.2 秒" style="width:100%;height:auto;border:1px solid #dadce0;border-radius:6px">
+<figcaption><b>六个节点的一整步，同一把时间尺子：三段路、两次换底座</b><ol class="shotkey" style="margin:.3em 0 .2em 1.2em;padding:0;list-style:none"><li>每张窗宽 13 秒；括号是芯片上被录下的那一步的实测长度</li><li>起点 12.7 秒 → 第一段末 2.9 秒（录下的单步；30 步平均 2.731 秒）；换半层底座 5.4 秒 → 4.0 秒；换长文 5.5 秒 → 4.2 秒</li></ol><details class="figsrc"><summary>出处与口径</summary><p>实测：XProf，一颗芯片。图里每段标题和括号都是被录下的那一步，跟编年史里的多步均值略有出入。第一段最后一站没录 profile，图上 2.9 秒那一格是前一站，编年史第一段终点是 2.731 秒。换底座时一步里要算的东西也变了，只比每段自己的起点和终点。</p></details></figcaption></figure>
 
   
   <h3 id="s3-1">3.1　先砍字节（站 0–3）</h3>
@@ -3292,7 +3292,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>定稿时离有效 25% 还差一截；定稿之后第二步 30 步短格过线，第三步长跑也过了（25.22%）；128 片全量版本离线编过、放得下，还没上卡。</p>
   <p>定稿之后又加了三步：① 路由先挑 top-k 再收集（4.082 秒，−0.9%；站 2 带过、站 5 因在噪声内去掉的同一类改动，长文上量出了收益）；② 融合核不报耗时、③ 调度门槛，都在 9.5；编译改动（9.6）叠在 ③ 的对照里，不单算一步。</p>
 <details class="foldfig"><summary><b>离 25% 差多少、128 片放不放得下</b></summary>
-  <p>按长文的有效分子推，25% 要 约 3.98 秒（1148.2 ÷（0.25 × 1155）），定稿按短格还要再降约 3.4%（约 139 毫秒），按长跑口径约 5.1%（约 215 毫秒）。定稿之后第二步 3.931 秒（25.33%）短格过线，它的 200 步长跑 4.018 秒（24.74%）还差约 1.0%（约 41 毫秒）；第三步短格 3.868 秒，200 步长跑 3.941 秒（25.22%），长跑也过了线。128 片全量的版本只在它上面多加一项视觉塔逐层重算：正常步 88.99 GiB，离余量线（上限 94.74 减 1.5）还有 4.25 GiB（定稿之后第二步那一版是 88.57 GiB、余 4.67 GiB；第三步 90.69 GiB，余 2.55 GiB）。各格的有效 MFU 用各自窗口那几步的分子，按 1148.2 折算会差 0.04 个百分点上下；显存为什么要在全量上单独编，见 3.4。</p>
+  <p>按长文的有效分子推，25% 要 约 3.98 秒（1148.2 ÷（0.25 × 1155））（这几格的有效 MFU 是作业自己报的，拿 1148.2 反推会差 0.04 个百分点以内），定稿按短格还要再降约 3.4%（约 139 毫秒），按长跑口径约 5.1%（约 215 毫秒）。定稿之后第二步 3.931 秒（25.33%）短格过线，它的 200 步长跑 4.018 秒（24.74%）还差约 1.0%（约 41 毫秒）；第三步短格 3.868 秒，200 步长跑 3.941 秒（25.22%），长跑也过了线。128 片全量的版本只在它上面多加一项视觉塔逐层重算：正常步 88.99 GiB，离余量线（上限 94.74 减 1.5）还有 4.25 GiB（定稿之后第二步那一版是 88.57 GiB、余 4.67 GiB；第三步 90.69 GiB，余 2.55 GiB）。各格的有效 MFU 用各自窗口那几步的分子，按 1148.2 折算会差 0.04 个百分点上下；显存为什么要在全量上单独编，见 3.4。</p>
 </details>
 
 <details class="foldfig"><summary><b>128 片全量版本的两个显存旁证：省显存的开关不是越多越好</b></summary>
@@ -4353,7 +4353,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>原始代码自己不打有效 MFU。借同一个作业（20 层、生产图像比例的长图文）里定稿那一格的有效分子 633.7 TFLOP，除以原始代码的步时 12.899 秒，再除以 1155 TFLOP/s，约 4.25%；同数据、同层数，每步的有效计算量相同。同一个作业里定稿 2.253 秒，快 5.73 倍。上图是以前以文字为主的长文数据上同样做的一组（另一个作业，原始代码 12.914 秒），快 5.80 倍；那份数据上推荐配置的 200 步长跑是 3.941 秒、有效 25.2%。</p>
 </details>
 
-  <p><b>站数多，不等于每一站都大</b>：同一个底座上快 5.80 倍（纯文字长文；其余见读数对照表），第一段就占 4.62 倍。</p>
+  <p><b>站数多，不等于每一站都大</b>：同一个底座上快 5.80 倍（以文字为主的长文；其余见读数对照表），第一段就占 4.62 倍。</p>
 <details class="foldfig"><summary><b>另两种数据为什么还没管到</b></summary>
   <p>页首的主口径是生产图像比例的长图文，一行基本是一整篇长文档。另两种数据还没管到：长短文档混拼会让上下文并行各分片负载不对称（GPU 上也一样，判断未实测；按长度分桶应能缓解，也还没测）；全是短文档时每篇只占对角线上的小三角，块里大半被掩掉，利用率更低，新版还没测，是下一步第一优先。</p>
 </details>
