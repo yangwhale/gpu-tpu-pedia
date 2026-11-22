@@ -1691,7 +1691,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="679" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">静态公式按大三角数，模型要的只是对角线上那几个小三角</tspan></text>
 </svg><figcaption><b>左边是公式数的，右边是模型要的。</b><span class="capmore"><br><em>示意图的文档长度是编的；真实数据的比例在右下。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 示意：8 篇文档的长度是编的（加起来 32768），小三角占大三角的 17.1% 由脚本现算。</p>
 <p>📌 实测：真实图文数据一行平均约 28 篇文档（在线打包；预打包约 32）；文档内配对占整行因果的比例，在线打包的数据是 8.4%，离线预打包的数据是 11.2%（第 5–9 步）。</p>
-<p>📌 实际算的比要的多：注意力核按 1024 × 1024 的块算，块里只要有一个点要算，整块都算。预打包数据某一步平均每个设备保留满因果的 24.2% 的块，要的配对只有 11.2%（本课推导：两者不是同一个分母的精确比，只说明一半左右的块是半掩的）。</p></details></figure>
+<p>📌 实际算的比要的多：注意力核按 1024 × 1024 的块算，块里只要有一个点要算，整块都算。预打包数据某一步平均每个设备保留满因果的 24.2% 的块，要的配对只有 11.2%（本课推导：两者分母都是满因果，一个按块、一个按配对，窗口也不同；同一步算约三分之一的块是半掩的，见 2.4）。</p></details></figure>
 <figure class="fbox fwide" id="fig-numerator"><svg viewBox="0 0 1400 598" width="100%" role="img" aria-label="一根横条从静态公式数的分子 608.55 TFLOP 开始，减掉跨文档的注意力 41.7%、减掉填充 8.2%，加上静态公式漏计的 MTP 输出头 2.8%、视觉塔按实际图像块 0.6%，得到有效分子 325.18 TFLOP，只有原来的 53%。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">静态公式数的分子，一半不是模型真正需要的</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">条长 ＝ 每设备每步的运算量（TFLOP）；红 ＝ 扣掉的，绿 ＝ 补上的，蓝 ＝ 剩下的有效分子</text>
@@ -1967,11 +1967,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>之后换预打包数据、MoE 缓冲只读写有效行（各 −2 到 −3%）；<b>站 12</b> 拿公开模型（第四节的参照）的 profile 对照，看出主核每层还多等 10 毫秒，差在反向；按差的地方重新分配小核的活、把缓冲压到 4 倍，−7.3%，到 2.731 秒。</p>
 <details class="foldfig"><summary><b>站 8–12 逐站四件事</b></summary>
 
-  <table class="t9 mini" id="tab-front3"><caption>站 8–12：小核队列，再回到排法</caption><thead><tr><th>站</th><th>看到什么</th><th>怎么判断的</th><th>做了什么</th><th>快了多少（对同作业对照）</th></tr></thead><tbody><tr><td>8</td><td>约 4.0 秒那一格，小核 0 被占 3,424 毫秒，占设备一步的 88%；其中 1,203 毫秒不是通信，是 token 重排这类 kernel</td><td>只压主核不见效：注意力反向跳块，注意力核少算约 340 毫秒，步时只快 78；把通信提前发的调度变换也没用，队列满了，提前也没空位</td><td>跳块照留，但知道了瓶颈不在主核</td><td>3.577 → 3.496 秒（−2.2%）</td></tr><tr><td>9</td><td>同上</td><td>完美重叠的下限就是小核 0 那条队列：要从小核上拿走实活</td><td>token 排序挪回主核（缓冲 7.75 倍，溢出的那步整步回放）</td><td>3.496 → 3.100 秒（−11.3%）</td></tr><tr><td>10、11</td><td>数据填充 15.1%（第 5–9 步这几步；第 0–49 步统计是 12.6%，2.2 用的是这个）；主核上的 MoE 胶水按整块缓冲读写</td><td>第二节：换数据先变分子；胶水按有效行就够</td><td>换离线预打包数据；MoE 缓冲只读写有效行</td><td>3.100 → 3.031 → 2.946 秒（−2.4%、−2.9%）</td></tr><tr><td>12</td><td>两颗小核真在执行的只剩 45%、44%，队列不满了；主核每层还停等 20.5 毫秒，参照只有 10.3</td><td>差距全在反向；单项最大是一个输出投影的权重梯度规约，完成点露出 7.2 毫秒。照搬参照的钉核反而慢 2.1%：另一颗小核还有活</td><td>按自己的诊断改三处：规约只钉一颗小核、路由权重的累加挪回主核、那个输出投影的权重梯度提前；缓冲压到 4 倍</td><td>2.946 → 2.731 秒（−7.3%），有效 MFU 12.25%</td></tr></tbody></table>
+  <table class="t9 mini" id="tab-front3"><caption>站 8–12：小核队列，再回到排法</caption><thead><tr><th>站</th><th>看到什么</th><th>怎么判断的</th><th>做了什么</th><th>快了多少（对同作业对照）</th></tr></thead><tbody><tr><td>8</td><td>约 4.0 秒那一格，小核 0 被占 3,424 毫秒，占设备一步的 88%；其中 1,203 毫秒不是通信，是 token 重排这类 kernel</td><td>只压主核不见效：注意力反向跳块，注意力核少算约 340 毫秒，步时只快约 80；把通信提前发的调度变换也没用，队列满了，提前也没空位</td><td>跳块照留，但知道了瓶颈不在主核</td><td>3.577 → 3.496 秒（−2.2%）</td></tr><tr><td>9</td><td>同上</td><td>完美重叠的下限就是小核 0 那条队列：要从小核上拿走实活</td><td>token 排序挪回主核（缓冲 7.75 倍，溢出的那步整步回放）</td><td>3.496 → 3.100 秒（−11.3%）</td></tr><tr><td>10、11</td><td>数据填充 15.1%（第 5–9 步这几步；第 0–49 步统计是 12.6%，2.2 用的是这个）；主核上的 MoE 胶水按整块缓冲读写</td><td>第二节：换数据先变分子；胶水按有效行就够</td><td>换离线预打包数据；MoE 缓冲只读写有效行</td><td>3.100 → 3.031 → 2.946 秒（−2.4%、−2.9%）</td></tr><tr><td>12</td><td>两颗小核真在执行的只剩 45%、44%，队列不满了；主核每层还停等 20.5 毫秒，参照只有 10.3</td><td>差距全在反向；单项最大是一个输出投影的权重梯度规约，完成点露出 7.2 毫秒。照搬参照的钉核反而慢 2.1%：另一颗小核还有活</td><td>按自己的诊断改三处：规约只钉一颗小核、路由权重的累加挪回主核、那个输出投影的权重梯度提前；缓冲压到 4 倍</td><td>2.946 → 2.731 秒（−7.3%），有效 MFU 12.25%</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>实测：站 8 的诊断来自约 4.0 秒那一格逐事件记账（只录了小核 0，小核 1 是推断）。站 12 三处单测 −0.5%、−1.0%、−3.7%，合开 −4.6%；挪回主核那项离线估能省约 0.36 秒，实测只省 0.03 秒：省下的小核时间原本大半藏在主核计算后面（推断）。</p><p>站 10 换数据，有效 MFU 从这一站起跳一档（分子 325.18 → 386.56 TFLOP），步时可以接着比。</p></details>
 
 </details>
-<details class="foldfig"><summary><b>考考自己</b>：站 8：注意力反向跳块，注意力核少算约 340 毫秒，步时只快 78。按第一节的说法，你先怀疑什么？</summary><p>省下的计算不在关键路径上。那时关键路径是小核 0 那条队列（占满步长的 88%），主核算得再快，也只是换个地方等。把 token 排序挪回主核、给小核减负，才快了 11.3%。</p></details>
+<details class="foldfig"><summary><b>考考自己</b>：站 8：注意力反向跳块，注意力核少算约 340 毫秒，步时只快约 80 毫秒。按第一节的说法，你先怀疑什么？</summary><p>省下的计算不在关键路径上。那时关键路径是小核 0 那条队列（占满步长的 88%），主核算得再快，也只是换个地方等。把 token 排序挪回主核、给小核减负，才快了 11.3%。</p></details>
 
   <h3 id="s3-4">3.4　衔接①：换到半层底座</h3>
   <p><b>为什么换。</b>换成半层底座：78 层主干留 39 层、视觉塔 40 层留 20 层，再加 MTP 头。半层底座层数减半、切参数的份数也减半，所以每设备的参数和每层的活都跟 128 片全量一样。20 层底座每层的活一样，但每设备参数只有一半，优化器偏轻。</p>
@@ -2200,7 +2200,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>找关键路径：该省 578 毫秒，只快 148 毫秒</h2></div>
 
   <table class="t9 mini" id="tab-mid-map"><caption>第二段（半层底座·短文）的四站在哪讲</caption><thead><tr><th>站</th><th>计入编年史的改动</th><th>对上一站</th><th>在哪讲</th></tr></thead><tbody><tr><td>13</td><td>数据滤掉长文档</td><td>−2.7%</td><td>第五节</td></tr><tr><td>14</td><td>少搬字节（改了精度，第六节讲）</td><td>−16.9%</td><td>第六节</td></tr><tr><td>15</td><td>三样改排法、改存什么的改动（第七节讲）</td><td>−6.0%</td><td>第七节</td></tr><tr><td>16</td><td>两类通信分开排队（第六节讲）</td><td>−2.4%（跨作业）</td><td>第六节 6.4 讲，第七节末计入</td></tr></tbody></table>
-  <details class="figsrc"><summary>出处与口径</summary><p>作者私有编年史总表；中间穿插的单项读数（例如 7.1 屏障单独 −6.9%、6.4 分两颗小核单独 −3.1%）是旁证，不是站。</p></details>
+  <details class="figsrc"><summary>出处与口径</summary><p>作者私有编年史总表；中间穿插的单项读数（例如 7.1 屏障单独 −6.9%、6.4 限 2 条在飞＋分两颗小核 −3.1%）是旁证，不是站。</p></details>
 
   <details class="foldfig"><summary><b>这一段出现的几个「对照」各是哪一格</b>：5.476、5.448、5.311、5.300</summary>
   <p>5.476 秒：衔接①，同一份推荐配置放到半层底座的第一次读数。5.448 → 5.300 秒：站 13 自己那个作业里，滤长文档前后的对照和改后。5.311 秒：另一个作业重跑滤完以后那份配置，第一节的解剖样本、第七节屏障的对照都用它（跟 5.300 差在跨作业尺子以内）。比收益时一律用同一个作业里的那一对。</p>
@@ -2587,14 +2587,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="740" y="344" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">小核 1</tspan></text>
 <rect x="820" y="264" width="109.2" height="30" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="820" y="324" width="317.2" height="30" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="820" y="392" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.415 → 4.280 秒（−3.1%）</tspan></text>
+<text class="svgsm" x="820" y="392" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.415 → 4.280 秒（−3.1%，含限 2 条在飞）</tspan></text>
 <rect x="0" y="482" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="482" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="482" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">能做的多半是藏：先看谁跟谁排在同一条队列里</tspan></text>
 </svg><figcaption><b>左边一条队列塞满，右边两条队列各走各的。</b><span class="capmore"><br><em>排布是示意，忙时和步时是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（改之前）：前向每层中位数，小核 0 忙 18.57 ms（专家权重收集 12.18、token 4.20、其它 2.18），主核计算 18.65 ms；小核 1 只忙 0.59 ms。</p>
 <p>实测：整步看，专家权重那条链在小核上一共 1389 ms，主核等它露出 381 ms；token 走另一个方向的链路，跟权重的两类通信不抢道。</p>
-<p>实测：用两个现成开关把 token 钉到小核 0、让编译器把专家权重收集排到小核 1：4.415 → 4.280 秒（−3.1%）；离线比过编译产物，只动了排布和核号，求和顺序不变。</p>
+<p>实测：在同时在飞的异步收集限 2 条（单开 −2.2%）的基础上，再用两个现成开关把 token 钉到小核 0、让编译器把专家权重收集排到小核 1，两项合起来 4.415 → 4.280 秒（−3.1%；分小核这一步约 −0.9%）；离线比过编译产物，只动了排布和核号，求和顺序不变。</p>
 <p>⚠️ 示意：左边小核 0 的段是按忙时拼的，实际顺序更碎；右边改之后的忙时没有逐层量，按改之前的分项画。</p></details></figure>
   </details>
   <p>同时在飞的异步收集限 2 条（不只专家权重收集；单开 −2.2%），再把两类通信分给两颗小核各排一队（不是两颗一起收同一条），合起来在站 14 上快 3.1%（同一常驻作业、不同分配）；叠到站 15 上跨作业量是 −2.4%，编年史按后者记（站 16）。</p>
@@ -3038,7 +3038,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="480" y="244" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">长文</tspan></text>
 <rect x="760.3759398496239" y="226" width="99.62406015037605" height="26" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="750" y="244" fill="#0d652d" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-1.1%</tspan></text>
-<text class="svgsm" x="40" y="336" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">token 和专家权重分到两颗小核</tspan></text>
+<text class="svgsm" x="40" y="336" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">收集限 2 条＋token 和专家权重分到两颗小核</tspan></text>
 <text class="svgsm" x="480" y="318" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">短文</tspan></text>
 <rect x="584.8018120045301" y="300" width="275.19818799546994" height="26" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="574" y="318" fill="#0d652d" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-3.1%</tspan></text>
@@ -3056,7 +3056,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="572" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="572" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="599" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">瓶颈换了地方：无效的翻正，有效的变小。换了数据，每一刀都要重测</tspan></text>
-</svg><figcaption><b>每把刀看上下两行：短文和长文，方向或大小都变了。</b><span class="capmore"><br><em>长文那格只看方向。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测：每格对它自己作业里的对照，第 5–9 步均值；短文那一列来自前几节的作业，长文来自长文数据上的作业；「分两颗小核」短文用第六节同作业的单测（4.415 → 4.280），长文那一格的对照来自另一个作业，只看方向。短文上的暂存上限那一格只有百分比读数（−0.4%）。</p>
+</svg><figcaption><b>每把刀看上下两行：短文和长文，方向或大小都变了。</b><span class="capmore"><br><em>长文那格只看方向。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测：每格对它自己作业里的对照，第 5–9 步均值；短文那一列来自前几节的作业，长文来自长文数据上的作业；「限 2 条＋分两颗小核」短文用第六节同作业的读数（4.415 → 4.280），长文那一格的对照来自另一个作业，只看方向。短文上的暂存上限那一格只有百分比读数（−0.4%）。</p>
 <p>长文数据：八成多的行是一整篇长文。同一配置换成长文，有效 MFU 10.98% → 17.83%，步时 5.311 → 5.553 秒。另在叠了前几节几刀的配置上比，长文比短文多出的 748 毫秒里 743 毫秒落在注意力两颗核上。</p>
 <p>推断：长文数据的路由更不均（最差层负载比到 2.3），MoE 那段也跟着变，这是长文结论最大的不确定性。</p></details></figure>
   <p>无效的翻正，有效的变小：片上暂存上限（主核旁边那块小而快的存储能用多大）短文上几乎没用，长文上成了收益最大的一刀，就是<b>站 18</b>（−2.3%）。<b>每压缩一次关键路径，就重新找一次；换一份数据，每一刀都要重测。</b></p>

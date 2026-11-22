@@ -156,13 +156,13 @@ def fig_twoqueue():
         else:
             f.box(x0 + 80, py + 132, 4.2 * SC, 30, PU, PU, 2)
             f.box(x0 + 80, py + 192, 12.2 * SC, 30, OR, OR, 2)
-            f.t(x0 + 80, py + 260, "%.3f → %.3f 秒（−%.1f%%）" % (N.SPLIT_CTL, N.SPLIT_S, N.SPLIT_PCT), GR, True, 14)
+            f.t(x0 + 80, py + 260, "%.3f → %.3f 秒（−%.1f%%，含限 2 条在飞）" % (N.SPLIT_CTL, N.SPLIT_S, N.SPLIT_PCT), GR, True, 14)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "能做的多半是藏：先看谁跟谁排在同一条队列里", [])
     yb = f.src(yb + 10,
                "实测（改之前）：前向每层中位数，小核 0 忙 %.2f ms（专家权重收集 12.18、token 4.20、其它 2.18），主核计算 %.2f ms；小核 1 只忙 %.2f ms。" % (N.FWD_SC0_BUSY, N.FWD_TC_COMPUTE, N.FWD_SC1_BUSY),
                "实测：整步看，专家权重那条链在小核上一共 %d ms，主核等它露出 %d ms；token 走另一个方向的链路，跟权重的两类通信不抢道。" % (N.CHAIN_SC_MS, N.CHAIN_EXPOSED_MS),
-               "实测：用两个现成开关把 token 钉到小核 0、让编译器把专家权重收集排到小核 1：%.3f → %.3f 秒（−%.1f%%）；离线比过编译产物，只动了排布和核号，求和顺序不变。" % (N.SPLIT_CTL, N.SPLIT_S, N.SPLIT_PCT),
+               "实测：在同时在飞的异步收集限 2 条（单开 −2.2%%）的基础上，再用两个现成开关把 token 钉到小核 0、让编译器把专家权重收集排到小核 1，两项合起来 %.3f → %.3f 秒（−%.1f%%；分小核这一步约 −0.9%%）；离线比过编译产物，只动了排布和核号，求和顺序不变。" % (N.SPLIT_CTL, N.SPLIT_S, N.SPLIT_PCT),
                "⚠️ 示意：左边小核 0 的段是按忙时拼的，实际顺序更碎；右边改之后的忙时没有逐层量，按改之前的分项画。")
     f.save("fig8b-twoqueue.svg", yb + 14)
 
