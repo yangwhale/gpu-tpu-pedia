@@ -1082,7 +1082,6 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1234" y="488" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">+0.1%</text>
 <path d="M 1234.89 444.53 L 1239.89 449.53 L 1234.89 454.53 L 1229.89 449.53 Z" fill="#1e8e3e" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="1293" y="476" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−0.9%</text>
-<path d="M 1293.31 446.26 L 1298.31 451.26 L 1293.31 456.26 L 1288.31 451.26 Z" fill="#1e8e3e" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="1329" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−3.8%</text>
 <path d="M 1329.83 454.13 L 1334.83 459.13 L 1329.83 464.13 L 1324.83 459.13 Z" fill="#1e8e3e" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="1366" y="487" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">−1.0%</text>
@@ -1130,7 +1129,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="707" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前两刀砍掉一大半，后面每站只抠几个百分点；换底座后每段从自己的起点重新量</tspan></text>
 </svg><figcaption><b>先看两条灰带：灰带两边各自从头量，不能跨着比。</b><span class="capmore"><br><em>曲线前两段是短文、第三段是以文字为主的长文，没画长图文；各数据的终点见读数对照表。第三段的段内倍数含定稿之后三步。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（作者私有编年史总表与调优记录，64 片 v7x）：台阶旁的百分比是这一站对上一站，优先用同一个作业里的对照；跨作业的（如第 16 站）在编年史正文里写明。</p>
 <p>段内倍数：第一段 12.743 ÷ 2.731，第二段 5.476 ÷ 4.049，第三段 5.553 ÷ 3.868（本课推导）。</p>
-<p>定稿之后三步：路由先挑 top-k 再收集（同作业对照 4.120 → 4.082 秒）；融合核去掉报给调度器的耗时估计（4.088 → 3.931 秒，绕开了调度器挑锚点的问题）；调度门槛（同一台机器对照 3.907 → 3.868 秒，对照已含编译组合，编译组合本身 −0.5%、在噪声带边上；调度部分 30 步逐位）。三步都改了舍入，做过两道轻检查。终点是 30 步口径；同一配置 200 步长跑 3.941 秒、有效 25.22%（第 5–199 步，0 次回放、0 丢 token），比上一步的长跑 4.018 秒快 1.9%，长跑第一次过 25%。</p>
+<p>定稿之后三步：路由先挑 top-k 再收集（同作业对照 4.120 → 4.082 秒）；融合核去掉报给调度器的耗时估计（4.088 → 3.931 秒，绕开了调度器挑锚点的问题）；调度门槛（同一台机器对照 3.907 → 3.868 秒，对照已含编译组合，编译组合本身 −0.5%、在噪声带边上；调度部分 30 步逐位）。三步都过了两道轻检查：只有融合核那步有舍入增删；top-k 那步不逐位但舍入点无增删；门槛那步本身逐位，舍入变化来自对照里的编译组合。终点是 30 步口径；同一配置 200 步长跑 3.941 秒、有效 25.22%（第 5–199 步，0 次回放、0 丢 token），比上一步的长跑 4.018 秒快 1.9%，长跑第一次过 25%。</p>
 <p>灰叉画在它所在底座上的实测步时，百分比对它自己的对照：预取下一层权重 4.948 → 5.388 秒；融合核照原样 4.351 → 4.692 秒；核耗时按实测校准 4.088 → 4.474 秒。</p>
 <p>为什么不把三段串乘成一个总倍数：每站对上一站的倍数串乘起来约 9.1 倍，同一底座实测只有 5.80 倍——换了底座，同一刀的收益不一样大。</p>
 <p>有效 25% 的线按长文有效分子 1148.2 TFLOP 推：1148.2 ÷（0.25 × 1155）≈ 3.98 秒（本课推导），只对长文那一段有意义。</p></details></figure>
@@ -1229,7 +1228,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <table class="t9 ftab"><thead><tr><th>现象</th><th>多大</th><th>在哪讲</th></tr></thead><tbody>
 <tr class="fgrp"><td colspan="3"><b>先把数量准（全程都用）</b>　<span>2 处</span></td></tr>
 <tr><td>同一次运行：静态口径 18.64%，有效口径 10.30%</td><td class="fimp">「别人 49%、我们 11%」不等于慢四倍</td><td><a href="#s二">第二节</a></td></tr>
-<tr><td>四格各开一条空操作开关，编出来跟对照一模一样</td><td class="fimp">连对照 5 格 5.309–5.311 秒，差 0.04%：性能的尺子</td><td><a href="#s二">第二节</a></td></tr>
+<tr><td>四格共五条空操作开关，编出来跟对照一模一样</td><td class="fimp">连对照 5 格 5.309–5.311 秒，差 0.04%：性能的尺子</td><td><a href="#s二">第二节</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>从头到尾，同一个底座上直接比</b>　<span>1 处</span></td></tr>
 <tr><td>原始代码和定稿放进同一个作业（以文字为主的长文）</td><td class="fimp">12.914 → 2.228 秒，快 5.80 倍；长图文上 5.73 倍</td><td><a href="#s十一">第十一节</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>第一段 · 20 层底座</b>　<span>1 处</span></td></tr>
@@ -1817,7 +1816,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="482" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="482" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一个作业里比，尺子是 0.002 秒；跨作业比，尺子放宽到 0.018 秒</tspan></text>
-</svg><figcaption><b>蓝点挤成一团，红点远在带外。</b><span class="capmore"><br><em>上一行同一个作业，下一行不同作业。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：同一个作业里，对照 5.311 秒（第 13–20 步），四格各加一条开关、编出来的程序跟对照只差步数常量（离线逐条比过），5.309、5.310、5.309、5.310 秒（第 5–9 步）。</p>
+</svg><figcaption><b>蓝点挤成一团，红点远在带外。</b><span class="capmore"><br><em>上一行同一个作业，下一行不同作业。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：同一个作业里，对照 5.311 秒（第 13–20 步），四格共开了五条开关（有一格同时开两条）、编出来的程序跟对照只差步数常量（离线逐条比过），5.309、5.310、5.309、5.310 秒（第 5–9 步）。</p>
 <p>📌 实测：不同作业里同一个对照配置 10 次：5.300、5.311、5.313、5.311、5.313、5.308、5.310、5.314、5.315、5.318 秒。窗口不全相同（作业第一格取第 13–20 步或第 12–19 步，其余取第 5–9 步）。</p>
 <p>⚠️ 本课推导：尺子取同一行两两之差的最大值，跟专题八的噪声尺子同一个造法；生效开关甲比对照快 0.145 秒，是同作业尺子的 72.5 倍。</p>
 <p>⚠️ 跨作业为什么更散，素材里没有拆（推断：机器、时段不同）。</p></details></figure>
@@ -2876,7 +2875,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="393" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运行库也是变量：升级以后先普查，看见的那处在代码里兜住</tspan></text>
 </svg><figcaption><b>红条是新版本，热循环每趟的指令包是旧版本的约五倍；最下面一行是代码里兜住以后。</b><span class="capmore"><br><em>「指令包」是编译器排好的一拍指令，条越长热循环越长。同一颗核单独离线编译。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（离线单核对比）：0.0.46 对 0.0.53.1，热循环每趟 41 → 198 个指令包；新版本不再对这个循环做软件流水，循环里不变的量也不再提到循环外（从指令排布判断）。</p>
 <p>实测（profile）：这颗核每次执行 1.68 → 5.39 ms；主核等它 22.0 → 132.2 ms；同一份配方一步 1329.4 → 1499.5 ms。</p>
-<p>实测（离线单核编译）：这是 SparseCore 上做 ragged gather-reduce 的核；代码里只改一行，给热循环展开 8 次，每个元素的计算不变。新版本上每次向量乘摊到的指令包 12.62 → 2.47，旧版本展开后 2.44、原样约 2.56。</p>
+<p>实测（离线单核编译）：这是 SparseCore 上做 ragged gather-reduce 的核；代码里只改一行，给热循环展开 8 次，每个元素的计算不变。新版本上每次向量乘摊到的指令包 12.62 → 2.47，旧版本展开后 2.44、原样 2.60。</p>
 <p>本讲的模型正常训练步不用这颗核（走主核上的排序），只有 token 溢出、整步回放的那一步会用到。</p></details></figure>
   <p>0.0.46 对 0.0.53.1：这个热循环每跑一趟，从 41 个指令包变成 198 个，长了约五倍；代码里展开 8 次，在新版本上编回了旧水平。</p>
 <details class="foldfig"><summary><b>新版本到底改了哪种排法</b></summary>
