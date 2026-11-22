@@ -325,8 +325,8 @@ for (_n, _p), (_n2, _a, _b) in zip(BAR_PHASES, BAR_PHASES_MS):
 BAR_SC1_BWD = (1935.7, 1936.0)                # 反向窗口里小核 1 的忙时：一点没少
 BAR_LAYER = (79.7, 70.3)                      # 反向每层（ms）
 BAR_BWD_CUT_PCT = 12
-BAR_SC1_DIFF_PCT = 0.02                       # 反向窗口里小核 1 的忙时：加屏障前后只差 0.02%（只给比例：整步合计和每层中位数一凑就是层数）
-BAR_LAYER_CUT_PCT = 11.8                      # 反向每层短了约一成（只给比例）
+BAR_SC1_DIFF_PCT = 0.02                       # 反向窗口里小核 1 的忙时：加屏障前后只差 0.02%（正文给了绝对值；半层 39 层本来就公开）
+BAR_LAYER_CUT_PCT = 11.8                      # 反向每层短了约一成
 BAR_BRACKET = (801, 1261)                     # 反向循环里，每条小核通信「放行到完成」之间夹的计算，合计
 BAR_EMPTY = (18, 1)                           # 括号里一个计算都没有的条数
 BAR_HOIST_GIB = 7.125                         # 被提前到前向之前、一直活到优化器段的那块数据
@@ -446,7 +446,7 @@ MU_SEG_MS = 742.3                                # 优化器段（视觉塔反�
 # 修好以后（结果先放回参数自己的切法、再加到 FP32 主权重上）：离线编译产物整步统计，只给比例
 MU_A2A_LEFT_PCT = 42                             # 整步 all-to-all 字节剩原来的约 42%（FP32 的 all-to-all 全没了）
 MU_F32_AG_CUT_PCT = 97                           # 整步 FP32 all-gather 少了约 97%（另一类按头切开的叶子原来用「全收再切」搬 FP32，一并去掉）
-MU_MEM_CUT_PCT = 8                               # 正常步峰值显存少约 8%（只给比例）
+MU_MEM_CUT_PCT = 8                               # 正常步峰值显存少约 8%
 MU_CTL, MU_S = 4.673, 4.377                      # 同一作业两格，第 5–9 步
 MU_PCT = (1 - MU_S / MU_CTL) * 100
 assert abs(MU_PCT - 6.3) < 0.05, MU_PCT
@@ -861,3 +861,4 @@ F0_BWD_GB = 19.3 + 38.7                          # 3.1：反向一层重收权�
 F0_BWD_MS = F0_BWD_GB / 186 * 1000               # ≈ 312 ms（借第六节实测链路速度）
 F0_BWD_X = F0_BWD_MS / 63                        # ≈ 5 倍（对反向一层专家矩阵乘 63 ms）
 assert abs(F0_BWD_MS - 312) < 2 and abs(F0_BWD_X - 4.95) < 0.05
+NOPREC_PRED_MULT = NOPREC_CTL * (LEGALIZER_S / 5.311) * (SML_S / 5.311) * (WO_SINGLE_S / 5.311)   # 6.3 出处：三个单项按相乘推
