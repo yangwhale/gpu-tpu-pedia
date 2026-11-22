@@ -4,7 +4,7 @@ r"""专题九 · 开篇总览：一张阶梯曲线看全程（2026-11-22）。
 fig8b-curve   回答：随着一项项改动推进，步时一步一步跳了多少？
               横轴一站一格（时间顺序），纵轴步时（对数轴：同样的百分比 ＝ 同样的高度）。
               两次换底座处断开、画灰带：同一配置在新旧底座各量一次，用虚线连起来——高低不能跨灰带比。
-              下面一条：同一底座、同一份长文数据上首尾直接比（5.80 倍），这是唯一能跨段相除的数。
+              曲线只负责「一级一级往下跳、每级多少」；绝对终点看页首。同一底座首尾直接比（5.80 倍）挪到第十一节（fig8b-mile）。
 
 刻意没画：
   · 右轴有效 MFU —— 有效分子在「换预打包数据」「滤掉长文档」「换长文」三处都变了，一根右轴会让人跨段比 MFU。
@@ -33,12 +33,11 @@ def fig_curve():
     aria = ("开篇总览，一条阶梯曲线。第一段 20 层底座：原样 %.3f 秒，两刀砍掉一大半（−45.4%%、−29.0%%），到第 12 站 %.3f 秒，段内 %.2f 倍。"
             "换底座（20 层换半层）后同一配置是 %.3f 秒；第二段短文到第 16 站 %.3f 秒，段内 %.2f 倍。换长文后同一配置是 %.3f 秒；"
             "第三段长文到第 27 站定稿 %.3f 秒，后面每站只抠 1%% 上下，最后三站是精度修正；定稿之后再三步，%.3f 秒，有效 MFU %.2f%%（30 步口径；200 步长跑也过了 25%%）。"
-            "灰色叉是试过、变慢、没采用的三次尝试：%s。下面一条：同一底座、同一份长文数据直接比，%.3f → %.3f 秒，快 %s 倍。"
+            "灰色叉是试过、变慢、没采用的三次尝试：%s。"
             % (N.FRONT_BASE_S, N.FRONT_END_S, N.CURVE_SEG_X[0], N.HALF_START, N.HALF[-1][2], N.CURVE_SEG_X[1], N.LONG_START,
-               N.END_S, N.CURVE_END_S, N.CURVE_END_MFU, "、".join("%s +%.1f%%" % (r[1], r[3]) for r in N.CURVE_REJ),
-               N.MILE20_0, N.MILE20_3, N.MILE20_X_T))
+               N.END_S, N.CURVE_END_S, N.CURVE_END_MFU, "、".join("%s +%.1f%%" % (r[1], r[3]) for r in N.CURVE_REJ)))
     f = Fig(W, aria)
-    y0 = f.header("一张图看全程：一站一站往下抠，%.1f 秒 → %.2f 秒（30 步口径）" % (N.FRONT_BASE_S, N.CURVE_END_S),
+    y0 = f.header("一张图看全程：一站一站往下抠，每级多少",
                   "每级台阶是一站的步时（纵轴：秒，取对数，同样的百分比台阶一样高）。灰带是换测试底座，同一配置在两边各量一次（虚线），不是变慢，高低不能跨灰带比",
                   [(BL, "20 层底座"), (OR, "半层底座 · 短文"), (PU, "半层底座 · 长文"), (GR, "◆ 数值不逐位"), (REJC, "✕ 试过、变慢、没采用")])
     PH = 530
@@ -152,15 +151,10 @@ def fig_curve():
     f.t(SX["b17"] + 0.95 * U, Y(N.TARGET25_S) + 15, "有效 25%", GR, size=11.5)
 
     # 关键读数
-    f.t(SX[0] + HW + 8, Y(N.FRONT_BASE_S) + 5, "原样 %.3f 秒 · 有效 %.2f%%" % (N.FRONT_BASE_S, N.FRONT_BASE_MFU), INK, True, 13)
+    f.t(SX[0] + HW + 8, Y(N.FRONT_BASE_S) + 5, "原样 %.3f 秒" % N.FRONT_BASE_S, INK, True, 13)
     f.t(SX[11], Y(N.FRONT_END_S) + 46, "%.3f 秒 · %.2f%%" % (N.FRONT_END_S, N.FRONT_END_MFU), INK, size=12, anchor="middle")
     f.t(SX[16], Y(N.HALF[-1][2]) + 36, "%.3f 秒 · %.2f%%" % (N.HALF[-1][2], N.HALF[-1][3]), INK, size=12, anchor="middle")
     f.t(SX[25], Y(N.END_S) + 48, "定稿 %.3f 秒 · %.2f%%" % (N.END_S, N.END_MFU), INK, size=12, anchor="middle")
-    xe = SX["p%d" % (len(post) - 1)] + HW
-    f.t(xe, Y(N.CURVE_END_S) + 56, "%.3f 秒 · 有效 %.2f%%（30 步口径）" % (N.CURVE_END_S, N.CURVE_END_MFU), PU, True, 15, "end")
-    f.t(xe, Y(N.CURVE_END_S) + 75, "200 步长跑 %.3f 秒 · %.2f%%，长跑也第一次过 25%%" % (N.CURVE_RUN200_S, N.CURVE_RUN200_MFU),
-        PU, size=12, anchor="end")
-    f.t(xe, Y(N.CURVE_END_S) + 93, "定稿之后：路由先挑 top-k；去掉融合核估计；编译组合 ＋ 调度门槛", GY, size=11.5, anchor="end")
 
     # 横轴：站号（定稿之后不编号）
     for s, *_r in st:
@@ -168,21 +162,8 @@ def fig_curve():
             f.t(SX[s], BOT + 22, str(s), GY, size=11.5, anchor="middle")
     f.t(X0 - 8, BOT + 22, "站", GY, size=11.5, anchor="end")
 
-    # 同一底座直接比（下面一条）
-    y2 = py + PH + 16
-    PH2 = 150
-    py2 = f.panel(0, y2, W, PH2, "首尾放到一起直接比：20 层底座、长文数据、一个作业里连着量", INK)
-    bx0, sc = 330, 900.0 / N.MILE20_0
-    labs = ["原样（原始代码）", "第一段终点", "第二段终点", "长文定稿"]
-    for i, (n, t) in enumerate(N.MILE20):
-        yy = py2 + 16 + i * 26
-        f.t(bx0 - 12, yy + 14, labs[i], INK, size=12.5, anchor="end")
-        f.box(bx0, yy + 2, t * sc, 16, INK if i == 0 else GY2, INK if i == 0 else GY2, 3)
-        tag = "%.3f 秒" % t + ("" if i == 0 else "　×%.2f" % N.MILE20_SEG[i - 1])
-        f.t(bx0 + t * sc + 10, yy + 15, tag, INK, i == 3, 12.5)
-    f.t(W - 20, py2 + 100, "合计快 %s 倍" % N.MILE20_X_T, INK, True, 17, "end")
     f._pan = None
-    yb = f.band(py2 + PH2 + 18, "ok", "前两刀砍掉一大半，后面每站只抠几个百分点；换底座后每段从自己的起点重新量", [])
+    yb = f.band(py + PH + 18, "ok", "前两刀砍掉一大半，后面每站只抠几个百分点；换底座后每段从自己的起点重新量", [])
     yb = f.src(yb + 10,
                "实测（作者私有编年史总表与调优记录，64 片 v7x）：台阶旁的百分比是这一站对上一站，优先用同一个作业里的对照；跨作业的（如第 16 站）在编年史正文里写明。",
                "段内倍数：第一段 %.3f ÷ %.3f，第二段 %.3f ÷ %.3f，第三段 %.3f ÷ %.3f（本课推导）。" % (
@@ -198,5 +179,31 @@ def fig_curve():
     f.save("fig8b-curve.svg", yb + 14)
 
 
+
+def fig_mile():
+    f = Fig(W, "同一个底座（20 层）、同一份以文字为主的长文数据、同一个作业里，把原始代码和三段终点的配置各跑一格：原始代码 %.3f 秒，第一段终点 %.3f 秒（快 %.2f 倍），第二段终点 %.3f 秒（再快 %.2f 倍），定稿 %.3f 秒（再快 %.2f 倍），合计快 %s 倍。"
+            % (N.MILE20_0, N.MILE20_1, N.MILE20_SEG[0], N.MILE20_2, N.MILE20_SEG[1], N.MILE20_3, N.MILE20_SEG[2], N.MILE20_X_T))
+    y0 = f.header("首尾放到一起直接比：同一个底座、同一份数据、一个作业里连着量",
+                  "条长 ＝ 一步的秒数；只有这一组能首尾相除（20 层底座，以文字为主的长文）", [(INK, "原始代码"), (GY2, "三段终点")])
+    PH = 170
+    py = f.panel(0, y0, W, PH, "20 层底座、长文数据、一个作业（实测）", INK)
+    bx0, sc = 330, 900.0 / N.MILE20_0
+    labs = ["原样（原始代码）", "第一段终点", "第二段终点", "长文定稿"]
+    for i, (n, t) in enumerate(N.MILE20):
+        yy = py + 20 + i * 30
+        f.t(bx0 - 12, yy + 14, labs[i], INK, size=13, anchor="end")
+        f.box(bx0, yy + 2, t * sc, 18, INK if i == 0 else GY2, INK if i == 0 else GY2, 3)
+        tag = "%.3f 秒" % t + ("" if i == 0 else "　×%.2f" % N.MILE20_SEG[i - 1])
+        f.t(bx0 + t * sc + 10, yy + 16, tag, INK, i == 3, 13)
+    f.t(W - 20, py + 110, "合计快 %s 倍" % N.MILE20_X_T, INK, True, 17, "end")
+    f._pan = None
+    yb = f.band(py + PH + 18, "ok", "大头在前几刀的字节和队列上（第一段 4.62 倍），后两段各一成多", [])
+    yb = f.src(yb + 10,
+               "实测：20 层底座、长文数据、同一个作业。三段终点的配置截到 20 层（半层底座上原始代码放不下，要 103.24 GiB）。",
+               "这几个数跟编年史里的读数不是同一个底座、同一份数据，只在这张图里互相比。生产图像比例的长图文上同样做一组：%.3f → %.3f 秒，快 %s 倍（第十一节正文）。" % (N.STD_START_S, N.STD_V2_20[0], N.STD_X_T))
+    f.save("fig8b-mile.svg", yb + 14)
+
+
 if __name__ == "__main__":
     fig_curve()
+    fig_mile()
