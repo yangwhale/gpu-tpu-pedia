@@ -31,8 +31,8 @@ def fig_curve():
          [(s, n, t, m, p, 3) for s, n, t, m, p, _k in N.LONG]
     post = N.CURVE_POST
     aria = ("开篇总览，一条阶梯曲线。第一段 20 层底座：原样 %.3f 秒，两刀砍掉一大半（−45.4%%、−29.0%%），到第 12 站 %.3f 秒，段内 %.2f 倍。"
-            "换底座（20 层换半层）后同一配置是 %.3f 秒；第二段短文到第 16 站 %.3f 秒，段内 %.2f 倍。换长文后同一配置是 %.3f 秒；"
-            "第三段长文到第 27 站定稿 %.3f 秒，后面每站只抠 1%% 上下，最后三站是精度修正；定稿之后再三步，%.3f 秒，有效 MFU %.2f%%（30 步口径；200 步长跑也过了 25%%）。"
+            "换底座（20 层换半层）后同一配置是 %.3f 秒；第二段短文到第 16 站 %.3f 秒，段内 %.2f 倍。站 13 那套配置换长文是 %.3f 秒；"
+            "第三段长文到第 27 站定稿 %.3f 秒，多数每站 1–2%%（站 19 −7.3%%），最后三站是精度修正；定稿之后再三步，%.3f 秒，有效 MFU %.2f%%（30 步口径；200 步长跑也过了 25%%）。"
             "灰色叉是试过、变慢、没采用的三次尝试：%s。"
             % (N.FRONT_BASE_S, N.FRONT_END_S, N.CURVE_SEG_X[0], N.HALF_START, N.HALF[-1][2], N.CURVE_SEG_X[1], N.LONG_START,
                N.END_S, N.CURVE_END_S, N.CURVE_END_MFU, "、".join("%s +%.1f%%" % (r[1], r[3]) for r in N.CURVE_REJ)))
@@ -70,7 +70,7 @@ def fig_curve():
 
     # 换底座灰带
     for b, top_lab, bot_lab, t_new, prev in ((13, "换底座", "20 层→半层", N.HALF_START, 12),
-                                             (17, "换数据", "短文→长文", N.LONG_START, 16)):
+                                             (17, "换数据", "短文→长文", N.LONG_START, 13)):
         bx = SX["b%d" % b]
         f.box(bx - 0.85 * U, TOP - 6, 1.7 * U, BOT - TOP + 12, "#f1f3f4", "#f1f3f4", 4)
         f.t(bx, BOT - 26, top_lab, GY, True, 13, "middle")
