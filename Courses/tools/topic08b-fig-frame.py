@@ -62,7 +62,7 @@ def fig_budget():
     f.t(X(N.CTL_STEP), y2 - 10, "主机均值 %.2f 秒" % N.CTL_STEP, GY, size=13, anchor="middle")
     f.t(X0, y2 + 66, "空闲不到 2 毫秒：主核几乎没歇过，可六成在算、四成在等", GY, size=14)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "实测是理想的 %.1f 倍：四成在等，在算的那六成也是理想的 %.1f 倍" % (N.GAP_X, N.COMPUTE_OVER_IDEAL), [])
+    yb = f.band(py + PH + 20, "ok", "实测是理想的 %.1f 倍：四成在等；在算的那部分，也是理想的 %.1f 倍" % (N.GAP_X, N.COMPUTE_OVER_IDEAL), [])
     yb = f.src(yb + 10,
                "📌 实测（主机日志）：这一格跑 22 步，取第 13–20 步；步时 %.3f 秒（逐步 5.301–5.318），每设备每步有效运算量 %.1f TFLOP（第二节讲怎么数）。" % (N.CTL_STEP, N.CTL_EFF_TF),
                "⚠️ 本课推导：每设备峰值取 1155 TFLOP/s（MaxText 日志与项目报告的常数；v7x 每芯片公开值 2,307 ÷ 2 ＝ 1153.5，差 0.13%%）；理想 %.3f 秒 ＝ %.1f ÷ 1155；有效 MFU %.2f%% ＝ %.1f ÷ %.3f ÷ 1155。" % (N.IDEAL_S, N.CTL_EFF_TF, N.CTL_MFU * 100, N.CTL_EFF_TF, N.CTL_STEP),

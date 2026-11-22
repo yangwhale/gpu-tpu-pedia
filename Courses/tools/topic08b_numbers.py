@@ -849,3 +849,8 @@ CURVE_IDEAL_S = EFF_LONG / PEAK_DEV              # 长文上按峰值理想的�
 CURVE_GAP_X = CURVE_END_S / CURVE_IDEAL_S        # 还差几倍：3.868 ÷ 0.994 ≈ 3.89（＝ 1 ÷ 有效 MFU，差在有效分子取整）
 CURVE_GAP_RUN_X = CURVE_RUN200_S / CURVE_IDEAL_S # 按长跑口径：3.941 ÷ 0.994 ≈ 3.96（＝ 1 ÷ 25.22%）
 assert abs(CURVE_GAP_X - 3.89) < 0.005 and abs(CURVE_GAP_RUN_X - 3.96) < 0.005 and abs(100 / CURVE_END_MFU - CURVE_GAP_X) < 0.01
+
+# ── R4 补出处：正文里写成字面量、以前没登记的几处（来源都是作者私有调优文档）
+DSV3_BUSY_AVG_BLOCKS = 50       # 4.2 / fig-ref：对方文本数据第 5–9 步最忙设备平均约 50 个子块（本讲模型几乎每步 66）
+HW_MFU_FINAL = 36.5             # 11.3：定稿硬件 MFU（实际执行的矩阵运算，含重算、优化器、冗余；修正核的记账后）
+FINAL_PROFILE_S = 4.122         # 11.3：定稿时间账那次多芯片 profile 的步时
