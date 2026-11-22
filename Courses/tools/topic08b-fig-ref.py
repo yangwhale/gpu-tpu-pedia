@@ -69,7 +69,7 @@ def fig_selfslow():
     _listed = sum(ms for _n, ms in N.SELF_SLOW)
     _rest = N.SAME_TOTAL_DIFF_MS - _listed
     assert _listed == 164 and _rest == -534
-    rows = list(N.SELF_SLOW) + [("其余各类（没逐项拆，推断多为通信等待）", _rest)]
+    rows = list(N.SELF_SLOW) + [("其余（含两个窗口之差，没逐项拆）", _rest)]
     PH = 110 + 50 * len(rows)
     py = f.panel(0, y0, W, PH, "同样层数，同一步 profile 逐类相减（推断）", BL)
     XC, SC = 760, 1.1
