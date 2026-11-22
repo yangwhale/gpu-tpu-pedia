@@ -45,7 +45,7 @@ def fig_ladder():
         f.box(x0, yy + 8, w, 26, RD if k % 2 == 0 else "#f28b82", "#fff", 2)
     f.t(xs + 10, yy + 27, "约 ×%.1f" % N.LADDER_PROD, RD, True, 18)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "最大的几刀都是条件：精度、实现、序列长度、优化器，不是模型结构", [])
+    yb = f.band(py + PH + 20, "ok", "最大的几刀都是条件：精度、实现、序列长度、优化器（结构有没有影响，看 4.2）", [])
     _rows = "；".join("%s %.3f → %.3f 秒" % (name, a, b) for name, a, b, _w in N.LADDER_STEPS)
     yb = f.src(yb + 10,
                "📌 实测：每一行前后两格的步时：" + _rows + "。",
