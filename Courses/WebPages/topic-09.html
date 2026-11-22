@@ -2416,7 +2416,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>五个点一条线：耗时只跟字节走。</b><span class="capmore"><br><em>蓝点收集、红点规约；有两对点几乎重叠。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测：五种组合各自一条集合通信的每设备实收字节与单次耗时（profile 第 11 步），折合 186、187、186、187、185 GB/s。</p>
 <p>实测：这两类通信只走 3D 环面的两个轴（每轴正反两条；编译产物里的环配置）；一颗芯片两个设备同时各收各的。</p>
 <p>实测：让专家权重收集也用两颗小核，同一个作业里 4.415 → 4.467 秒（第 5–9 步），慢 1.2%；每条收集没有变快，反而多占一条队列。</p>
-<p>📌 公开规格：每芯片 6 条 ICI 链路，每条双向 200 GB/s（Google Cloud TPU7x 文档）。⚠️ 本课推导：每方向约 100 GB/s；这两类通信走 3D 环面的两个轴共 4 条，入向约 400 GB/s；一颗芯片两个设备合计约 372 GB/s，到九成多。一颗芯片里两块计算晶粒怎么分这几条链路官方没公开，所以这个对比只对量级；「卡在链路上」也是由此推断。</p></details></figure>
+<p>📌 公开规格：每芯片 6 条 ICI 链路，每条双向 200 GB/s（Google Cloud TPU7x 文档）。⚠️ 本课推导：每方向约 100 GB/s；并行度按配置是上下文并行 8（显式）× FSDP 16（128 ÷ 8 自动填满），专家并行复用上下文并行那一维；按这两类通信走 3D 环面的两个轴共 4 条算（环面轴的具体映射未核），入向约 400 GB/s；一颗芯片两个设备合计约 372 GB/s，到九成多。一颗芯片里两块计算晶粒怎么分这几条链路官方没公开，所以这个对比只对量级；「卡在链路上」也是由此推断。</p></details></figure>
   <p>收集和规约、FP32 和 BF16、一颗小核和两颗小核，全落在同一条线上：每设备约 186 GB/s。<b>这条链不卡在小核个数上（实测），最可能卡在芯片之间的链路带宽上</b>（约为芯片间链路入向上限的九成多，折算见图出处；推断）；两颗小核一起收反而慢 1.2%。要缩它，只能少搬字节；把两份权重拼成一趟收也不省链路时间。</p>
 
   <h3 id="s6-2">6.2　砍一刀：梯度改 BF16，再加两个开关</h3>
@@ -2847,7 +2847,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   
   <p>复现一份参照配方（不是本讲的模型）时，只换软件镜像（编译器和运行库），配方、代码、开关一个不动：一步从 1.346 秒变成 1.517 秒，慢 12.7%。差在小核上的一个 kernel，每次慢到原来的三倍多。单独拿出来新旧各离线编一次：</p>
-<figure class="fbox fwide" id="fig-bisect"><svg viewBox="0 0 1400 440" width="100%" role="img" aria-label="同一颗小核上的核，用两个版本的运行库离线单独编译，数热循环每跑一趟要几个指令包。0.0.46 是 41 个，0.0.53.1 是 198 个，长了约五倍。代码里给这个循环展开 8 次以后，在 0.0.53.1 上编回了旧版本的水平。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-bisect"><svg viewBox="0 0 1400 440" width="100%" role="img" aria-label="同一颗小核上的核，用两个版本的运行库离线单独编译，数热循环每跑一趟要几个指令包。0.0.46 是 39 个，0.0.53.1 是 202 个，长了约五倍。代码里给这个循环展开 8 次以后，在 0.0.53.1 上编回了旧版本的水平。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一颗核，换个运行库版本，热循环长了约五倍</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">条长 ＝ 热循环每跑一趟要几个指令包（越短越好）；离线单独编这一颗核</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -2862,22 +2862,22 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">离线编译产物（实测）</tspan></text>
 <text class="svgsm" x="346" y="194" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.0.46（旧版本）</tspan></text>
-<rect x="360" y="176" width="164.0" height="28" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="534" y="195" fill="#80868b" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">41 个指令包／趟</tspan></text>
+<rect x="360" y="176" width="156.0" height="28" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="526" y="195" fill="#80868b" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">39 个指令包／趟</tspan></text>
 <text class="svgsm" x="346" y="246" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.0.53.1（新版本）</tspan></text>
-<rect x="360" y="228" width="792.0" height="28" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1162" y="247" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">198 个指令包／趟</tspan></text>
+<rect x="360" y="228" width="808.0" height="28" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1178" y="247" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">202 个指令包／趟</tspan></text>
 <text class="svgsm" x="346" y="298" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.0.53.1 ＋ 代码里展开 8 次</tspan></text>
 <text class="svgsm" x="360" y="299" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每次向量乘摊到的指令包 12.6 → 2.5，回到旧版本水平（约 2.6）</tspan></text>
 <rect x="0" y="366" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="366" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="366" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="393" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运行库也是变量：升级以后先普查，看见的那处在代码里兜住</tspan></text>
-</svg><figcaption><b>红条是新版本，热循环每趟的指令包是旧版本的约五倍；最下面一行是代码里兜住以后。</b><span class="capmore"><br><em>「指令包」是编译器排好的一拍指令，条越长热循环越长。同一颗核单独离线编译。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（离线单核对比）：0.0.46 对 0.0.53.1，热循环每趟 41 → 198 个指令包；新版本不再对这个循环做软件流水，循环里不变的量也不再提到循环外（从指令排布判断）。</p>
+</svg><figcaption><b>红条是新版本，热循环每趟的指令包是旧版本的约五倍；最下面一行是代码里兜住以后。</b><span class="capmore"><br><em>「指令包」是编译器排好的一拍指令，条越长热循环越长。同一颗核单独离线编译。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（离线单核对比）：0.0.46 对 0.0.53.1，热循环每趟 39 → 202 个指令包；新版本不再对这个循环做软件流水，循环里不变的量也不再提到循环外（从指令排布判断）。</p>
 <p>实测（profile）：这颗核每次执行 1.68 → 5.39 ms；主核等它 22.0 → 132.2 ms；同一份配方一步 1329.4 → 1499.5 ms。</p>
 <p>实测（离线单核编译）：这是 SparseCore 上做 ragged gather-reduce 的核；代码里只改一行，给热循环展开 8 次，每个元素的计算不变。新版本上每次向量乘摊到的指令包 12.62 → 2.47，旧版本展开后 2.44、原样 2.60。</p>
 <p>本讲的模型正常训练步不用这颗核（走主核上的排序），只有 token 溢出、整步回放的那一步会用到。</p></details></figure>
-  <p>0.0.46 对 0.0.53.1：这个热循环每跑一趟，从 41 个指令包变成 198 个，长了约五倍；代码里展开 8 次，在新版本上编回了旧水平。</p>
+  <p>0.0.46 对 0.0.53.1：这个热循环每跑一趟，从 39 个指令包变成 202 个，长了约五倍；代码里展开 8 次，在新版本上编回了旧水平。</p>
 <details class="foldfig"><summary><b>新版本到底改了哪种排法</b></summary>
   <p>新版本不再对这个热循环（核里反复跑的那个循环）做软件流水（前一件还没做完、后一件已经开工的那种排法），循环里不变的量也不再提到循环外（从指令排布判断）。手动展开 8 次以后，每个元素的计算不变。</p>
 </details>

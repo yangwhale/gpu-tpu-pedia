@@ -110,7 +110,7 @@ LAYER_WAIT_AFTER = 8.5                                    # 第五节：每层�
 SINGLE_A, SINGLE_B, COMBO = 6.5, 5.7, 16.9                # 第五节（%）
 FUSED_SAVED_MS, FUSED_STEP_MS = 183, 107                  # 第七节：iHC 融合核（省约 183：本体 −84.7、相邻约 −70、零散约 −28）
 WO_COMPUTE_MS, WO_WAIT_MS, CHAIN_DELTA_MS = 116, 136, 6   # 第六节：不重算
-BUNDLE_OLD, BUNDLE_NEW = 41, 198                          # 第八节：热循环每趟指令包（0.0.46 对 0.0.53.1，离线单核）
+BUNDLE_OLD, BUNDLE_NEW = 39, 202                          # 第八节：热循环每趟指令包（0.0.46 对 0.0.53.1，离线单核实测；作者调优记录 1B.3。结论段里的「约 41 → 198–202」是约数和区间，以表为准）
 A2A_N, A2A_MS = 97, 350                                   # 第八节：只取整到十位（跟 7.3 的 347.6 是不同的两次读数，不当两个数报）
 NOOP_FLAGS, ALL_FLAGS = 5, 8                              # 第七节
 INTERP_S, REF_S = 1.68, 1.346                             # 第七节：解释循环 vs 原样
@@ -861,7 +861,7 @@ F0_BWD_X = F0_BWD_MS / 63                        # ≈ 5 倍（对反向一层�
 assert abs(F0_BWD_MS - 312) < 2 and abs(F0_BWD_X - 4.95) < 0.05
 NOPREC_PRED_MULT = NOPREC_CTL * (LEGALIZER_S / 5.311) * (SML_S / 5.311) * (WO_SINGLE_S / 5.311)   # 6.3 出处：三个单项按相乘推
 # 8.1 运行库回归与展开修法（作者调优记录：SparseCore 上做 ragged gather-reduce 的核，离线单核编译）
-SCK_BUNDLES_OLD, SCK_BUNDLES_NEW = 41, 198       # 热循环每趟指令包：0.0.46 → 0.0.53.1（约 4.8 倍）
+SCK_BUNDLES_OLD, SCK_BUNDLES_NEW = 39, 202       # 热循环每趟指令包：0.0.46 → 0.0.53.1（约 5.2 倍；0.0.51–0.0.53 区间 198–202）
 SCK_PER_VMUL = (12.62, 2.47, 2.44)               # 每次向量乘摊到的指令包：新版原样 → 新版展开 8 次 → 旧版展开 8 次
 SCK_PER_VMUL_OLD_RAW = 2.60                      # 旧版原样实测：39 个指令包 ÷ 15 次向量乘（作者调优记录 1B.3）；展开后的 2.47 回到旧水平
 OPT_TAIL_SHOT_MS = (1094, 644)                   # 站 7 截图：反向结束到一步结束（作者 profile 截图口径）

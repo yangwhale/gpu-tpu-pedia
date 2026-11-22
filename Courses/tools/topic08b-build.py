@@ -869,7 +869,7 @@ BODY += sec("s八", "八", "编译器和运行库会变") + '''
   
   <p>复现一份参照配方（不是本讲的模型）时，只换软件镜像（编译器和运行库），配方、代码、开关一个不动：一步从 1.346 秒变成 1.517 秒，慢 12.7%。差在小核上的一个 kernel，每次慢到原来的三倍多。单独拿出来新旧各离线编一次：</p>
 __FIG_BISECT__
-  <p>0.0.46 对 0.0.53.1：这个热循环每跑一趟，从 41 个指令包变成 198 个，长了约五倍；代码里展开 8 次，在新版本上编回了旧水平。</p>
+  <p>0.0.46 对 0.0.53.1：这个热循环每跑一趟，从 39 个指令包变成 202 个，长了约五倍；代码里展开 8 次，在新版本上编回了旧水平。</p>
 ''' + fold('新版本到底改了哪种排法', '''  <p>新版本不再对这个热循环（核里反复跑的那个循环）做软件流水（前一件还没做完、后一件已经开工的那种排法），循环里不变的量也不再提到循环外（从指令排布判断）。手动展开 8 次以后，每个元素的计算不变。</p>''') + '''
   
 
@@ -1490,7 +1490,7 @@ for _tag in ("h2", "h3", "section", "div", "details", "table"):
 # ⭐ 正文里手打的关键数，必须在对应的图里也出现（图是脚本现算的）
 _NUM_LOCK = [("0.58", "fig8b-budget.svg"), ("3.18", "fig8b-budget.svg"), ("2.07", "fig8b-budget.svg"),
              ("16.2", "fig8b-lanes.svg"), ("10.1", "fig8b-lanes.svg"), ("6.1", "fig8b-hide.svg"), ("27.7", "fig8b-lanes.svg"), ("325.18", "fig8b-numerator.svg"),
-             ("0.002", "fig8b-ruler.svg"), ("0.018", "fig8b-ruler.svg"), ("72", "fig8b-ruler.svg"), ("1.7", "fig8b-busiest.svg"), ("66", "fig8b-busiest.svg"), ("541", "fig8b-heavylight.svg"), ("672", "fig8b-heavylight.svg"), ("186", "fig8b-linkbw.svg"), ("8.5", "fig8b-perlayer.svg"), ("4.413", "fig8b-additive.svg"), ("4.280", "fig8b-twoqueue.svg"), ("1261", "fig8b-barrier.svg"), ("801", "fig8b-barrier.svg"), ("183", "fig8b-fused.svg"), ("198", "fig8b-bisect.svg"),
+             ("0.002", "fig8b-ruler.svg"), ("0.018", "fig8b-ruler.svg"), ("72", "fig8b-ruler.svg"), ("1.7", "fig8b-busiest.svg"), ("66", "fig8b-busiest.svg"), ("541", "fig8b-heavylight.svg"), ("672", "fig8b-heavylight.svg"), ("186", "fig8b-linkbw.svg"), ("8.5", "fig8b-perlayer.svg"), ("4.413", "fig8b-additive.svg"), ("4.280", "fig8b-twoqueue.svg"), ("1261", "fig8b-barrier.svg"), ("801", "fig8b-barrier.svg"), ("183", "fig8b-fused.svg"), ("202", "fig8b-bisect.svg"),
              ("4.377", "fig8b-muon.svg"), ("5 份", "fig8b-muon.svg"), ("4.351", "fig8b-agwin.svg"),
              ("290.5", "fig8b-cebracket.svg"), ("11.9", "fig8b-cebracket.svg"), ("0.48", "fig8b-cebracket.svg"), ("3965", "fig8b-cecells.svg"), ("3.931", "fig8b-cecells.svg"),
              ("11.9", "fig8b-celayer.svg"), ("1522", "fig8b-aot.svg"), ("153", "fig8b-aot.svg"), ("361", "fig8b-aot.svg")]
