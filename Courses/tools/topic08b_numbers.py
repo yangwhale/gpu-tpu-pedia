@@ -639,7 +639,7 @@ FR_ON_T = "%.3f／%.3f" % FR_STEP_ON
 # 前 7 站（站 0–6）是第 20–35 步均值，站 7 起第 5–9 步均值；站 10 换了数据，有效 MFU 分子变了，不能和上面逐行比
 FRONT = [   # 站号照作者私有编年史总表
     (0, "原样跑：专家按 FSDP 切", 12.743, 2.30, None, "bytes"),
-    (1, "换切法：每个设备只管自己那一份专家", 6.951, 4.21, -45.4, "bytes"),
+    (1, "换切法：权重只收八分之一，其余挪 token", 6.951, 4.21, -45.4, "bytes"),
     (2, "搬来已上线的注意力配置（少重算、块更大）", 4.948, 5.92, -29.0, "sched"),
     (3, "换新版的专家矩阵乘 kernel", 4.601, 6.36, -7.0, "sched"),
     (4, "专家权重收集流水化", 4.260, 6.87, -7.5, "sched"),
@@ -664,7 +664,7 @@ F0_EXPERT_MS = 6811                              # 站 0 一步里主核等专�
 F0_GB = 77.3                                     # 每层每设备收发（推断：一层全部专家权重 19.3 GB × 收两次 ＋ FP32 梯度 38.7）
 assert abs(MC_LAYER_EXPERT_GB * 2 + MC_LAYER_EXPERT_GB * 2 - F0_GB) < 0.1
 F1_GB = 12                                       # 换按专家切以后每层每设备约 12 GB（专家 9.7 ＋ token 2.4，推断）
-EXPERT_PER_DEV = MC_EXPERTS // 8                 # 按专家切（专家轴 8 份）：每设备 32 个专家
+EXPERT_PER_DEV = MC_EXPERTS // 8                 # 按专家切（专家轴 8 份）：每 16 个设备一组合管 32 个专家，组内收齐后每设备手上 32 个
 LAYER_EXPERT_GIB_DEV = EXPERT_PER_DEV * 3 * MC_HIDDEN * MC_EXPERT_FF * 2 / 2**30   # 一层收好的专家权重每设备（GiB）
 assert abs(LAYER_EXPERT_GIB_DEV - 2.25) < 0.01, LAYER_EXPERT_GIB_DEV
 KEEP_ALL_GIB = 81                                # 半层 38 个 MoE 层收好的专家权重都留到反向：约 81 GiB／设备（实测 8 层 17.06 GiB 折算每层约 2.13，× 38，推断；按形状算每层 2.25）
