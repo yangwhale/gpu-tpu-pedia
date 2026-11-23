@@ -892,7 +892,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（主核、小核）、<b>专题五</b>（FSDP、all-gather）、<b>专题七</b>（MFU、读一条通信）、<b>专题八</b>（尺子）</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>一次课，主线约 91 分钟</b>（讲稿一字不落念完约 84 分钟，其余留给互动）</span>
+    <span class="chip">⏱ <b>一次课，主线约 90 分钟</b>（讲稿一字不落念完约 82 分钟，其余留给互动）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -1939,14 +1939,18 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 
   <h3 id="s3-2">3.2　再理排法和优化器（站 4–7）</h3>
-  <p>字节降下来以后，通信已经比计算短，剩下的是它排在哪。（试过预取下一层权重：4.948 → 5.388 秒，+8.9%，没采用。）<b>站 4</b>：一条收集放行到完成之间没东西陪它；改成流水（分几块收，收一块就先算这一块），对同作业对照 4.605 秒快 7.5%（下图）。</p>
+  <p>字节降下来以后，通信已经比计算短，剩下的是它排在哪。（试过预取下一层权重：4.948 → 5.388 秒，+8.9%，没采用。）<b>站 4</b>：一条收集放行到完成之间没东西陪它；改成流水（分几块收，收一块就先算这一块），对同作业对照 4.605 秒快 7.5%。</p>
+  <p><b>站 7</b>：步尾优化器段露出 651 毫秒，放大是一串同步 all-to-all：Muon 正交化前要把动量换成「每个设备拿整块矩阵」（当时的程序连参数也一起搬，第九节回来讲），原来被编译器拆成沿几个设备轴分三步搬（设备排成一张多维网格，每一维叫一个轴，FSDP 是其中一维）；换个切的顺序，只沿 FSDP 那一个轴搬一步，−11.2%。</p>
+<details class="foldfig"><summary><b>站 4、站 7 前后的 profile 截图</b></summary>
+
 <figure class="fbox fwide shot" id="shot-agp"><img src="media/topic08b-shot-agp.webp" loading="lazy" alt="站 4 前后：同一条专家权重收集，放行到完成之间夹没夹计算。上：流水关，放行到完成之间没有矩阵乘，主核在红框里停 6.94 毫秒；下：流水开，中间夹进两个矩阵乘（绿框），只停 4.95 毫秒" style="width:100%;height:auto;border:1px solid #dadce0;border-radius:6px">
 <figcaption><b>站 4 前后：同一条专家权重收集，放行到完成之间夹没夹计算</b><ol class="shotkey" style="margin:.3em 0 .2em 1.2em;padding:0;list-style:none"><li>上：流水关，放行到完成之间没有矩阵乘，主核在红框里停 6.94 毫秒</li><li>下：流水开，中间夹进两个矩阵乘（绿框），只停 4.95 毫秒</li></ol><details class="figsrc"><summary>出处与口径</summary><p>收齐要的时间两边差不多（9.6 对 9.9 毫秒），收益全在重叠。实测：XProf，两张同窗宽 20 毫秒，左沿在这条收集放行前 4 毫秒。</p></details></figcaption></figure>
 
-  <p><b>站 7</b>：步尾优化器段露出 651 毫秒，放大是一串同步 all-to-all：Muon 正交化前要把动量换成「每个设备拿整块矩阵」（当时的程序连参数也一起搬，第九节回来讲），原来被编译器拆成沿几个设备轴分三步搬（设备排成一张多维网格，每一维叫一个轴，FSDP 是其中一维）；换个切的顺序，只沿 FSDP 那一个轴搬一步，−11.2%（下图）。</p>
 <figure class="fbox fwide shot" id="shot-s7"><img src="media/topic08b-shot-s7.webp" loading="lazy" alt="站 7 前后：步尾优化器段，主核停在同步 all-to-all 上。① 红框：同步 all-to-all（没有放行／完成，主核直接停在它上面）：改前 47 条、498 毫秒，改后 38 条、187 毫秒" style="width:100%;height:auto;border:1px solid #dadce0;border-radius:6px">
 <figcaption><b>站 7 前后：步尾优化器段，主核停在同步 all-to-all 上</b><ol class="shotkey" style="margin:.3em 0 .2em 1.2em;padding:0;list-style:none"><li>① 红框：同步 all-to-all（没有放行／完成，主核直接停在它上面）：改前 47 条、498 毫秒，改后 38 条、187 毫秒</li></ol><details class="figsrc"><summary>出处与口径</summary><p>反向结束到一步结束：1094 → 644 毫秒。实测：XProf，两张同窗宽 1120 毫秒，左沿都对在反向循环结束前 20 毫秒。</p></details></figcaption></figure>
 
+
+</details>
 <details class="foldfig"><summary><b>站 4–7 逐站四件事</b></summary>
 
   <table class="t9 mini" id="tab-front2"><caption>站 4–7：排法与优化器</caption><thead><tr><th>站</th><th>看到什么</th><th>怎么判断的</th><th>做了什么</th><th>快了多少（对同作业对照）</th></tr></thead><tbody><tr><td>4</td><td>第一次录全一步：主核等通信仍占 44%；专家权重收集从放行到完成之间，0 个矩阵乘</td><td>收集用时正常，只是没有计算陪它</td><td>专家权重收集流水化</td><td>4.601 → 4.260 秒（对同作业对照 4.605 是 −7.5%）；中间夹进 2 个矩阵乘，收集用时几乎不变</td></tr><tr><td>5、6</td><td>（照已有方案试的，事先没有单独诊断）</td><td>站 5 的两样（收潜变量、精简配置）单独叠都变慢、一起开才快：收益来自哪段通信能藏到哪段计算底下，不是字节，也不是运算量（推断：由不可加推出，合开那格没拆账）</td><td>上下文并行改成收潜变量（同时精简配置）；整条序列的 K 一次矩阵乘</td><td>4.260 → 4.101 → 4.021 秒（−3.7%、−2.0%）</td></tr><tr><td>7</td><td>步尾优化器段 906 毫秒，露出 651 毫秒（原样时只露 158）</td><td>放大是三组同步 all-to-all，合计 497 毫秒（截图那一步 498）：Muon 正交化前要把动量换成「每个设备拿整块矩阵」（当时连参数也一起搬），原来的写法被编译器拆成沿几个设备轴分三步搬</td><td>换一种切的顺序，只沿 FSDP 那一个轴搬一步</td><td>4.028 → 3.577 秒（−11.2%）；优化器段约 819 → 340 毫秒（906 是站 3 那格；截图按「反向结束到一步结束」量是 1094 → 644）</td></tr></tbody></table>
