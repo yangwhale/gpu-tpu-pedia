@@ -854,7 +854,7 @@ DSV3_BUSY_AVG_BLOCKS = 50       # 4.2 / fig-ref：对方文本数据第 5–9 �
 HW_MFU_FINAL = 36.5             # 11.3：定稿硬件 MFU（实际执行的矩阵运算，含重算、优化器、冗余；修正核的记账后）
 FINAL_PROFILE_S = 4.122         # 11.3：定稿时间账那次多芯片 profile 的步时
 FULL128_NORMAL_GIB, FULL128_HEADROOM_GIB = 88.99, 4.25   # 9.4：128 片全量正常步离线峰值与余量（作者调优记录）
-RAW_HALF_MEM_GIB = 103.24                                # 第十一节 / fig-mile：原始代码放到半层底座要的显存（放不下）
+RAW_HALF_MEM_GIB = 103.24                                # 第十二节 / fig-mile：原始代码放到半层底座要的显存（放不下）
 HERO_START_MFU_T = "%.2f" % HERO_START_MFU
 F0_BWD_GB = 19.3 + 38.7                          # 3.1：反向一层重收权重 ＋ FP32 规约梯度 ≈ 58 GB
 F0_BWD_MS = F0_BWD_GB / 186 * 1000               # ≈ 312 ms（借第六节实测链路速度）
@@ -879,3 +879,62 @@ OTHER_PIN_PCT, OTHER_NOAGP_PCT = -3.3, -3.5          # 另一个模型（每设�
 OURS_PIN_PCT, OURS_NOAGP_PCT = (2.6, 8.3), 14        # 本讲模型：钉核三格 +2.6% 到 +8.3%；去收集流水约 +14%（第 5–9 步）
 OTHER_MFU_SHORT_LONG = (10.77, 27.85)                # 另一个模型同一套配置：短文档 / 长图文的有效 MFU（%）
 CE_STALL_MS = (1003, 176, 299, 150)                  # 9.5：每步停在完成点上的等待合计 / 前向 gate/up / 反向 gate/up / token 收集（ms）
+
+# ── 第十一节：稀疏注意力核（DSA），照 MoE 的分工写（2026-11-24 补）────────────────────
+# 出处：作者的稀疏核设计与逐轮记录（设计 05 / 06 / 08、案例 02、results/*.json；原始路径在私有台账）。
+# 口径：一层注意力、单个设备、前向 ＋ 反向；32K、上下文并行 8（每设备 4096 个 query，key 收齐 32768），每个 query 挑 k ＝ 2048 个 key；
+#       上下文并行下一步等最慢的那个设备，所以比「最慢的设备对最慢的设备」；稠密 ＝ 本讲模型调优用的块稀疏 splash 配置（按块掩码），同一进程。
+#       两种宽度：32 头（同项目另一个更小的模型）／ 64 头（公开的 Hy4，本讲的模型）。挑选是真实的：公开的 Hy4 预览版权重在 CPU 上抓的一篇 32K 长文。
+DSA_K, DSA_S32, DSA_T32 = 2048, 32768, 4096
+# 训练里省的是 (query, key) 对的乘法，不是读 KV（本课推导）：
+DSA_PAIRS_DENSE_32K = DSA_S32 * (DSA_S32 + 1) // 2          # ≈ 5.4 亿对（满因果）
+DSA_PAIRS_SPARSE_32K = DSA_S32 * DSA_K                       # ≈ 6700 万对（上界，每个 query 挑满）
+DSA_PAIRS_X_32K = DSA_PAIRS_DENSE_32K / DSA_PAIRS_SPARSE_32K
+DSA_PAIRS_X_256K = (262144 * 262145 // 2) / (262144 * DSA_K)
+assert round(DSA_PAIRS_X_32K) == 8 and round(DSA_PAIRS_X_256K) == 64
+DSA_KV_READ_US = 32768 * 576 * 2 / 3.686e12 * 1e6            # 一层潜变量读一遍 ≈ 10 µs（每芯片 7.38 TB/s ÷ 2 个设备，均分是假设）
+assert 9.5 < DSA_KV_READ_US < 10.8, DSA_KV_READ_US
+DSA_BLOCK_ACTIVE_PCT = 100                                   # 块模拟：32K、k 2048／512／128、两种块、均匀与局部偏置 12 种组合，块激活率全部 100%
+# 真实挑选的重叠：相邻 QB 个 query 的并集 ÷ k（ρ），32K 各层各数据的均值
+DSA_RHO = {4: (1.31, 1.49), 8: (1.50, 1.87), 16: (1.71, 2.38)}
+# 第 1 轮 → 第 6 轮（合成选法 local_half，32 头 QB 8 ρ 2.28 / 64 头 QB 4 ρ 1.45，只看前向，默认设置）
+DSA_FWD_DENSE = (4.87, 9.72)
+DSA_FWD_V1 = (43.4, 53.9)                                    # 主核每行一条 DMA（32 头那格只收集就 38.4 ms）
+DSA_FWD_V2 = (12.5, 16.2)                                    # 潜变量整份放进片上暂存，主核按行向量取
+DSA_V2_SLOW_X = DSA_FWD_V2[0] / DSA_FWD_DENSE[0]
+assert abs(DSA_V2_SLOW_X - 2.57) < 0.02                      # 「还慢 2.6 倍」
+DSA_FWD_V4_K1 = (14.0, 17.4)                                 # 小核收、主核算，一整段串着
+DSA_FWD_V4_K16 = (8.8, 11.6)                                 # 切 16 段，小核收下一段时主核算这一段
+DSA_V4_KSWEEP_32H = ((1, 13.9), (4, 10.9), (8, 9.5), (16, 8.8))
+DSA_TC_ROW_NS = (13, 16)                                     # 主核每行一条 DMA：13–16 ns／行，1 KB 到 12 KB 行几乎不变（发射受限）
+DSA_TC_SCALAR_PER_ROW = 11                                   # 主核向量按行取：每行约 11 条标量指令（离线编译产物计数）
+DSA_SC_GATHER_MROWS = 420                                    # 小核间接收集：两颗每秒 4.2 亿行（1536 B 行，含写回）
+DSA_SC_SCATTER_MROWS = 390                                   # 小核带加法的间接写：每秒 3.9 亿行（f32，确定性顺序）
+DSA_FWD_GATHER_EXPOSED_MS = 0.85                             # 切段以后，前向等收集只露 0.85 ms（profile）
+# 每收一行，后面跟多少乘加（本课推导）：DSA ＝ M × (576 ＋ 512)，M ＝ QB × 头数
+DSA_MAC_PER_ROW = {512: 512 * 1088, 1024: 1024 * 1088}
+assert DSA_MAC_PER_ROW[512] == 557056 and DSA_MAC_PER_ROW[1024] == 1114112
+# 前向 ＋ 反向阶梯（每段内同口径；最慢的设备）。各元组：(32 头, 64 头)
+DSA_LAD_SYN = {"dense": (15.0, 29.7), "v2": (60.6, 79.4), "v4": (27.1, 34.1), "v4g": (21.8, 30.6)}   # 合成选法，rank 0
+DSA_LAD_REAL = {"dense": (15.7, 29.8), "r12": (18.6, 29.9), "qb": (15.3, 22.7), "r14": (14.6, 21.7), "dense14": (15.7, 30.0)}   # 真实挑选，默认设置
+DSA_LAD_PROD = {"dense": (12.97, 25.68), "r20": (13.20, 21.86), "r21": (11.24, 18.29), "r24": (10.60, 17.09), "r28": (10.04, 16.02),
+                "dense28": (12.98, 25.73)}                   # 真实挑选，生产配置的运行库设置，设备时间口径
+DSA_RHO_QB = {"32h": ((8, 1.87, 2.08), (16, 2.37, 1.30), (32, 2.99, 0.82)), "64h": ((4, 1.50, 3.41), (8, 1.88, 2.10), (16, 2.38, 1.31))}   # (QB, ρ, 并集行数百万)
+# 账本（元数据）：每组 4 层共用一份，前向反向共用（不含在上面的层耗时里）
+DSA_META_STEPS = (("两次 scatter ＋ 逐段切片", 71), ("scatter 换成排序", 9.9), ("全局一张表、单键排序", 8.9),
+                  ("排序写成 Pallas 双调网络", 5.6), ("压紧写成 Pallas 移位网络", 4.1), ("合并、标记、压紧一个核", 3.5))
+DSA_META_FINAL = (3.1, 3.5)                                  # 定稿每组（32K，两种宽度、8 个设备的范围）
+# 定稿（第 28 轮）：32K 最慢设备，及摊进每层的账本（每组 ÷ 4，推断）
+DSA_FIN_32K = {"32h": (10.04, 12.98, 10.9), "64h": (16.02, 25.73, 16.9)}   # (稀疏, 稠密, 稀疏 ＋ 每层账本)
+DSA_FIN_256K = {"32h": (31.3, 186.0, 33.2), "64h": (46.3, 377.6, 48.4)}     # 256K、上下文并行 32（每设备 8192 query），一本书一层的真实挑选
+DSA_X_32K = tuple(round(DSA_FIN_32K[h][1] / DSA_FIN_32K[h][0], 2) for h in ("32h", "64h"))
+DSA_X_32K_META = tuple(round(DSA_FIN_32K[h][1] / DSA_FIN_32K[h][2], 2) for h in ("32h", "64h"))
+DSA_X_256K = tuple(round(DSA_FIN_256K[h][1] / DSA_FIN_256K[h][0], 1) for h in ("32h", "64h"))
+assert DSA_X_32K == (1.29, 1.61) and DSA_X_32K_META == (1.19, 1.52) and DSA_X_256K == (5.9, 8.2), (DSA_X_32K, DSA_X_32K_META, DSA_X_256K)
+DSA_FWD_SPLIT_PCT = 5.5                                      # 第 28 轮：前向核把行分两组交错，快约 5.5%，逐位不变
+DSA_NUM_MAXREL = 3e-6                                        # 核内改精确算术：o / lse / dQ / dKV / d sink 对规格最大相对差 ≤ 3e-6
+# 整层代理（一台主机 8 个设备、专家并行 8；注意力 ＋ MoE 一个程序前向 ＋ 反向；64 头；不是真实的层）
+DSA_LAYER = {"moe": 30.2, "att_dense": 28.0, "att_sparse": 21.6, "layer_dense": 43.3, "layer_sparse": 52.0,
+             "hidden_dense": 14.9, "wait_dense": 2.2, "wait_sparse": 14.3, "two_dense": 99.3, "two_sparse": 99.0}
+assert abs(DSA_LAYER["moe"] + DSA_LAYER["att_dense"] - DSA_LAYER["layer_dense"] - DSA_LAYER["hidden_dense"]) < 0.11
+assert round(DSA_LAYER["layer_sparse"] - DSA_LAYER["layer_dense"], 1) == 8.7
