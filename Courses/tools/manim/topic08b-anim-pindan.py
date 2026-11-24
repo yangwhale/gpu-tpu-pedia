@@ -177,7 +177,7 @@ class PinDanGather(Scene):
             m.set_opacity(0.0)
             self.add(m)
         uni = VGroup(tx("并集 8 行", 28, GREEN, True), tx("ρ ＝ 8 ÷ 4 ＝ 2", 24, GREY_B),
-                     tx("白格：没挑的，乘完用成员位掩掉", 20, GREY_B)).arrange(DOWN, aligned_edge=LEFT, buff=0.14)
+                     tx("空格：没挑的，乘完用成员位掩掉", 20, GREY_B)).arrange(DOWN, aligned_edge=LEFT, buff=0.14)
         uni.move_to([1.6, 0.85, 0], aligned_edge=LEFT)
         uni.add_updater(lambda m: m.set_opacity(clamp((ph()[3] - 0.9) * 10)))
         uni.set_opacity(0.0)

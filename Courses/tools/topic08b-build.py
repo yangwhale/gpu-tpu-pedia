@@ -1569,7 +1569,7 @@ FIGS = {
     "__FIG_DSAARCH__": ("fig-dsa-arch", "fig8b-dsa-arch.svg", "topic08b-fig-dsa.py",
         '<b>上面看框底的颜色：蓝的在主核上跑，紫的在小核上跑；下面看紫块和蓝块错开一格。</b><br><em>时间线是示意。</em>'),
     "__FIG_DSALADDER__": ("fig-dsa-ladder", "fig8b-dsa-ladder.svg", "topic08b-fig-dsa.py",
-        '<b>每一段从上往下看：条越来越短，跨过虚线就变绿。</b><br><em>三段口径不同，只在段内跟各自的稠密比；最下面是账本，单独一条线。</em>'),
+        '<b>每一段从上往下看：条越来越短，跨过虚线就标「✓ 快」。</b><br><em>三段口径不同，只在段内跟各自的稠密比；最下面是账本，单独一条线。</em>'),
     "__FIG_DSARESULT__": ("fig-dsa-result", "fig8b-dsa-result.svg", "topic08b-fig-dsa.py",
         '<b>左右两块比例尺不同：32K 绿条比灰条短一截，256K 短到五分之一以下。</b><br><em>浅绿那一小截是摊进每层的账本（推断）。</em>'),
     "__FIG_DSALAYER__": ("fig-dsa-layer", "fig8b-dsa-layer.svg", "topic08b-fig-dsa.py",

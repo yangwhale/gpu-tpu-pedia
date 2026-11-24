@@ -4334,16 +4334,18 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="s11-1">11.1　训练里省的是乘法，不是读 KV</h3>
   <p>专题三讲过，DSA 省的是「读多少」：那是推理，一次只来一个新 query，从 32K 里挑 2048 个，少读 16 倍。训练不一样：32768 个 query 同时都在，几乎每个 key 都有人挑，读省不了；也不用省，一层的 KV 读一遍约 10 微秒，一层注意力的计算却是毫秒级（本课推导）。读的字节不是瓶颈，后面要对付的是按行收的次数（11.3）。<b>训练里省的是 query 和 key 两两相乘的次数：满因果约 5.4 亿对，每人只挑 2048 个是约 6700 万对，32K 少 8 倍，256K 少 64 倍（本课推导）。</b></p>
   <p>可现成的块稀疏核是按块跳的：一块 512 个 query × 512 个 key，块里只要有一对被挑中，整块就得算。下图左边是一份玩具账：</p>
-<figure class="fbox fwide" id="fig-dsa-moe"><svg viewBox="0 0 1400 646" width="100%" role="img" aria-label="左：一个 query 块的 4 个 query（位置 12 到 15）各从 16 个 key 里挑 4 个，蓝格是挑中的；key 按 4 个一块切，4 块里每块都至少有一个蓝格，所以 4 块都要整块算，跟稠密一样。右：把这 4 个 query 挑中的 key 收拢成一摞，并集 8 行（0、5、9、11、12、13、14、15），整单对着这 8 行一起乘，没挑的格子用成员位掩掉。这一单就像 MoE 的一个专家，收拢来的 key 行就像分给它的 token。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-dsa-moe"><svg viewBox="0 0 1400 628" width="100%" role="img" aria-label="左：一个 query 块的 4 个 query（位置 12 到 15）各从 16 个 key 里挑 4 个，蓝格是挑中的；key 按 4 个一块切，4 块里每块都至少有一个蓝格，所以 4 块都要整块算，跟稠密一样。右：把这 4 个 query 挑中的 key 收拢成一摞，并集 8 行（0、5、9、11、12、13、14、15），整单对着这 8 行一起乘，没挑的格子用成员位掩掉。这一单就像 MoE 的一个专家，收拢来的 key 行就像分给它的 token。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每个 query 只挑 2048 个，块稀疏却一块都跳不掉；拼单收拢再乘，就是一次 MoE</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">玩具账：一单 4 个 query（位置 12–15），每人从 16 个 key 里挑 4 个（真实是从 32768 里挑 2048）；蓝格 ＝ 挑中，灰格 ＝ 因果看不见</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">挑中</text>
-<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">这一块要整块算</text>
-<rect x="235.12" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="256" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">收拢后的一摞</text>
-<rect x="0" y="102" width="670" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">因果看不见</text>
+<rect x="203.76" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="224" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">这一块要整块算</text>
+<rect x="360.52" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="381" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">收拢后的一摞</text>
+<rect x="0" y="102" width="670" height="402" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="670" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="0" y="104" width="670" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="670" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
@@ -4442,10 +4444,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="492" y="196" width="136" height="136" rx="4" fill="none" stroke="#d93025" stroke-width="2.4"/>
 <text class="svgsm" x="560" y="356" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">要算</tspan></text>
 <text class="svgsm" x="30" y="396" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4 块里 4 块要算：块激活 100%，算量跟稠密一样</tspan></text>
-<text class="svgsm" x="30" y="430" fill="#5f6368" style="font-size:14.5px;font-variant-numeric:tabular-nums">真实情况：一块 512 个 query × 512 个 key，每个 query 挑 2048 ÷ 32768 ≈ 6%，</text>
-<text class="svgsm" x="30" y="454" fill="#5f6368" style="font-size:14.5px;font-variant-numeric:tabular-nums">块里一个都没挑中几乎不可能。模拟 12 种组合（3 种 k × 2 种块 × 2 种挑法），</text>
-<text class="svgsm" x="30" y="478" fill="#5f6368" style="font-size:14.5px;font-variant-numeric:tabular-nums">块激活率全是 100%；把 k 从 2048 压到 128，现成的核耗时一点没变。</text>
-<rect x="700" y="102" width="700" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="30" y="430" fill="#5f6368" style="font-size:14.5px;font-variant-numeric:tabular-nums">真实情况（512 × 512 的块、每人散着挑 6%）也是 100%</text>
+<rect x="700" y="102" width="700" height="402" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="700" y="102" width="700" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="700" y="104" width="700" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="700" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
@@ -4512,10 +4512,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="960" y="458" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">它的并集 key 行</tspan></text>
 <text class="svgsm" x="1170" y="458" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按组矩阵乘 ＋ 成员位</tspan></text>
 <text class="svgsm" x="730" y="502" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">真实的 ρ：相邻 4 个 query 只有 1.31–1.49，相邻 8 个 1.50–1.87</text>
-<rect x="0" y="572" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="572" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="572" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="599" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练里省的是乘法：先把一单要的 key 收拢成一摞，再整块乘</tspan></text>
+<rect x="0" y="554" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="554" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="554" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="581" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练里省的是乘法：先把一单要的 key 收拢成一摞，再整块乘</tspan></text>
 </svg><figcaption><b>左边四块全是红框：块里有一个蓝格，整块就得算。右边只剩 8 列，全是这一单要的 key。</b><span class="capmore"><br><em>玩具账，挑选是编的；真实的重叠程度在出处里。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>玩具挑选是编的（4 个 query、16 个 key、每人挑 4 个）；真实挑选：32K 长文，每个 query 挑 2048 个，「最近 512 个几乎全挑、其余散在整个历史上」。</p>
 <p>块激活率：32K、k ＝ 2048／512／128、块 512 × 512 和 1024 × 2048、均匀挑与偏向最近，12 种组合全部 100%（模拟）；k 从 2048 压到 128 时现成的动态块稀疏核 987.8 → 987.6 ms（另一代芯片上的实测）。</p>
 <p>ρ（并集膨胀比）＝ 一单的并集行数 ÷ k；真实值是公开的 Hy4 预览版权重在 CPU 上抓的 32K 长文 top-k 统计（4 个 F 层、两份数据的均值）：ρ(4) 1.31–1.49、ρ(8) 1.50–1.87、ρ(16) 1.71–2.38。</p>
@@ -4530,8 +4530,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="s11-2">11.2　拼单：收拢以后，就是一次 MoE</h3>
   <p>相邻几个 query 拼一单：把各自挑的 key 合成一张单子（并集），收拢成一摞；整单对着这一摞一起乘，谁没挑哪个 key，用一张成员位表掩掉。对照 MoE：<b>一单 query 就是一个专家，收拢来的 key 行就是分给它的 token，成员位就是路由，反向把梯度按 key 加回去就是 MoE 的反排列求和。</b>我们 MoE 那套核上攒下的东西（组表、可变组数、容量和回放），从这里起都能搬。</p>
 <figure class="fbox fwide" id="anim-pindan">
-<video src="media/topic08b-pindan.mp4?v=7b2a50c8" autoplay loop muted playsinline data-pauses="5.40,10.20,16.80"
-       aria-label="PinDanGather 动画，标题「拼单：先收拢，再整块乘」。上方一张 4 行 16 列的格子：行是 q12 到 q15，列是 key 0 到 15，蓝格是挑中的，深灰格是因果看不见的。字幕依次是：「一单 4 个 query，每人从 16 个 key 挑 4 个」；「按块跳：块里有一个挑中，整块就得算」，四个 4 列的块逐个框上红框，下面计数「要整块算的块：1 / 4」到「4 / 4」；「4 块全要算，跟稠密一样」。接着红框和没被这一单挑过的列淡出，挑过的 8 列（0、5、9、11、12、13、14、15）往左挤成一摞，字幕「拼一单：只留这一单挑过的 key，收拢成一摞」；绿框框住 8 列，旁边写「并集 8 行」「ρ ＝ 8 ÷ 4 ＝ 2」「白格：没挑的，乘完用成员位掩掉」，字幕「一单是一个专家，收来的 key 行是它的 token」。下面出现两条车道「小工（小核）」「师傅（主核）」：紫块收1 到收4 依次出现，蓝块算1 到算4 各晚一格，字幕「小工收下一段时，师傅算这一段」，最后「师傅只看见连续的大块，搬行交给小工」。随后各列散回原位，回到开头画面。"></video>
+<video src="media/topic08b-pindan.mp4?v=aa055473" autoplay loop muted playsinline data-pauses="5.40,10.20,16.80"
+       aria-label="PinDanGather 动画，标题「拼单：先收拢，再整块乘」。上方一张 4 行 16 列的格子：行是 q12 到 q15，列是 key 0 到 15，蓝格是挑中的，深灰格是因果看不见的。字幕依次是：「一单 4 个 query，每人从 16 个 key 挑 4 个」；「按块跳：块里有一个挑中，整块就得算」，四个 4 列的块逐个框上红框，下面计数「要整块算的块：1 / 4」到「4 / 4」；「4 块全要算，跟稠密一样」。接着红框和没被这一单挑过的列淡出，挑过的 8 列（0、5、9、11、12、13、14、15）往左挤成一摞，字幕「拼一单：只留这一单挑过的 key，收拢成一摞」；绿框框住 8 列，旁边写「并集 8 行」「ρ ＝ 8 ÷ 4 ＝ 2」「空格：没挑的，乘完用成员位掩掉」，字幕「一单是一个专家，收来的 key 行是它的 token」。下面出现两条车道「小工（小核）」「师傅（主核）」：紫块收1 到收4 依次出现，蓝块算1 到算4 各晚一格，字幕「小工收下一段时，师傅算这一段」，最后「师傅只看见连续的大块，搬行交给小工」。随后各列散回原位，回到开头画面。"></video>
 <figcaption><b>看蓝格那几列往左挤到一起：16 列收成 8 列；下面紫块和蓝块错开一格。</b>
   <span class="sub">（19 秒，Manim 渲染，可一步一步看。玩具挑选同上图（位置 12–15 的 4 个 query，各挑 4 个 key）；第三幕的段数和段长是示意。）</span></figcaption></figure>
   <p>拼单有一笔白算：每个 query 都要跟整张单子算。这里有两种「行」别混：<b>乘的行</b>是一单的 query 数 × 头数（吸收式 MLA 下各头共用同一份潜变量 KV，能摞成一次矩阵乘的行）；<b>收的行</b>是单子里的 key 行。并集行数 ÷ 2048 叫 ρ，相邻的 query 挑得越像，ρ 越小。用公开的 Hy4 预览版权重在一篇 32K 长文上实测：相邻 4 个 query 的 ρ 只有 1.31–1.49，16 个 1.71–2.38；单子翻一倍，ρ 只涨约 1.2 倍。单子多大，看两笔账：</p>
@@ -4661,14 +4661,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="0" y1="486" x2="1400" y2="486" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="476" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 交给小工以后，一层切成几段重叠（32 头，合成挑法，只看前向，实测；稠密 4.85 ms）</tspan></text>
 <text class="svgsm" x="344" y="546" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不切段（小工收完、师傅再算）</tspan></text>
-<rect x="360" y="530" width="695.0" height="24" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="1065" y="547" fill="#80868b" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">13.9 ms</tspan></text>
+<rect x="360" y="530" width="695.0" height="24" rx="3" fill="#a8dab5" stroke="#a8dab5" stroke-width="1.0"/>
+<text class="svgsm" x="1065" y="547" fill="#a8dab5" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">13.9 ms</tspan></text>
 <text class="svgsm" x="344" y="592" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切 4 段</tspan></text>
-<rect x="360" y="576" width="545.0" height="24" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="915" y="593" fill="#80868b" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10.9 ms</tspan></text>
+<rect x="360" y="576" width="545.0" height="24" rx="3" fill="#a8dab5" stroke="#a8dab5" stroke-width="1.0"/>
+<text class="svgsm" x="915" y="593" fill="#a8dab5" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10.9 ms</tspan></text>
 <text class="svgsm" x="344" y="638" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切 8 段</tspan></text>
-<rect x="360" y="622" width="475.0" height="24" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="845" y="639" fill="#80868b" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.5 ms</tspan></text>
+<rect x="360" y="622" width="475.0" height="24" rx="3" fill="#a8dab5" stroke="#a8dab5" stroke-width="1.0"/>
+<text class="svgsm" x="845" y="639" fill="#a8dab5" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.5 ms</tspan></text>
 <text class="svgsm" x="344" y="684" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切 16 段</tspan></text>
 <rect x="360" y="668" width="440.00000000000006" height="24" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="810" y="685" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8.8 ms</tspan></text>
@@ -4830,7 +4830,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="88.44" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="109" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">64 头</text>
 <rect x="176.88" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="197" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">比稠密快</text>
+<text class="svgsm" x="197" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">✓ 比稠密快</text>
 <rect x="0" y="102" width="1400" height="818" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -4874,19 +4874,19 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="877.65" y="465" width="44" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svgsm" x="881" y="480" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">29.9</tspan></text>
 <text class="svgsm" x="454" y="526" fill="#202124" text-anchor="end" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 13 轮　一单的 query 加倍、段长 1024</tspan></text>
-<rect x="470" y="502" width="206.55" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="680.55" y="503" width="44" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="684" y="518" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">15.3</tspan></text>
-<rect x="470" y="528" width="306.45" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="780.45" y="529" width="44" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="784" y="544" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">22.7</tspan></text>
+<rect x="470" y="502" width="206.55" height="20" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="680.55" y="503" width="89" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="684" y="518" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">15.3 ✓ 快</tspan></text>
+<rect x="470" y="528" width="306.45" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="780.45" y="529" width="89" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="784" y="544" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">22.7 ✓ 快</tspan></text>
 <text class="svgsm" x="454" y="590" fill="#202124" text-anchor="end" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 14 轮　层里的整数活挪进账本</tspan></text>
-<rect x="470" y="566" width="197.1" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="671.1" y="567" width="44" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="675" y="582" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">14.6</tspan></text>
-<rect x="470" y="592" width="292.95" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="766.95" y="593" width="44" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="770" y="608" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">21.7</tspan></text>
+<rect x="470" y="566" width="197.1" height="20" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="671.1" y="567" width="89" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="675" y="582" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">14.6 ✓ 快</tspan></text>
+<rect x="470" y="592" width="292.95" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="766.95" y="593" width="89" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="770" y="608" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">21.7 ✓ 快</tspan></text>
 <text class="svgsm" x="1370" y="448" fill="#5f6368" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密 15.7 ／ 29.8</tspan></text>
 <rect x="16" y="636" width="1368" height="28" rx="4" fill="#f1f3f4" stroke="#f1f3f4" stroke-width="1.0"/>
 <text class="svgsm" x="30" y="656" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 前向 ＋ 反向 · 生产设置 · 设备时间</tspan></text>
@@ -4896,30 +4896,30 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="470" y="676" width="178.2" height="20" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="652.2" y="677" width="53" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svgsm" x="656" y="692" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">13.20</tspan></text>
-<rect x="470" y="702" width="295.11" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="769.11" y="703" width="53" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="773" y="718" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">21.86</tspan></text>
+<rect x="470" y="702" width="295.11" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="769.11" y="703" width="98" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="773" y="718" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">21.86 ✓ 快</tspan></text>
 <text class="svgsm" x="454" y="764" fill="#202124" text-anchor="end" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 21 轮　一单再加倍（M ＝ 1024）</tspan></text>
-<rect x="470" y="740" width="151.74" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="625.74" y="741" width="53" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="629" y="756" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">11.24</tspan></text>
-<rect x="470" y="766" width="246.915" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="720.915" y="767" width="53" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="724" y="782" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">18.29</tspan></text>
+<rect x="470" y="740" width="151.74" height="20" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="625.74" y="741" width="98" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="629" y="756" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">11.24 ✓ 快</tspan></text>
+<rect x="470" y="766" width="246.915" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="720.915" y="767" width="98" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="724" y="782" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">18.29 ✓ 快</tspan></text>
 <text class="svgsm" x="454" y="828" fill="#202124" text-anchor="end" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 24 轮　去掉核外零碎</tspan></text>
-<rect x="470" y="804" width="143.1" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="617.1" y="805" width="53" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="621" y="820" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10.60</tspan></text>
-<rect x="470" y="830" width="230.715" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="704.715" y="831" width="53" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="708" y="846" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">17.09</tspan></text>
+<rect x="470" y="804" width="143.1" height="20" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="617.1" y="805" width="98" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="621" y="820" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10.60 ✓ 快</tspan></text>
+<rect x="470" y="830" width="230.715" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="704.715" y="831" width="98" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="708" y="846" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">17.09 ✓ 快</tspan></text>
 <text class="svgsm" x="454" y="892" fill="#202124" text-anchor="end" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 28 轮　前向两组行交错</tspan></text>
-<rect x="470" y="868" width="135.54" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="609.54" y="869" width="53" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="613" y="884" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10.04</tspan></text>
-<rect x="470" y="894" width="216.26999999999998" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="690.27" y="895" width="53" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svgsm" x="694" y="910" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16.02</tspan></text>
+<rect x="470" y="868" width="135.54" height="20" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="609.54" y="869" width="98" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="613" y="884" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10.04 ✓ 快</tspan></text>
+<rect x="470" y="894" width="216.26999999999998" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="690.27" y="895" width="98" height="19" rx="2" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="694" y="910" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16.02 ✓ 快</tspan></text>
 <text class="svgsm" x="1370" y="686" fill="#5f6368" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密 12.97 ／ 25.68</tspan></text>
 <rect x="0" y="974" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="974" width="1400" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -4936,19 +4936,19 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="470" y="1127" width="80.10000000000001" height="22" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="558" y="1143" fill="#80868b" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8.9</tspan></text>
 <text class="svgsm" x="454" y="1182" fill="#202124" text-anchor="end" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">排序写成 Pallas 双调网络</tspan></text>
-<rect x="470" y="1167" width="50.4" height="22" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="528" y="1183" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.6</tspan></text>
+<rect x="470" y="1167" width="50.4" height="22" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="528" y="1183" fill="#80868b" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.6</tspan></text>
 <text class="svgsm" x="454" y="1222" fill="#202124" text-anchor="end" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">压紧写成 Pallas 移位网络</tspan></text>
-<rect x="470" y="1207" width="36.9" height="22" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="514" y="1223" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.1</tspan></text>
+<rect x="470" y="1207" width="36.9" height="22" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="514" y="1223" fill="#80868b" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.1</tspan></text>
 <text class="svgsm" x="454" y="1262" fill="#202124" text-anchor="end" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">合并、标记、压紧一个核</tspan></text>
-<rect x="470" y="1247" width="31.5" height="22" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="509" y="1263" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.5</tspan></text>
+<rect x="470" y="1247" width="31.5" height="22" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="509" y="1263" fill="#80868b" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.5</tspan></text>
 <rect x="0" y="1324" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="1324" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="1324" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="1351" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一轮先量清楚卡在哪：先是搬一行太贵，再是数据，再是核外的零碎和账本</tspan></text>
-</svg><figcaption><b>每一段从上往下看：条越来越短，跨过虚线就变绿。</b><span class="capmore"><br><em>三段口径不同，只在段内跟各自的稠密比；最下面是账本，单独一条线。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（单设备、同一进程里稀疏和稠密各测；稠密是本讲模型调优用的块稀疏配置，按块掩码）。① 段的稠密虚线取第 3 轮那次读数 4.87 ／ 9.72（第 7–8 轮同批是 4.85 ／ 9.79）。合成挑法「一半挑最近、一半在更早的里随机」，32 头一单 8 个 query（ρ 2.28）、64 头一单 4 个（ρ 1.45），rank 0，只看前向。第 3 轮 12.5 对稠密 4.87，还慢 2.6 倍；第 7 轮不切段 14.0 / 17.4。合成挑法上前向 ＋ 反向：第 5 轮 60.6 / 79.4，第 9–11 轮小工散射累加、规约分组倒序 27.1 → 21.8 / 34.1 → 30.6（稠密 15.0 / 29.7）。</p>
+</svg><figcaption><b>每一段从上往下看：条越来越短，跨过虚线就标「✓ 快」。</b><span class="capmore"><br><em>三段口径不同，只在段内跟各自的稠密比；最下面是账本，单独一条线。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（单设备、同一进程里稀疏和稠密各测；稠密是本讲模型调优用的块稀疏配置，按块掩码）。① 段的稠密虚线取第 3 轮那次读数 4.87 ／ 9.72（第 7–8 轮同批是 4.85 ／ 9.79）。合成挑法「一半挑最近、一半在更早的里随机」，32 头一单 8 个 query（ρ 2.28）、64 头一单 4 个（ρ 1.45），rank 0，只看前向。第 3 轮 12.5 对稠密 4.87，还慢 2.6 倍；第 7 轮不切段 14.0 / 17.4。合成挑法上前向 ＋ 反向：第 5 轮 60.6 / 79.4，第 9–11 轮小工散射累加、规约分组倒序 27.1 → 21.8 / 34.1 → 30.6（稠密 15.0 / 29.7）。</p>
 <p>② 真实挑选：公开的 Hy4 预览版权重在 CPU 上抓的一篇 32K 长文，按上下文并行 8 的负载均衡切法取每个设备的本地 query；8 个设备取最慢的那个；默认运行库设置、每次调用后同步（含主机派发）。</p>
 <p>③ 换成生产配置用的运行库设置，连续派发 10 次取平均（设备时间口径，训练里整步异步派发就是这样）；稠密在这个设置下也快了一截，所以第 20 轮看着比第 14 轮快、其实是换了尺子。M ＝ 一单 query 数 × 头数：32 头一单 32 个、64 头一单 16 个。</p>
 <p>账本：第 1 轮 71 ms（两次 840 万元素的 scatter ＋ 逐段切片）→ 排序替掉 scatter 7.8–9.9 → 全局一张表 8.9 → 两次排序写成 Pallas 双调网络 5.6 → 压紧写成 Pallas 移位网络 3.7–4.1 → 合并、标记、压紧一个核 3.1–3.6（一单加倍那一轮一度回到 5 ms 多）。</p></details></figure>
@@ -4960,8 +4960,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul>
 <figure class="fbox fwide" id="fig-dsa-result"><svg viewBox="0 0 1400 518" width="100%" role="img" aria-label="定稿：一层注意力前向加反向，最慢的设备。32K：32 头稠密 12.98 毫秒、稀疏 10.04，快 1.29 倍，摊进每层的账本后 10.9，快 1.19 倍；64 头稠密 25.73、稀疏 16.02，快 1.61 倍，含账本 16.9，快 1.52 倍。256K：32 头稠密 186.0、稀疏 31.3，快 5.9 倍，含账本 5.6 倍；64 头稠密 377.6、稀疏 46.3，快 8.2 倍，含账本 7.8 倍。全部零溢出、重跑逐位。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">定稿：单个分片的注意力计算本身，32K 快 1.3–1.6 倍，256K 快 5.9–8.2 倍</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">口径：单设备 ＝ 上下文并行里的一个分片（全长 KV 当作已在本地），不含跨卡收集 KV、跨主机通信和小核上的通信争用，稠密同口径；灰 ＝ 稠密，绿 ＝ 稀疏核，浅绿 ＝ 摊进</text>
-<text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每层的账本（推断）；条越短越快；取最慢的分片</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">毫秒；口径：单设备 ＝ 上下文并行里的一个分片（全长 KV 当作已在本地），不含跨卡收集 KV、跨主机通信和小核上的通信争用，稠密同口径；灰 ＝ 稠密，绿 ＝ 稀疏核，浅绿 ＝</text>
+<text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">摊进每层的账本（推断）；条越短越快；取最慢的分片</text>
 <rect x="0" y="85" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="96" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稠密</text>
 <rect x="78.36" y="85" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -5079,8 +5079,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 <figure class="fbox fwide" id="fig-dsa-step"><svg viewBox="0 0 1400 688" width="100%" role="img" aria-label="整模型一步的拆账，32 头的模型，64 片，每设备 16K 个 token，同一种切法放大。32K：稠密 4.49 秒，其中注意力核 1.55；稀疏 5.11 秒，注意力核 1.09，但多了 indexer、账本、等小核 0.49，露出的通信从 0.35 涨到 0.72，比稠密慢。256K：稠密 15.27 秒，注意力核 11.86；稀疏 7.82 秒，注意力核 1.48，多了 indexer 1.80、等小核 0.68、账本 0.09，露出的通信 1.14，快约 1.95 倍。虚线是阿姆达尔下限约 3.9 秒：只有注意力核那段会缩，其余不变。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">放进整模型：32K 慢 15%，256K 快 1.95 倍</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每行一步（毫秒，profile 中位步，同一把尺子）；灰 ＝ 注意力核，浅灰 ＝ 注意力的投影等，红 ＝ 稀疏新增（indexer、账本、等小核），橙 ＝ MoE 与其余计算，紫 ＝ 露出的</text>
-<text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">通信</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每行一步（秒，profile 中位步，同一把尺子）；灰 ＝ 注意力核，浅灰 ＝ 注意力的投影等，红 ＝ 稀疏新增（indexer、账本、等小核），橙 ＝ MoE 与其余计算，紫 ＝ 露出的通</text>
+<text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">信</text>
 <rect x="0" y="85" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="96" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">注意力核</text>
 <rect x="109.72" y="85" width="14" height="14" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
@@ -5147,92 +5147,93 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>这个模型没有训过的 indexer：挑选用按真实挑选统计拟合的合成选择（32K ρ(32) 2.85，比真实偏高 12–15%；256K 3.71，偏低约 10%，按真实挑选约多 0.2 秒，推算），indexer 照常算。</p>
 <p>本课推导（下限）：稠密 15.27 秒里只有注意力核 11.86 秒会随稀疏缩，缩到稀疏这一侧的计算量（稀疏注意力 115.0 ＋ indexer 197.4 万亿次）÷ 稠密注意力 7388.7 ＝ 4.2%，约 0.50 秒；投影等 1.40 秒和其余 2.01 秒不动：下限约 3.9 秒，上限约 3.9 倍。稀疏这边的投影实测只要 0.70 秒（吸收式不用为核构完整的 K/V），按它算上限还能再高一些（约 4.8 倍），这里取保守的 3.9。</p></details></figure>
   <p><b>32K 慢 15%（5.17 对 4.50 秒），256K 快 1.95 倍（7.88 对 15.34 秒）</b>；再算上训练 indexer 的蒸馏（11.7），是 1.73 倍。同一颗核，为什么短的慢、长的快？</p>
-<figure class="fbox fwide" id="fig-dsa-share"><svg viewBox="0 0 1400 680" width="100%" role="img" aria-label="为什么长序列才快。左：每设备 16K 个 token 不变，稠密一步要算的量里注意力占多少：32K 是 923.6 对其余 551.6 万亿次，占 63%；256K 是 7388.7 对 523.6，占 93%；注意力核自己的效率两种长度都在 52% 到 54%。右：横轴序列长度，纵轴每设备每步万亿次运算，按对数画。稠密注意力随长度成正比涨，其余矩阵乘不变，两条线在约 17K 相交；稀疏注意力几乎不随长度变，约 115；indexer 打分随长度涨，但只有稠密注意力的 2.6%。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-dsa-share"><svg viewBox="0 0 1400 702" width="100%" role="img" aria-label="为什么长序列才快。左：每设备 16K 个 token 不变，稠密一步要算的量里注意力占多少：32K 是 923.6 对其余 551.6 万亿次，占 63%；256K 是 7388.7 对 523.6，占 93%；注意力核自己的效率两种长度都在 52% 到 54%。右：横轴序列长度，纵轴每设备每步万亿次运算，按对数画。稠密注意力随长度成正比涨，其余矩阵乘不变，两条线在约 17K 相交；稀疏注意力几乎不随长度变，约 115；indexer 打分随长度涨，但只有稠密注意力的 2.6%。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每设备的 token 不变，变的是每个 query 要看多少 key：注意力从 63% 涨到 93%</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：稠密一步要算的量（万亿次／设备／步）的构成；右：四类计算随序列长度怎么涨（纵轴按对数画，本课推导，32 头的模型，每设备 16K 个 query）</text>
-<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稠密注意力</text>
-<rect x="125.4" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="146" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">其余矩阵乘</text>
-<rect x="250.8" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="271" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稀疏注意力</text>
-<rect x="376.20000000000005" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="397" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">indexer 打分</text>
-<rect x="0" y="102" width="430" height="484" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="102" width="430" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="0" y="104" width="430" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="132" x2="430" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#80868b" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 稠密一步的构成（实测分子）</tspan></text>
-<rect x="90" y="202" width="90" height="123.3920824295011" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="90" y="325.3920824295011" width="90" height="206.6079175704989" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="135" y="434" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">63%</tspan></text>
-<text class="svgsm" x="135" y="556" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K</tspan></text>
-<text class="svgsm" x="135" y="578" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">注意力 924 ／ 共 1475</text>
-<rect x="260" y="202" width="90" height="21.837897956346467" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="260" y="223.83789795634647" width="90" height="308.16210204365353" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="305" y="383" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">93%</tspan></text>
-<text class="svgsm" x="305" y="556" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256K</tspan></text>
-<text class="svgsm" x="305" y="578" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">注意力 7389 ／ 共 7912</text>
-<rect x="460" y="102" width="940" height="484" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="460" y="102" width="940" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="460" y="104" width="940" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="460" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="474" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 四类计算随长度怎么涨（本课推导）</tspan></text>
-<line x1="550" y1="532.0" x2="1250" y2="532.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="540" y="537" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">1</text>
-<line x1="550" y1="447.0" x2="1250" y2="447.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="540" y="452" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">10</text>
-<line x1="550" y1="362.0" x2="1250" y2="362.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="540" y="367" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">100</text>
-<line x1="550" y1="277.0" x2="1250" y2="277.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="540" y="282" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">1000</text>
-<line x1="550" y1="192.0" x2="1250" y2="192.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="540" y="197" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">10000</text>
-<text class="svgsm" x="550" y="556" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8K</tspan></text>
-<text class="svgsm" x="690" y="556" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16K</tspan></text>
-<text class="svgsm" x="830" y="556" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K</tspan></text>
-<text class="svgsm" x="970" y="556" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64K</tspan></text>
-<text class="svgsm" x="1110" y="556" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K</tspan></text>
-<text class="svgsm" x="1250" y="556" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256K</tspan></text>
-<path d="M 550.00 331.11 L 690.00 305.52 L 830.00 279.93 L 970.00 254.35 L 1110.00 228.76 L 1250.00 203.17" fill="none" stroke="#80868b" stroke-width="3.0" stroke-linecap="round"/>
-<rect x="546.0" y="327.10896570204" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="686.0" y="301.5214160706016" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="826.0" y="275.9338664391632" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="966.0" y="250.3463168077248" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="1106.0" y="224.75876717628643" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="1246.0" y="199.171217544848" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="1262" y="208" fill="#80868b" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密注意力 7389</tspan></text>
-<path d="M 550.00 303.75 L 690.00 303.75 L 830.00 303.75 L 970.00 303.75 L 1110.00 303.75 L 1250.00 303.75" fill="none" stroke="#e8710a" stroke-width="3.0" stroke-linecap="round"/>
-<rect x="546.0" y="299.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="686.0" y="299.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="826.0" y="299.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="966.0" y="299.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="1106.0" y="299.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="1246.0" y="299.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1262" y="308" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">其余矩阵乘 484</tspan></text>
-<path d="M 550.00 361.63 L 690.00 359.08 L 830.00 357.87 L 970.00 357.28 L 1110.00 356.99 L 1250.00 356.84" fill="none" stroke="#1e8e3e" stroke-width="3.0" stroke-linecap="round"/>
-<rect x="546.0" y="357.6262398146226" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="686.0" y="355.07936582753985" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="826.0" y="353.86892850279804" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="966.0" y="353.2782754065952" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="1106.0" y="352.9864554603317" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="1246.0" y="352.8414060361402" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1262" y="361" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稀疏注意力 115</tspan></text>
-<path d="M 550.00 465.28 L 690.00 439.69 L 830.00 414.10 L 970.00 388.52 L 1110.00 362.93 L 1250.00 337.34" fill="none" stroke="#d93025" stroke-width="3.0" stroke-linecap="round"/>
-<rect x="546.0" y="461.27990818008584" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="686.0" y="435.69235854864746" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="826.0" y="410.1048089172091" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="966.0" y="384.51725928577065" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1106.0" y="358.9297096543322" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1246.0" y="333.34216002289384" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1262" y="342" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">indexer 打分 195</tspan></text>
-<line x1="699.691988953966" y1="202" x2="699.691988953966" y2="532" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5,4"/>
-<text class="svgsm" x="707" y="216" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 17K：注意力 ＝ 其余矩阵乘</tspan></text>
-<text class="svgsm" x="838" y="267" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">924</tspan></text>
-<rect x="0" y="606" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="606" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="606" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="633" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列越长，稠密里注意力越占大头，稀疏能省的越多；短序列上注意力本来就不大，省不出多少</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Ⓐ 稠密一步要算的量里各占多少（柱高按占比画，两根总量不同）；Ⓑ 四类计算随序列长度怎么涨（万亿次／设备／步，纵轴按对数画，本课推导，32 头的模型，每设备 16K 个 query</text>
+<text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">）</text>
+<rect x="0" y="85" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="96" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稠密注意力</text>
+<rect x="125.4" y="85" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="146" y="96" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">其余矩阵乘</text>
+<rect x="250.8" y="85" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="271" y="96" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稀疏注意力</text>
+<rect x="376.20000000000005" y="85" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="397" y="96" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">indexer 打分</text>
+<rect x="0" y="124" width="430" height="484" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="124" width="430" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="0" y="126" width="430" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="154" x2="430" y2="154" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="144" fill="#80868b" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 稠密一步的构成（实测分子）</tspan></text>
+<rect x="90" y="224" width="90" height="123.3920824295011" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="90" y="347.3920824295011" width="90" height="206.6079175704989" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="135" y="456" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">63%</tspan></text>
+<text class="svgsm" x="135" y="578" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K</tspan></text>
+<text class="svgsm" x="135" y="600" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">注意力 924 ／ 共 1475</text>
+<rect x="260" y="224" width="90" height="21.837897956346467" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="260" y="245.83789795634647" width="90" height="308.16210204365353" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="305" y="405" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">93%</tspan></text>
+<text class="svgsm" x="305" y="578" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256K</tspan></text>
+<text class="svgsm" x="305" y="600" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">注意力 7389 ／ 共 7912</text>
+<rect x="460" y="124" width="940" height="484" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="460" y="124" width="940" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="460" y="126" width="940" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="460" y1="154" x2="1400" y2="154" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="474" y="144" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 四类计算随长度怎么涨（本课推导）</tspan></text>
+<line x1="550" y1="554.0" x2="1250" y2="554.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="540" y="559" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">1</text>
+<line x1="550" y1="469.0" x2="1250" y2="469.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="540" y="474" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">10</text>
+<line x1="550" y1="384.0" x2="1250" y2="384.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="540" y="389" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">100</text>
+<line x1="550" y1="299.0" x2="1250" y2="299.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="540" y="304" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">1000</text>
+<line x1="550" y1="214.0" x2="1250" y2="214.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="540" y="219" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">10000</text>
+<text class="svgsm" x="550" y="578" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8K</tspan></text>
+<text class="svgsm" x="690" y="578" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16K</tspan></text>
+<text class="svgsm" x="830" y="578" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K</tspan></text>
+<text class="svgsm" x="970" y="578" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64K</tspan></text>
+<text class="svgsm" x="1110" y="578" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K</tspan></text>
+<text class="svgsm" x="1250" y="578" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256K</tspan></text>
+<path d="M 550.00 353.11 L 690.00 327.52 L 830.00 301.93 L 970.00 276.35 L 1110.00 250.76 L 1250.00 225.17" fill="none" stroke="#80868b" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="546.0" y="349.10896570204" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="686.0" y="323.5214160706016" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="826.0" y="297.9338664391632" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="966.0" y="272.3463168077248" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1106.0" y="246.75876717628643" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1246.0" y="221.171217544848" width="8" height="8" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1262" y="230" fill="#80868b" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密注意力 7389</tspan></text>
+<path d="M 550.00 325.75 L 690.00 325.75 L 830.00 325.75 L 970.00 325.75 L 1110.00 325.75 L 1250.00 325.75" fill="none" stroke="#e8710a" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="546.0" y="321.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="686.0" y="321.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="826.0" y="321.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="966.0" y="321.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1106.0" y="321.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1246.0" y="321.7500285821233" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1262" y="330" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">其余矩阵乘 484</tspan></text>
+<path d="M 550.00 383.63 L 690.00 381.08 L 830.00 379.87 L 970.00 379.28 L 1110.00 378.99 L 1250.00 378.84" fill="none" stroke="#1e8e3e" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="546.0" y="379.6262398146226" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="686.0" y="377.07936582753985" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="826.0" y="375.86892850279804" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="966.0" y="375.2782754065952" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1106.0" y="374.9864554603317" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1246.0" y="374.8414060361402" width="8" height="8" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1262" y="383" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稀疏注意力 115</tspan></text>
+<path d="M 550.00 487.28 L 690.00 461.69 L 830.00 436.10 L 970.00 410.52 L 1110.00 384.93 L 1250.00 359.34" fill="none" stroke="#d93025" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="546.0" y="483.27990818008584" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="686.0" y="457.69235854864746" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="826.0" y="432.1048089172091" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="966.0" y="406.51725928577065" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="1106.0" y="380.9297096543322" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="1246.0" y="355.34216002289384" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1262" y="364" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">indexer 打分 195</tspan></text>
+<line x1="699.691988953966" y1="224" x2="699.691988953966" y2="554" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5,4"/>
+<text class="svgsm" x="707" y="238" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 17K：注意力 ＝ 其余矩阵乘</tspan></text>
+<text class="svgsm" x="838" y="289" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">924</tspan></text>
+<rect x="0" y="628" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="628" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="628" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="655" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列越长，稠密里注意力越占大头，稀疏能省的越多；短序列上注意力本来就不大，省不出多少</tspan></text>
 </svg><figcaption><b>右图看灰线和橙线在哪交叉：约 17K 以后注意力就是大头。绿线几乎是平的。</b><span class="capmore"><br><em>纵轴按对数画；本课推导，锚点是左边两根实测分子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测分子（每设备每步，前向 ＋ 反向）：其余矩阵乘 ＝ 投影、稠密与专家 FFN、输出头（含 MTP 层）484.5，加 MTP 输出头 35.0、视觉塔（按实际图像，32K 32.1、256K 4.1）；稠密注意力 ＝ 2 · t · T · 32 头 · 512 ÷ 2 × 3 × 35 层，32K 923.6、256K 7388.7；注意力核效率 ＝ 923.6 ÷ 1.55 s、7388.7 ÷ 11.86 s，再 ÷ 1155。</p>
 <p>本课推导：交点 ＝ 32768 × 484.5 ÷ 923.6 ≈ 17,200（只跟其余矩阵乘比；加上 MTP 头约 18K，再加视觉塔约 20K）。稀疏注意力照框架的写法（每个 query 2048 个 key、不计并集白算）；indexer 打分 ＝ 每个 query 对全部可见 key 算 32 头 × 128 维、只在 11 层、只有前向。其余矩阵乘那条只画线性层 484.5。</p></details></figure>
   <p>两种长度每设备都是 16K 个 query，MoE、投影、优化器的计算量一样多；变的是每个 query 平均要看的 key：因果下约半个序列，32K 约 16K 个，256K 约 128K 个。注意力占稠密计算量的比例从 63% 涨到 93%（按时间，32K 的注意力核只占一步的三分之一左右），注意力核自己的效率一直在 52–54%：稠密 256K 的有效 MFU 45% 比 32K 的 28% 高，不是核变好了，是注意力占多了。按这个模型推，<b>注意力和其余矩阵乘一样多的长度约 17K</b>（本课推导）。</p>
@@ -5320,6 +5321,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="100" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">S 层</text>
 <rect x="160.07999999999998" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="181" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">教师</text>
+<rect x="238.44" y="63" width="14" height="14" rx="3" fill="#f6aea9" stroke="#f6aea9" stroke-width="1.0"/>
+<text class="svgsm" x="259" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">热身一步的其余</text>
 <rect x="0" y="102" width="1400" height="188" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -5451,7 +5454,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="470" y="472" width="676.704" height="28" rx="3" fill="#f6aea9" stroke="#f6aea9" stroke-width="1.0"/>
 <text class="svgsm" x="1156" y="491" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">70.5 秒</tspan></text>
 <text class="svgsm" x="454" y="540" fill="#202124" text-anchor="end" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">热身 · 再把教师写进 Pallas 核</tspan></text>
-<rect x="470" y="522" width="233.18399999999997" height="28" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="470" y="522" width="233.18399999999997" height="28" rx="3" fill="#f6aea9" stroke="#f6aea9" stroke-width="1.0"/>
 <rect x="470" y="522" width="195.83999999999997" height="28" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="567" y="541" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">教师 20.4（84%）</tspan></text>
 <text class="svgsm" x="713" y="541" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">24.3 秒</tspan></text>
