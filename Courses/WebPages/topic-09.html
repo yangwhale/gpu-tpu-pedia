@@ -892,7 +892,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（主核、小核）、<b>专题五</b>（FSDP、all-gather）、<b>专题七</b>（MFU、读一条通信）、<b>专题八</b>（尺子）</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>一次课，主线约 104 分钟</b>（讲稿一字不落念完约 94 分钟，其余留给互动）</span>
+    <span class="chip">⏱ <b>一次课，主线约 102 分钟</b>（讲稿一字不落念完约 93 分钟，其余留给互动）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -4332,7 +4332,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="lead">公开 Hy4 的注意力带一个稀疏索引器（indexer）：每个 query 只挑 2048 个 key 来看（前面调优的配置没开它）。按理 32K 上能少算 8 倍，交给现成的块稀疏核，一点没省。这一节讲为它写的一颗 Pallas 稀疏注意力核：怎么设计、怎么一轮一轮做快；放进整模型以后，<b>256K 快 1.95 倍，32K 反而慢 15%</b>，为什么。</p>
 
   <h3 id="s11-1">11.1　训练里省的是乘法，不是读 KV</h3>
-  <p>专题三讲过，DSA 省的是「读多少」：那是推理，一次只来一个新 query，从 32K 里挑 2048 个，少读 16 倍。训练不一样：32768 个 query 同时都在，几乎每个 key 都有人挑，读省不了；也不用省，一层的 KV 读一遍约 10 微秒，一层注意力的计算却是毫秒级（本课推导）。<b>训练里省的是 query 和 key 两两相乘的次数：满因果约 5.4 亿对，每人只挑 2048 个是约 6700 万对，32K 少 8 倍，256K 少 64 倍（本课推导）。</b></p>
+  <p>专题三讲过，DSA 省的是「读多少」：那是推理，一次只来一个新 query，从 32K 里挑 2048 个，少读 16 倍。训练不一样：32768 个 query 同时都在，几乎每个 key 都有人挑，读省不了；也不用省，一层的 KV 读一遍约 10 微秒，一层注意力的计算却是毫秒级（本课推导）。读的字节不是瓶颈，后面要对付的是按行收的次数（11.3）。<b>训练里省的是 query 和 key 两两相乘的次数：满因果约 5.4 亿对，每人只挑 2048 个是约 6700 万对，32K 少 8 倍，256K 少 64 倍（本课推导）。</b></p>
   <p>可现成的块稀疏核是按块跳的：一块 512 个 query × 512 个 key，块里只要有一对被挑中，整块就得算。下图左边是一份玩具账：</p>
 <figure class="fbox fwide" id="fig-dsa-moe"><svg viewBox="0 0 1400 646" width="100%" role="img" aria-label="左：一个 query 块的 4 个 query（位置 12 到 15）各从 16 个 key 里挑 4 个，蓝格是挑中的；key 按 4 个一块切，4 块里每块都至少有一个蓝格，所以 4 块都要整块算，跟稠密一样。右：把这 4 个 query 挑中的 key 收拢成一摞，并集 8 行（0、5、9、11、12、13、14、15），整单对着这 8 行一起乘，没挑的格子用成员位掩掉。这一单就像 MoE 的一个专家，收拢来的 key 行就像分给它的 token。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每个 query 只挑 2048 个，块稀疏却一块都跳不掉；拼单收拢再乘，就是一次 MoE</text>
@@ -4534,7 +4534,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
        aria-label="PinDanGather 动画，标题「拼单：先收拢，再整块乘」。上方一张 4 行 16 列的格子：行是 q12 到 q15，列是 key 0 到 15，蓝格是挑中的，深灰格是因果看不见的。字幕依次是：「一单 4 个 query，每人从 16 个 key 挑 4 个」；「按块跳：块里有一个挑中，整块就得算」，四个 4 列的块逐个框上红框，下面计数「要整块算的块：1 / 4」到「4 / 4」；「4 块全要算，跟稠密一样」。接着红框和没被这一单挑过的列淡出，挑过的 8 列（0、5、9、11、12、13、14、15）往左挤成一摞，字幕「拼一单：只留这一单挑过的 key，收拢成一摞」；绿框框住 8 列，旁边写「并集 8 行」「ρ ＝ 8 ÷ 4 ＝ 2」「白格：没挑的，乘完用成员位掩掉」，字幕「一单是一个专家，收来的 key 行是它的 token」。下面出现两条车道「小工（小核）」「师傅（主核）」：紫块收1 到收4 依次出现，蓝块算1 到算4 各晚一格，字幕「小工收下一段时，师傅算这一段」，最后「师傅只看见连续的大块，搬行交给小工」。随后各列散回原位，回到开头画面。"></video>
 <figcaption><b>看蓝格那几列往左挤到一起：16 列收成 8 列；下面紫块和蓝块错开一格。</b>
   <span class="sub">（19 秒，Manim 渲染，可一步一步看。玩具挑选同上图（位置 12–15 的 4 个 query，各挑 4 个 key）；第三幕的段数和段长是示意。）</span></figcaption></figure>
-  <p>拼单有一笔白算：每个 query 都要跟整张单子算。这里有两种「行」别混：<b>乘的行</b>是一单的 query 数 × 头数（各头共用同一份 KV，能摞成一次矩阵乘的行）；<b>收的行</b>是单子里的 key 行。并集行数 ÷ 2048 叫 ρ，相邻的 query 挑得越像，ρ 越小。用公开的 Hy4 预览版权重在一篇 32K 长文上实测：相邻 4 个 query 的 ρ 只有 1.31–1.49，16 个 1.71–2.38；单子翻一倍，ρ 只涨约 1.2 倍。单子多大，看两笔账：</p>
+  <p>拼单有一笔白算：每个 query 都要跟整张单子算。这里有两种「行」别混：<b>乘的行</b>是一单的 query 数 × 头数（吸收式 MLA 下各头共用同一份潜变量 KV，能摞成一次矩阵乘的行）；<b>收的行</b>是单子里的 key 行。并集行数 ÷ 2048 叫 ρ，相邻的 query 挑得越像，ρ 越小。用公开的 Hy4 预览版权重在一篇 32K 长文上实测：相邻 4 个 query 的 ρ 只有 1.31–1.49，16 个 1.71–2.38；单子翻一倍，ρ 只涨约 1.2 倍。单子多大，看两笔账：</p>
 <figure class="fbox fwide" id="fig-dsa-qb"><svg viewBox="0 0 1400 616" width="100%" role="img" aria-label="拼单的两笔账。相邻几个 query 拼一单，把各自挑的 key 合成一张单子，一起收、一起算。横轴是一单几个 query：8、16、32、64。每档两根柱：蓝 ＝ 算的时间，随 ρ 涨（每个 query 要跟整张单子算）；紫 ＝ 收行的时间，单子越大、要收的行越少（197 万、125 万、79 万、50 万行）。一层的时间取两者中较大的那根。32 头：较大值 4.68、2.97、1.88、2.27 毫秒，一单 32 个最省；64 头每个 query 的活是两倍，较大值 4.68、2.97、3.59、4.54，一单 16 个最省。两种都是一单 1024 行。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">拼单的两笔账：单子越大，收得越少、白算越多；取两者较大的那根最小</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每档两根柱（毫秒，每设备每层前向）：蓝 ＝ 算，随 ρ 涨；紫 ＝ 收 key 行，行数 ÷ 小工每秒 4.2 亿行；绿框 ＝ 两根里较高的那根最矮的一档（本课推导）</text>
@@ -4959,7 +4959,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>最后几刀</b>：去掉核外的切片、拼接、换型；前向核把行分两组，一组的 softmax 跟另一组的矩阵乘交错，快约 5.5%，逐位不变。</li>
   </ul>
 <figure class="fbox fwide" id="fig-dsa-result"><svg viewBox="0 0 1400 518" width="100%" role="img" aria-label="定稿：一层注意力前向加反向，最慢的设备。32K：32 头稠密 12.98 毫秒、稀疏 10.04，快 1.29 倍，摊进每层的账本后 10.9，快 1.19 倍；64 头稠密 25.73、稀疏 16.02，快 1.61 倍，含账本 16.9，快 1.52 倍。256K：32 头稠密 186.0、稀疏 31.3，快 5.9 倍，含账本 5.6 倍；64 头稠密 377.6、稀疏 46.3，快 8.2 倍，含账本 7.8 倍。全部零溢出、重跑逐位。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">定稿：单个分片的注意力计算本身，32K 快 1.2–1.6 倍，256K 快 5.9–8.2 倍</text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">定稿：单个分片的注意力计算本身，32K 快 1.3–1.6 倍，256K 快 5.9–8.2 倍</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">口径：单设备 ＝ 上下文并行里的一个分片（全长 KV 当作已在本地），不含跨卡收集 KV、跨主机通信和小核上的通信争用，稠密同口径；灰 ＝ 稠密，绿 ＝ 稀疏核，浅绿 ＝ 摊进</text>
 <text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每层的账本（推断）；条越短越快；取最慢的分片</text>
 <rect x="0" y="85" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -5235,7 +5235,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="633" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列越长，稠密里注意力越占大头，稀疏能省的越多；短序列上注意力本来就不大，省不出多少</tspan></text>
 </svg><figcaption><b>右图看灰线和橙线在哪交叉：约 17K 以后注意力就是大头。绿线几乎是平的。</b><span class="capmore"><br><em>纵轴按对数画；本课推导，锚点是左边两根实测分子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测分子（每设备每步，前向 ＋ 反向）：其余矩阵乘 ＝ 投影、稠密与专家 FFN、输出头（含 MTP 层）484.5，加 MTP 输出头 35.0、视觉塔（按实际图像，32K 32.1、256K 4.1）；稠密注意力 ＝ 2 · t · T · 32 头 · 512 ÷ 2 × 3 × 35 层，32K 923.6、256K 7388.7；注意力核效率 ＝ 923.6 ÷ 1.55 s、7388.7 ÷ 11.86 s，再 ÷ 1155。</p>
 <p>本课推导：交点 ＝ 32768 × 484.5 ÷ 923.6 ≈ 17,200（只跟其余矩阵乘比；加上 MTP 头约 18K，再加视觉塔约 20K）。稀疏注意力照框架的写法（每个 query 2048 个 key、不计并集白算）；indexer 打分 ＝ 每个 query 对全部可见 key 算 32 头 × 128 维、只在 11 层、只有前向。其余矩阵乘那条只画线性层 484.5。</p></details></figure>
-  <p>两种长度每设备都是 16K 个 query，MoE、投影、优化器的活一样多；变的是每个 query 平均要看的 key：因果下约半个序列，32K 约 16K 个，256K 约 128K 个。注意力占稠密计算的比例从 63% 涨到 93%，注意力核自己的效率一直在 52–54%：稠密 256K 的有效 MFU 45% 比 32K 的 28% 高，不是核变好了，是注意力占多了。按这个模型推，<b>注意力和其余矩阵乘一样多的长度约 17K</b>（本课推导）。</p>
+  <p>两种长度每设备都是 16K 个 query，MoE、投影、优化器的计算量一样多；变的是每个 query 平均要看的 key：因果下约半个序列，32K 约 16K 个，256K 约 128K 个。注意力占稠密计算量的比例从 63% 涨到 93%（按时间，32K 的注意力核只占一步的三分之一左右），注意力核自己的效率一直在 52–54%：稠密 256K 的有效 MFU 45% 比 32K 的 28% 高，不是核变好了，是注意力占多了。按这个模型推，<b>注意力和其余矩阵乘一样多的长度约 17K</b>（本课推导）。</p>
   <p>32K 的注意力核只有 1.55 秒，全省掉也就这么多；稀疏核（连核外粘合）省了 0.46 秒，indexer、账本、等小核 0.49 秒、多露出的通信 0.38 秒先把它吃掉了。256K 的注意力核有 11.86 秒，稀疏把它缩到 1.48 秒，新增的开销也涨了，省下的远多于付出的。<b>32K 的现实目标是持平，收益在长序列。</b></p>
 <details class="foldfig"><summary><b>这些整模型读数的口径</b></summary>
   <p>64 片 v7x：32K 上下文并行 2 ＋ FSDP 64，256K 上下文并行 16 ＋ FSDP 8，参数和优化器状态都切 128 份，稠密与稀疏同配置；32K 取第 20–35 步均值，256K 取第 12–21 步中位数，稠密与稀疏同一批。这个模型没有训过的 indexer：挑选用按真实挑选统计拟合的合成选择（32K ρ 2.85，比真实偏高 12–15%；256K ρ 3.71，偏低约 10%，按真实挑选约多 0.2 秒，推算），indexer 照常算；随机初始化的 indexer 相邻 query 几乎不重合（ρ 5.3），会把核的活放大一倍，不能拿来测性能。</p>
@@ -5243,7 +5243,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 
   <h3 id="s11-6">11.6　离上限还差多少：阿姆达尔、MFU 的口径、GPU 的 4 倍</h3>
-  <p>能快多少有上限（阿姆达尔定律：只有被加速的那部分会缩，其余照旧）。稠密 256K 那一步（profile 中位步 15.27 秒）里，会随稀疏缩的只有注意力核那 11.86 秒；投影等 1.4 秒、MoE 和其余约 2 秒不缩。注意力核缩到稀疏这一侧的计算量（稠密注意力的 4.2%），整步下限约 3.9 秒，<b>上限约 3.9 倍</b>（本课推导；把投影也按 4.2% 缩，会把上限算高）。现在 7.82 秒，差的约 3.9 秒里，约 2.9 秒在注意力这一侧（indexer 1.80、等小核 0.68、核本身的效率），约 1.1 秒在外面，主要是多露出的通信。</p>
+  <p>能快多少有上限（阿姆达尔定律：只有被加速的那部分会缩，其余照旧）。稠密 256K 那一步（profile 中位步 15.27 秒）里，会随稀疏缩的只有注意力核那 11.86 秒；投影等 1.4 秒、MoE 和其余约 2 秒不缩。注意力核缩到稀疏这一侧的计算量（稠密注意力的 4.2%，并假设按稠密注意力的效率跑、不计挑 top-k），整步下限约 3.9 秒，<b>按投影不缩的保守口径，上限约 3.9 倍</b>（本课推导）。现在 7.82 秒，差的约 3.9 秒里，约 2.9 秒在注意力这一侧（indexer 1.80、等小核 0.68、核本身的效率），约 1.1 秒在外面，主要是多露出的通信。</p>
 <figure class="fbox fwide" id="fig-dsa-mfu"><svg viewBox="0 0 1400 842" width="100%" role="img" aria-label="同一步 7.88 秒，三种分子。稠密等价：按稠密那一步该算的 7912.3 万亿次，有效 MFU 86.9%，比稠密自己的 45% 还高，说的是同样的训练量只用了一半时间。框架自带计数 2523.4，27.7%，其中 74% 是按 35 层、前向加反向数的 indexer。实际执行 836.1，9.2%。下：indexer 的三层折扣，每对的运算是主干注意力的四分之一，只有前向再剩三分之一，只在 35 层里的 11 层算再剩 11/35，合起来是稠密注意力的 2.6%。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">稀疏以后的 MFU：同一步，三种分子差十倍；稀疏后实际只有一成左右，却快了一倍</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Ⓐ 256K、不开蒸馏的那一步（7.88 秒）按三种分子算的 MFU（分母相同：步时 × 1155）；Ⓑ indexer 为什么只占一点：三层折扣（本课推导）</text>
@@ -5289,7 +5289,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="30" y="608" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每对只算 32 头 × 128 维：× 1/4</tspan></text>
 <rect x="520" y="592" width="200.0" height="24" rx="3" fill="#f6aea9" stroke="#f6aea9" stroke-width="1.0"/>
 <text class="svgsm" x="730" y="609" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">25.0%</tspan></text>
-<text class="svgsm" x="30" y="654" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只有前向（挑下标不求导）：× 1/3</tspan></text>
+<text class="svgsm" x="30" y="654" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不开蒸馏时只有前向（挑下标不求导）：× 1/3</tspan></text>
 <rect x="520" y="638" width="66.66666666666666" height="24" rx="3" fill="#f6aea9" stroke="#f6aea9" stroke-width="1.0"/>
 <text class="svgsm" x="596" y="655" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8.3%</tspan></text>
 <text class="svgsm" x="30" y="700" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只在 11 层算（其余 24 层借下标）：× 11/35</tspan></text>
@@ -5298,12 +5298,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="768" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="768" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="768" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="795" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稀疏后 MFU 低，是分子变小了，不是硬件闲着：省掉的乘法本来就不该再算进分子</tspan></text>
+<text class="svglbl" x="20" y="795" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">实际执行那根短，是两笔都不记账：拼单多做的乘法，和等待的时间</tspan></text>
 </svg><figcaption><b>同一步、同一个分母，三根条差十倍，差的全在分子怎么数。</b><span class="capmore"><br><em>下面那几根红条：indexer 的量一层一层打折。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>本课推导：MFU ＝ 分子 ÷（7.880 秒 × 1155）。稠密等价分子 ＝ 同长度稠密格的有效分子 7912.3；实际执行 ＝ 线性层 484.5 ＋ MTP 头 35.0 ＋ 视觉 4.1 ＋ 稀疏注意力 115.0 ＋ indexer 打分 195.0 ＋ indexer 投影 2.4 ＝ 836.1；框架自带计数 2523.4，其中 indexer 打分 1861.6（按 35 层 × 3 数）。</p>
 <p>实际执行里稀疏注意力照框架按 256 ＋ 256 维、每个 query 2048 个 key 数，不计并集的白算；核在矩阵单元上实际做的是吸收式 576 ＋ 512 维、ρ 倍的行，比分子多。所以实际执行 MFU 低有两个原因：一是分子扣得干净，二是 indexer、等小核、露出的通信这些不产生分子的时间。</p>
 <p>Ⓑ：7388.7 × 1/4 × 1/3 × 11/35 ≈ 193.5，加上按头加权那一项是 195.0；对稠密注意力是 2.6%。</p></details></figure>
-  <p>快了一倍，MFU 却只有一成左右，看分子怎么数。<b>稠密等价</b>拿稠密该算的数当分子，86.9%，比稠密自己的 45% 还高，说的只是「同样的训练量用了一半时间」；<b>实际执行</b>只数这一步真做了的，9.2%，硬件用得好不好看它。它低，是省掉的乘法本来就不该再进分子，剩下的时间又有一截花在 indexer、等小核、露出的通信这些不产生分子的事上。<b>框架自带的计数</b>把 indexer 按全部层、前向加反向数了，27.7%，高估 3 倍：indexer 每对只算主干的 1/4，只有前向，只在 35 层里的 11 层算，三层折扣下来只有稠密注意力的 2.6%。</p>
-  <p>GPU 上同类算子快多少？一组 GPU 上的读数（Blackwell 一代，DeepSeek V3.2 的形状：128 头、indexer 64 头），256K 单层注意力模块快 4.44 倍；我们按单层口径折算约 2.8 倍。差在三处（推断）：<b>头多不用拼单</b>，128 头一个 query 就有 128 行，不拼单行数也够，没有白算、也不要账本；<b>GPU 天生按行取数</b>，每个线程按地址去读，散着取 2048 行就是普通的读，不用另一种核搬、也不用先写进暂存；<b>indexer 可以用 FP8</b>，DeepSeek V3.2 的论文写明它的 indexer 头少、能用 FP8 实现，而 256K 上我们最大的一项开销正是 indexer。</p>
+  <p>快了一倍，MFU 却只有一成左右，看分子怎么数。<b>稠密等价</b>拿稠密该算的数当分子，86.9%，比稠密自己的 45% 还高，说的只是「同样的训练量用了一半时间」，省掉的乘法照样记了账。<b>实际执行</b>只数这一步真做了的，9.2%，硬件用得好不好看它。它绝对值低有两层：核为拼单多做的白算（ρ 倍的行、吸收式更宽的维数）不进分子；挑 top-k、等小核、露出的通信这段时间不产生分子。<b>框架自带的计数</b>把 indexer 按全部层、前向加反向数了，27.7%，高估 3 倍：indexer 每对只算主干的 1/4，不开蒸馏时只有前向，只在 35 层里的 11 层算，三层折扣下来只有稠密注意力的 2.6%。</p>
+  <p>GPU 上同类算子快多少？一组 GPU 上的读数（Blackwell 一代，DeepSeek V3.2 的形状：128 头、indexer 64 头），256K 单层注意力模块快 4.44 倍；我们按单层口径折算约 2.8 倍。先是形状不同：128 头的稠密一侧注意力更重，indexer 相对主干也更便宜，分母本来就大。剩下的差在三处（推断）：<b>头多不用拼单</b>，128 头一个 query 就有 128 行，不拼单行数也够，没有白算、也不要账本；<b>GPU 天生按行取数</b>，每个线程按地址去读，散着取的行跟乘法在同一颗核里流水，不用另一种核搬；<b>indexer 可以用 FP8</b>，DeepSeek V3.2 的论文写明它能用 FP8 实现。我们的芯片也有 FP8，可它会改挑出来的集合，要先过数值这一关；而且 256K 上 indexer 的 1.80 秒里打分只占 0.56 秒，大头是挑 top-k 和等小核。</p>
 <details class="foldfig"><summary><b>GPU 那组读数和我们的对照</b></summary>
   <p>GPU 那组是单层注意力模块（含全部投影）的前向 ＋ 反向，对照是同卡稠密 MLA：32K 1.16 倍、64K 1.77 倍、128K 2.78 倍、256K 4.44 倍；带蒸馏 0.94、1.48、2.32、4.07 倍。我们按单层口径折算（256K，整模型同一份 profile 里注意力这一侧的分项相加）：稠密的注意力这一侧 13.26 秒；稀疏是投影 0.70 ＋ 核 1.48 ＋ 等小核 0.68 ＋ indexer 1.80 ＋ 账本 0.09 ＝ 4.75 秒，约 2.8 倍；带蒸馏 5.53 秒，约 2.4 倍。模型形状不同（128 头的稠密一侧注意力占比更大），只作量级参照；追到 4.44 倍，注意力这一侧要降到约 3.0 秒，差的约 1.8 秒，正好和 indexer 一项相当。DeepSeek V3.2 的技术报告没有给训练步时的加速比。</p>
 </details>
@@ -5462,11 +5462,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="671" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">热身的教师看全部可见 key，按长度的平方涨；稀疏阶段只看挑中的 2048 个，不涨</tspan></text>
 </svg><figcaption><b>上面数蓝格：35 层只有 11 层自己挑；下面看最后一根灰条里红的那段：热身的教师占 84%。</b><span class="capmore"><br><em>整模型实测，256K，合成挑选。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（同上整模型配置，256K，合成挑选）：热身旧版 84.2 秒（主干稠密、所有参数求导、教师用 XLA 流式算）→ 70.5 秒（主干走稀疏核、只对 indexer 求导、主干不做反向也不为反向存激活；估计显存 91.9 → 23.6 GiB）→ 24.3 秒（教师四个核写成 Pallas）。按 1000 步算约 23.4 → 6.7 小时（推算，按这一格的批量）。</p>
 <p>热身的教师覆盖每个 query 的全部可见 key（O(T²)），256K 上比稀疏阶段多约 T ÷ 2k ≈ 64 倍的对数；稀疏阶段只在挑中集合上算，跟框架原来先算稠密再掩码的写法数学等价、只差求和顺序。</p>
-<p>S 层蒸馏：KL 里跟学生有关的项对教师是线性的，所以逐层 KL 取平均与「组内平均教师算一个 KL」梯度相同、loss 差一个常数（CPU 核对梯度 1e-7 量级）；32K 实测 F 层蒸馏 6.03 秒、各层各算一次 8.13 秒。</p></details></figure>
+<p>S 层蒸馏：KL 里跟学生有关的项对教师是线性的，所以逐层 KL 取平均与「组内平均教师算一个 KL」梯度相同、loss 差一个常数（CPU 核对梯度 1e-7 量级）。32K 实测：只蒸馏 F 层 6.03 秒；全层蒸馏、每层重算学生 8.00 秒，学生只算一次 6.84 秒（后两格同作业，CPU 上梯度相对差 ≤ 2e-7）。</p></details></figure>
   <ul>
     <li><b>为什么只能组内借</b>：隔 4 层的两个 F 层，挑法只重合六七成。</li>
-    <li><b>S 层也要蒸馏时，学生只算一次</b>：KL 里跟学生有关的那一项对教师是线性的，所以组内各层的教师先平均、再跟 F 层的学生算一次，梯度跟逐层各算一次一样；每层各重算一次学生，32K 一步多 2.1 秒。</li>
-    <li><b>热身只对 indexer 求导，是精确的</b>：热身时主干冻着。indexer 只通过挑出的下标影响主干，下标不可导；教师那一路也断开了梯度。所以主干那几项 loss 本来就传不到 indexer，主干整个不做反向、不为反向存激活，一步省 14 秒；再把教师写成 Pallas 核，又省 46 秒。</li>
+    <li><b>S 层也要蒸馏时，学生只算一次</b>（可选，要不要给 S 层蒸馏还没定）：S 层用的是 F 层的下标和 F 层的 indexer，学生在组里是同一个；KL 里跟学生有关的那一项对教师又是线性的，所以 F 层算一次学生、传给组内各层就够，梯度不变。原来每个 S 层各重算一次学生，带全层蒸馏的一步 32K 8.00 秒；改成只算一次，6.84 秒（同作业；256K 11.25 → 9.94 秒）。</li>
+    <li><b>热身只对 indexer 求导，是精确的</b>：热身时主干参数不训（路由偏置照常更新）。indexer 只通过挑出的下标影响主干，下标不可导；教师那一路也断开了梯度。所以主干那几项 loss 本来就传不到 indexer，主干整个不做反向、不为反向存激活。这一刀连同主干改走稀疏核（照 GPU 参照实现，不是为了提速）一起，一步省 14 秒；再把教师写成 Pallas 核，又省 46 秒。</li>
   </ul>
 
   <h3 id="s11-8">11.8　三条做法：锁基线、上卡验、向成熟核取经</h3>
