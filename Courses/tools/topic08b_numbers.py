@@ -1031,3 +1031,26 @@ DSA_QB_ACCT = ((8, 1.87, 197), (16, 2.38, 125), (32, 3.02, 79), (64, 3.82, 50)) 
 # S 层不重算学生（F 层算一次、传给组内各层；全层蒸馏，同作业）：32K 7.998 → 6.840 s，256K 11.252 → 9.944 s
 DSA_KD_SHARED = {"32k": (7.998, 6.840), "256k": (11.252, 9.944)}
 assert all(b < a for a, b in DSA_KD_SHARED.values())
+
+# ── 11-25 夜间优化后的最终读数（同作业；256K 第 107 批，32K 第 106 批，64K／128K 第 108／109 批）──
+DSA_FIN_LEN = {   # 长度: (稠密, 不开蒸馏, 全层蒸馏)，秒
+    "32K": (4.589, 5.076, 6.082), "64K": (6.014, 5.338, 6.229), "128K": (8.991, 5.731, 6.654), "256K": (15.329, 6.510, 7.457)}
+DSA_FIN_256K_FKD = 7.691                                     # 只蒸馏 F 层
+DSA_FIN_X = {k: (round(v[0] / v[1], 2), round(v[0] / v[2], 2)) for k, v in DSA_FIN_LEN.items()}
+assert DSA_FIN_X["256K"] == (2.35, 2.06) or DSA_FIN_X["256K"] == (2.36, 2.06), DSA_FIN_X
+assert [DSA_FIN_X[k][0] for k in ("32K", "64K", "128K")] == [0.9, 1.13, 1.57]
+DSA_FIN_SLOW_32K = round((DSA_FIN_LEN["32K"][1] / DSA_FIN_LEN["32K"][0] - 1) * 100)   # 32K 不开蒸馏慢 11%
+assert DSA_FIN_SLOW_32K == 11
+DSA_FIN_KD_EXTRA = [round(v[2] - v[1], 2) for v in DSA_FIN_LEN.values()]            # 开蒸馏比不开多 0.89–1.01 s
+assert min(DSA_FIN_KD_EXTRA) >= 0.88 and max(DSA_FIN_KD_EXTRA) <= 1.01, DSA_FIN_KD_EXTRA
+# 256K 不开蒸馏 6.510 s 的三种分子
+DSA_MFU3_FIN = (_mfu(DSA_NUM_DENSE["256k"], 6.510), _mfu(DSA_NUM_FRAME["256k"], 6.510), _mfu(DSA_NUM_EXEC["256k"][0], 6.510))
+assert [round(x, 1) for x in DSA_MFU3_FIN] == [105.2, 33.6, 11.1], DSA_MFU3_FIN
+DSA_MFU_DENSE_SAMEJOB = _mfu(DSA_NUM_DENSE["256k"], 15.329)   # 44.69%
+assert round(DSA_MFU_DENSE_SAMEJOB, 2) == 44.69
+# 全层蒸馏一夜的阶段（256K，各阶段对同作业稠密）
+DSA_KD_STAGES = (("修前：每个 S 层重算一遍学生", 11.566), ("S 层不重算学生", 9.944), ("再去三处重复：存残差、教师进核、反向核顺手出教师", 9.128),
+                 ("加 indexer 有序 top-k 与流水、散射原地累加", 8.068), ("小核收集 4 路、F 层学生改写", 7.488), ("最终", 7.457))
+DSA_KD_EXTRA_BEFORE_AFTER = (2.1, 0.95)                        # 开蒸馏比不开多出的时间
+DSA_IDX_256K = (1.80, 0.87)                                    # indexer 一夜：1.80 → 0.87 s；剩下打分核约 0.6 s 到向量单元下限
+DSA_OPGROUP_256K = (1.77, 3.42)                                # 单层核心注意力算子组（含蒸馏，不含投影）256K：修前 → 最终
