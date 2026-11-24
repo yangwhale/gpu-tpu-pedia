@@ -4332,7 +4332,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="lead">公开 Hy4 的注意力带一个稀疏索引器（indexer）：每个 query 只挑 2048 个 key 来看（前面调优的配置没开它）。按理 32K 上能少算 8 倍，交给现成的块稀疏核，一点没省。这一节讲为它写的一颗 Pallas 稀疏注意力核：怎么设计、怎么一轮一轮做快；放进整模型以后，<b>256K 快 1.95 倍，32K 反而慢 15%</b>，为什么。</p>
 
   <h3 id="s11-1">11.1　训练里省的是乘法，不是读 KV</h3>
-  <p>专题三讲过，DSA 省的是「读多少」：那是推理，一次只来一个新 query，从 32K 里挑 2048 个，少读 16 倍。训练不一样：32768 个 query 同时都在，几乎每个 key 都有人挑，读省不了；也不用省，一层的 KV 读一遍约 10 微秒（本课推导）。<b>训练里省的是 query 和 key 两两相乘的次数：满因果约 5.4 亿对，每人只挑 2048 个是约 6700 万对，32K 少 8 倍，256K 少 64 倍（本课推导）。</b></p>
+  <p>专题三讲过，DSA 省的是「读多少」：那是推理，一次只来一个新 query，从 32K 里挑 2048 个，少读 16 倍。训练不一样：32768 个 query 同时都在，几乎每个 key 都有人挑，读省不了；也不用省，一层的 KV 读一遍约 10 微秒，一层注意力的计算却是毫秒级（本课推导）。<b>训练里省的是 query 和 key 两两相乘的次数：满因果约 5.4 亿对，每人只挑 2048 个是约 6700 万对，32K 少 8 倍，256K 少 64 倍（本课推导）。</b></p>
   <p>可现成的块稀疏核是按块跳的：一块 512 个 query × 512 个 key，块里只要有一对被挑中，整块就得算。下图左边是一份玩具账：</p>
 <figure class="fbox fwide" id="fig-dsa-moe"><svg viewBox="0 0 1400 646" width="100%" role="img" aria-label="左：一个 query 块的 4 个 query（位置 12 到 15）各从 16 个 key 里挑 4 个，蓝格是挑中的；key 按 4 个一块切，4 块里每块都至少有一个蓝格，所以 4 块都要整块算，跟稠密一样。右：把这 4 个 query 挑中的 key 收拢成一摞，并集 8 行（0、5、9、11、12、13、14、15），整单对着这 8 行一起乘，没挑的格子用成员位掩掉。这一单就像 MoE 的一个专家，收拢来的 key 行就像分给它的 token。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每个 query 只挑 2048 个，块稀疏却一块都跳不掉；拼单收拢再乘，就是一次 MoE</text>
@@ -4520,96 +4520,108 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>块激活率：32K、k ＝ 2048／512／128、块 512 × 512 和 1024 × 2048、均匀挑与偏向最近，12 种组合全部 100%（模拟）；k 从 2048 压到 128 时现成的动态块稀疏核 987.8 → 987.6 ms（另一代芯片上的实测）。</p>
 <p>ρ（并集膨胀比）＝ 一单的并集行数 ÷ k；真实值是公开的 Hy4 预览版权重在 CPU 上抓的 32K 长文 top-k 统计（4 个 F 层、两份数据的均值）：ρ(4) 1.31–1.49、ρ(8) 1.50–1.87、ρ(16) 1.71–2.38。</p>
 <p>MoE 的对应关系：专家 ↔ query 块，token ↔ 并集里的 key 行；前向是按组矩阵乘 ＋ 分段 softmax，反向 dKV ＝ 按 key 把部分行加回去，对拍到 1e-6。</p></details></figure>
-  <p>每个 query 挑的是散的 6%，一块里一个都没挑中几乎不可能，块激活率 100%，算量跟稠密一样（第三节站 8 的跳块能省，是因为跨文档那些块整块是空的；这里是一个个 token 散着挑，块里总有人挑）。要省，就得反过来：<b>先把几个 query 要的 key 收拢成紧凑的一摞，再整块乘</b>（上图右边）。</p>
+  <p>每个 query 挑的是散的 6%，一块里一个都没挑中几乎不可能，块激活率 100%，算量跟稠密一样（第三节站 8 的跳块能省，是因为跨文档那些块整块是空的；这里是一个个 token 散着挑，块里总有人挑）。要省，就得反过来：<b>相邻几个 query 拼成一单，把要的 key 收拢成紧凑的一摞，再整块乘</b>（上图右边）。</p>
 <details class="foldfig"><summary><b>一层的 KV 读一遍为什么只要 10 微秒、两两相乘的次数怎么数</b></summary>
   <p>吸收式 MLA 一层每个 token 存 576 个 BF16（512 维潜变量 ＋ 64 维位置部分），32768 个 token 约 37.7 MB；按每设备约 3.7 TB/s（每芯片 7.38 TB/s 平分给两个设备，平分是假设）读一遍约 10 微秒，一层注意力前向加反向是毫秒级（本课推导）。</p>
-  <p>满因果的对数：32768 × 32769 ÷ 2 ≈ 5.4 亿；每个 query 挑满 2048 个：32768 × 2048 ≈ 6700 万（上界，前 2048 个 query 能挑的不到 2048 个）。256K 同样算：约 344 亿对 5.4 亿，64 倍。</p>
-  <p>块激活率是模拟的：32K、k ＝ 2048／512／128、块 512 × 512 和 1024 × 2048、均匀挑与偏向最近，12 种组合全部 100%；真实挑选下也是 100%。另一代芯片上把 k 从 2048 压到 128，现成的动态块稀疏核耗时 987.8 → 987.6 毫秒。</p>
+  <p>满因果的对数：32768 × 32769 ÷ 2 ≈ 5.4 亿；每个 query 挑满 2048 个：32768 × 2048 ≈ 6700 万（上界，前 2048 个 query 能挑的不到 2048 个）。256K 同样算：约 344 亿对 5.4 亿，64 倍。块激活率真实挑选下也是 100%。</p>
 </details>
 
 
   <h3 id="s11-2">11.2　拼单：收拢以后，就是一次 MoE</h3>
   <p>相邻几个 query 拼一单：把各自挑的 key 合成一张单子（并集），收拢成一摞；整单对着这一摞一起乘，谁没挑哪个 key，用一张成员位表掩掉。对照 MoE：<b>一单 query 就是一个专家，收拢来的 key 行就是分给它的 token，成员位就是路由，反向把梯度按 key 加回去就是 MoE 的反排列求和。</b>我们 MoE 那套核上攒下的东西（组表、可变组数、容量和回放），从这里起都能搬。</p>
-  <p>拼单有一笔白算：每个 query 都要跟整张单子算。并集行数 ÷ 2048 叫 ρ，相邻的 query 挑得越像，ρ 越小。用公开的 Hy4 预览版权重在一篇 32K 长文上实测：相邻 4 个 query 的 ρ 只有 1.31–1.49，16 个 1.71–2.38；单子翻一倍，ρ 只涨约 1.2 倍。单子多大，看两笔账：</p>
-<figure class="fbox fwide" id="fig-dsa-qb"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="拼单的两笔账。相邻几个 query 拼一单，把各自挑的 key 合成一张单子，一起收、一起算。横轴是一单几个 query：8、16、32、64。每档两根柱：蓝 ＝ 算的时间，随 ρ 涨（每个 query 要跟整张单子算）；紫 ＝ 收行的时间，单子越大、要收的行越少（197 万、125 万、79 万、50 万行）。一层的时间取两者中较大的那根。32 头：较大值 4.68、2.97、1.88、2.27 毫秒，一单 32 个最省；64 头每个 query 的活是两倍，较大值 4.68、2.97、3.59、4.54，一单 16 个最省。两种都是一单 1024 行。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="anim-pindan">
+<video src="media/topic08b-pindan.mp4?v=7b2a50c8" autoplay loop muted playsinline data-pauses="5.40,10.20,16.80"
+       aria-label="PinDanGather 动画，标题「拼单：先收拢，再整块乘」。上方一张 4 行 16 列的格子：行是 q12 到 q15，列是 key 0 到 15，蓝格是挑中的，深灰格是因果看不见的。字幕依次是：「一单 4 个 query，每人从 16 个 key 挑 4 个」；「按块跳：块里有一个挑中，整块就得算」，四个 4 列的块逐个框上红框，下面计数「要整块算的块：1 / 4」到「4 / 4」；「4 块全要算，跟稠密一样」。接着红框和没被这一单挑过的列淡出，挑过的 8 列（0、5、9、11、12、13、14、15）往左挤成一摞，字幕「拼一单：只留这一单挑过的 key，收拢成一摞」；绿框框住 8 列，旁边写「并集 8 行」「ρ ＝ 8 ÷ 4 ＝ 2」「白格：没挑的，乘完用成员位掩掉」，字幕「一单是一个专家，收来的 key 行是它的 token」。下面出现两条车道「小工（小核）」「师傅（主核）」：紫块收1 到收4 依次出现，蓝块算1 到算4 各晚一格，字幕「小工收下一段时，师傅算这一段」，最后「师傅只看见连续的大块，搬行交给小工」。随后各列散回原位，回到开头画面。"></video>
+<figcaption><b>看蓝格那几列往左挤到一起：16 列收成 8 列；下面紫块和蓝块错开一格。</b>
+  <span class="sub">（19 秒，Manim 渲染，可一步一步看。玩具挑选同上图（位置 12–15 的 4 个 query，各挑 4 个 key）；第三幕的段数和段长是示意。）</span></figcaption></figure>
+  <p>拼单有一笔白算：每个 query 都要跟整张单子算。这里有两种「行」别混：<b>乘的行</b>是一单的 query 数 × 头数（各头共用同一份 KV，能摞成一次矩阵乘的行）；<b>收的行</b>是单子里的 key 行。并集行数 ÷ 2048 叫 ρ，相邻的 query 挑得越像，ρ 越小。用公开的 Hy4 预览版权重在一篇 32K 长文上实测：相邻 4 个 query 的 ρ 只有 1.31–1.49，16 个 1.71–2.38；单子翻一倍，ρ 只涨约 1.2 倍。单子多大，看两笔账：</p>
+<figure class="fbox fwide" id="fig-dsa-qb"><svg viewBox="0 0 1400 616" width="100%" role="img" aria-label="拼单的两笔账。相邻几个 query 拼一单，把各自挑的 key 合成一张单子，一起收、一起算。横轴是一单几个 query：8、16、32、64。每档两根柱：蓝 ＝ 算的时间，随 ρ 涨（每个 query 要跟整张单子算）；紫 ＝ 收行的时间，单子越大、要收的行越少（197 万、125 万、79 万、50 万行）。一层的时间取两者中较大的那根。32 头：较大值 4.68、2.97、1.88、2.27 毫秒，一单 32 个最省；64 头每个 query 的活是两倍，较大值 4.68、2.97、3.59、4.54，一单 16 个最省。两种都是一单 1024 行。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">拼单的两笔账：单子越大，收得越少、白算越多；取两者较大的那根最小</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每档两根柱：蓝 ＝ 算（随 ρ 涨），紫 ＝ 收行（随单子变大而降）；绿框 ＝ 两根里较大的那根最矮的一档；每设备每层前向，毫秒（本课推导，代入实测的 ρ 和收行速率）</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每档两根柱（毫秒，每设备每层前向）：蓝 ＝ 算，随 ρ 涨；紫 ＝ 收 key 行，行数 ÷ 小工每秒 4.2 亿行；绿框 ＝ 两根里较高的那根最矮的一档（本课推导）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">算</text>
 <rect x="62.68" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="83" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">收行</text>
 <rect x="141.04" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="162" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">最优档</text>
-<rect x="0.0" y="102" width="685.0" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0.0" y="102" width="685.0" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0.0" y="102" width="685.0" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="0.0" y="104" width="685.0" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0.0" y1="132" x2="685.0" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 头：一单 32 个 query 最省（32 × 32 ＝ 1024 行）</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 头：一单 32 个 query 最省（一次乘 32 × 32 ＝ 1024 行）</tspan></text>
 <line x1="60.0" y1="452" x2="665.0" y2="452" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <rect x="70.0" y="394.1422" width="44" height="57.8578" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="120.0" y="208.09523809523813" width="44" height="243.90476190476187" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="92" y="386" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.11</tspan></text>
 <text class="svgsm" x="142" y="200" fill="#681da8" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.69</tspan></text>
 <text class="svgsm" x="117" y="476" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一单 8 个</tspan></text>
-<text class="svgsm" x="117" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 1.87 · 197 万行</text>
+<text class="svgsm" x="117" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 1.87</text>
+<text class="svgsm" x="117" y="518" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">收 197 万行</text>
 <rect x="215.0" y="378.3628" width="44" height="73.63719999999999" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="265.0" y="297.2380952380953" width="44" height="154.76190476190473" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="237" y="370" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.42</tspan></text>
 <text class="svgsm" x="287" y="289" fill="#681da8" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.98</tspan></text>
 <text class="svgsm" x="262" y="476" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一单 16 个</tspan></text>
-<text class="svgsm" x="262" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 2.38 · 125 万行</text>
+<text class="svgsm" x="262" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 2.38</text>
+<text class="svgsm" x="262" y="518" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">收 125 万行</text>
 <rect x="360.0" y="358.5612" width="44" height="93.4388" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="410.0" y="354.1904761904762" width="44" height="97.80952380952381" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="382" y="350" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.80</tspan></text>
 <text class="svgsm" x="432" y="346" fill="#681da8" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.88</tspan></text>
 <rect x="352.0" y="324.1904761904762" width="110" height="127.80952380952381" rx="6" fill="none" stroke="#1e8e3e" stroke-width="2.4"/>
 <text class="svgsm" x="407" y="476" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一单 32 个</tspan></text>
-<text class="svgsm" x="407" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 3.02 · 79 万行</text>
+<text class="svgsm" x="407" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 3.02</text>
+<text class="svgsm" x="407" y="518" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">收 79 万行</text>
 <rect x="505.0" y="333.80920000000003" width="44" height="118.1908" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="555.0" y="390.0952380952381" width="44" height="61.90476190476191" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="527" y="325" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.27</tspan></text>
 <text class="svgsm" x="577" y="382" fill="#681da8" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.19</tspan></text>
 <text class="svgsm" x="552" y="476" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一单 64 个</tspan></text>
-<text class="svgsm" x="552" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 3.82 · 50 万行</text>
-<rect x="715.0" y="102" width="685.0" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="552" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 3.82</text>
+<text class="svgsm" x="552" y="518" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">收 50 万行</text>
+<rect x="715.0" y="102" width="685.0" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="715.0" y="102" width="685.0" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="715.0" y="104" width="685.0" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="715.0" y1="132" x2="1400.0" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="729" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64 头：一单 16 个 query 最省（16 × 64 ＝ 1024 行）</tspan></text>
+<text class="svglbl" x="729" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64 头：一单 16 个 query 最省（一次乘 16 × 64 ＝ 1024 行）</tspan></text>
 <line x1="775.0" y1="452" x2="1380.0" y2="452" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <rect x="785.0" y="336.2844" width="44" height="115.7156" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="835.0" y="208.09523809523813" width="44" height="243.90476190476187" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="807" y="328" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.23</tspan></text>
 <text class="svgsm" x="857" y="200" fill="#681da8" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.69</tspan></text>
 <text class="svgsm" x="832" y="476" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一单 8 个</tspan></text>
-<text class="svgsm" x="832" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 1.87 · 197 万行</text>
+<text class="svgsm" x="832" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 1.87</text>
+<text class="svgsm" x="832" y="518" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">收 197 万行</text>
 <rect x="930.0" y="304.7256" width="44" height="147.27439999999999" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="980.0" y="297.2380952380953" width="44" height="154.76190476190473" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="952" y="296" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.83</tspan></text>
 <text class="svgsm" x="1002" y="289" fill="#681da8" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.98</tspan></text>
 <rect x="922.0" y="267.2380952380953" width="110" height="184.76190476190473" rx="6" fill="none" stroke="#1e8e3e" stroke-width="2.4"/>
 <text class="svgsm" x="977" y="476" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一单 16 个</tspan></text>
-<text class="svgsm" x="977" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 2.38 · 125 万行</text>
+<text class="svgsm" x="977" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 2.38</text>
+<text class="svgsm" x="977" y="518" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">收 125 万行</text>
 <rect x="1075.0" y="265.12239999999997" width="44" height="186.8776" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="1125.0" y="354.1904761904762" width="44" height="97.80952380952381" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="1097" y="257" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.59</tspan></text>
 <text class="svgsm" x="1147" y="346" fill="#681da8" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.88</tspan></text>
 <text class="svgsm" x="1122" y="476" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一单 32 个</tspan></text>
-<text class="svgsm" x="1122" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 3.02 · 79 万行</text>
+<text class="svgsm" x="1122" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 3.02</text>
+<text class="svgsm" x="1122" y="518" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">收 79 万行</text>
 <rect x="1220.0" y="215.6184" width="44" height="236.3816" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="1270.0" y="390.0952380952381" width="44" height="61.90476190476191" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="1242" y="207" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.55</tspan></text>
 <text class="svgsm" x="1292" y="382" fill="#681da8" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.19</tspan></text>
 <text class="svgsm" x="1267" y="476" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一单 64 个</tspan></text>
-<text class="svgsm" x="1267" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 3.82 · 50 万行</text>
-<rect x="0" y="522" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="522" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="522" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="549" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">收行受限时，单子往大走：两种模型都停在一单 1024 行，上卡扫出来的也是这一档</tspan></text>
-</svg><figcaption><b>每档看两根柱里高的那根：32 头在一单 32 个最矮，64 头在一单 16 个最矮。</b><span class="capmore"><br><em>两种模型都是一单 1024 行。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>本课推导：算 ＝ 每设备每层前向的理想时间（32 头 0.595 ms、64 头 1.19 ms）× ρ；这几档一单的行数（query 数 × 头数）都已经够多，矩阵单元喂得饱，计算账只随 ρ 涨。收行 ＝ 行数 ÷ 小核每秒 4.2 亿行。32K、上下文并行 8 的一个设备（4096 个 query）。</p>
+<text class="svgsm" x="1267" y="498" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">ρ 3.82</text>
+<text class="svgsm" x="1267" y="518" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">收 50 万行</text>
+<rect x="0" y="542" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="542" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="542" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="569" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">收行受限时，单子往大走：两种模型都停在一单 1024 行，上卡扫出来的也是这一档</tspan></text>
+</svg><figcaption><b>每档看两根柱里高的那根：32 头在一单 32 个最矮，64 头在一单 16 个最矮。</b><span class="capmore"><br><em>两种模型都是一单 1024 行。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>本课推导：算 ＝ 每设备每层前向的理想时间（32 头 0.595 ms、64 头 1.19 ms，QK 维按矩阵单元补齐到 768）× ρ；这几档一单的行数（query 数 × 头数）都已经够多，矩阵单元喂得饱，计算账只随 ρ 涨。收行 ＝ 行数 ÷ 小核每秒 4.2 亿行。32K、上下文并行 8 的一个设备（4096 个 query）。</p>
 <p>ρ（并集膨胀比）＝ 一单的并集行数 ÷ 2048，取真实挑选 32K 各层的上沿；一单翻倍，ρ 只涨 1.17–1.27 倍，所以行数降 37–41%。</p>
 <p>上卡：一单 512 行 → 1024 行，32 头 13.20 → 11.24 ms、64 头 21.86 → 18.29 ms（一层前向 ＋ 反向，最慢的设备）。</p></details></figure>
-  <p><b>算</b>：一单的行（query 数 × 头数）要够多，矩阵单元才喂得饱；够了以后，单子再大只让 ρ 涨、白算变多。<b>收</b>：单子越大，要收的行越少。现在是收行更紧，所以单子取大的那一档。</p>
+  <p><b>算</b>：乘的行要够多，矩阵单元才喂得饱；够了以后，单子再大只让 ρ 涨、白算变多。<b>收</b>：单子越大，平均每个 query 要收的 key 行越少。现在收行那根更高，所以单子取大的那一档。</p>
 
   <h3 id="s11-3">11.3　照专家并行学分工：小工搬、师傅算、账本先算好</h3>
   <p>写之前，先把本讲模型的专家并行代码路径从路由到通信读了一遍，问它为什么快。答案不在哪一颗核，在分工：<b>不规整的活在整数侧算好（账本），按行搬的活交给小工，师傅只看到连续的大块。</b></p>
@@ -4712,7 +4724,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1132" y="318" fill="#681da8" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">小核 Pallas</tspan></text>
 <line x1="1085" y1="259.0" x2="1112" y2="259.0" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
 <text class="svgsm" x="26" y="364" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">账本只跟下标有关：几层共用一份挑选时共用一份账本（按 4 层一组），前向反向共用；32K 每组 3.1–3.5 ms</text>
-<text class="svgsm" x="26" y="390" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">XLA 另做几样零碎：delta ＝ Σ dO · O、q 和 dQ 换布局；前向收来的暂存留给反向，反向不再收（每层省 3.6–4.2 ms，多占 2–4 GB）</text>
+<text class="svgsm" x="26" y="390" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">XLA 另做几样零碎：delta ＝ Σ dO · O、q 和 dQ 换布局；整模型里反向再收一遍暂存（几十层的暂存留不住，每层多 3.6–4.2 ms）</text>
 <text class="svgsm" x="26" y="416" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">④ 每段连续读一块 1024 行，主核看不到一行一行的下标；⑤ 每个小核子核独占 128 个 key、按块顺序加，所以重跑逐位</text>
 <rect x="0" y="486" width="1400" height="260" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="486" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -4757,7 +4769,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="615.0" y="602" width="46.0" height="26" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="638" y="620" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算8</tspan></text>
 <rect x="667.0" y="602" width="24" height="26" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="695" y="556" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反向（倒序；暂存留着，不再收）</tspan></text>
+<text class="svgsm" x="695" y="556" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反向（倒序；重收暂存，图里省略）</tspan></text>
 <rect x="695.0" y="602" width="46.0" height="26" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="718" y="620" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反8</tspan></text>
 <rect x="745.0" y="570" width="46.0" height="26" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -4802,7 +4814,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>时间线是示意：段的个数照定稿配置（8 段、8 组），块长不按比例；0.85 ms 来自合成挑法、切 8 段那一格的 profile，11.1 ms 的拆账来自真实挑选、一单 1024 行那一版的 profile（32 头）。</p></details></figure>
 <details class="foldfig"><summary><b>五步各在哪跑、怎么重叠；哪些是借的</b></summary>
   <p>账本是主核上的一颗 Pallas 核加编译器出的段表，收行和回加是小核上的 Pallas 核，流式计算是主核上的 Pallas 核。前向小工收下一段时师傅算这一段，主核等收集只露 0.85 毫秒（合成挑法那一格的 profile）；反向大段先算，梯度分 8 组交给小工加，第一组跟后面的计算重叠。</p>
-  <table class="t9 mini" id="tab-dsa-borrow"><caption>哪些是借的，哪些是自己做的</caption><thead><tr><th>做法</th><th>借的还是自己的</th><th>带来什么</th></tr></thead><tbody><tr><td>相邻 query 拼单：取并集 ＋ 成员位，让矩阵乘的行数够多</td><td>思路借自公开的 sglang-jax 推理 prefill 核（按页收）；按 token 收、训练里逐 token 精确、用实测重叠定单子大小是自己的</td><td>矩阵乘的行从一个 token 的头数（32／64）变成 1024</td></tr><tr><td>固定段长 ＋ 可变段数、段表进核</td><td>照自己 MoE 的分组矩阵乘核</td><td>一颗核覆盖所有重叠程度</td></tr><tr><td>小核收行、主核连续读</td><td>公开的 tokamax 稀疏 MLA 推理前向里也是这么分；这里是照自己专家并行的分工来的，并用每行开销的实测证明它非这么做不可</td><td>前向不再被逐行开销卡住</td></tr><tr><td>账本在求导之外、几层共用；容量 ＋ 回放</td><td>照自己 MoE 的排序成组与缓冲</td><td>每层省 1–2 毫秒的整数活</td></tr><tr><td>潜变量吸收成每行 576 维、sink 并进在线 softmax</td><td>MLA 吸收式写法（DeepSeek）；sink 的写法借自 sglang-jax</td><td>不用另起核做归一化</td></tr><tr><td>dKV 确定性累加：每个小核子核独占 128 个 key</td><td>自己的</td><td>重跑逐位</td></tr><tr><td>梯度按 query 块给范围、分 8 组倒序跟主核重叠</td><td>自己的</td><td>前向＋反向 33.0 → 21.8 毫秒（32 头，合成挑法）</td></tr><tr><td>账本写成 Pallas：双调合并、倍增标记、移位网络压紧，并成一颗核</td><td>双调网络是经典算法；移位压紧和并成一颗核是自己的</td><td>每组 71 → 约 3.5 毫秒</td></tr><tr><td>一单拼到 1024 行；前向核的行分两组交错</td><td>自己的（两笔账 ＋ 实测重叠）</td><td>1024 行那一刀 13.20 → 11.24 毫秒；两组交错快约 5.5%，逐位不变</td></tr></tbody></table>
+  <table class="t9 mini" id="tab-dsa-borrow"><caption>哪些是借的，哪些是自己做的</caption><thead><tr><th>做法</th><th>借的还是自己的</th><th>带来什么</th></tr></thead><tbody><tr><td>相邻 query 拼单：取并集 ＋ 成员位，让矩阵乘的行数够多</td><td>思路借自公开的 sglang-jax 推理 prefill 核（按页收）；按 token 收、训练里逐 token 精确、用实测重叠定单子大小是自己的</td><td>矩阵乘的行从一个 token 的头数（32／64）变成 1024</td></tr><tr><td>固定段长 ＋ 可变段数、段表进核</td><td>照自己 MoE 的分组矩阵乘核</td><td>一颗核覆盖所有重叠程度</td></tr><tr><td>小核收行、主核连续读</td><td>公开的 tokamax 稀疏 MLA 推理前向里也是这么分；这里是照自己专家并行的分工来的，并用每行开销的实测证明它非这么做不可</td><td>前向不再被逐行开销卡住</td></tr><tr><td>账本在求导之外、几层共用；容量 ＋ 回放</td><td>照自己 MoE 的排序成组与缓冲</td><td>每层省约 1 毫秒的整数活</td></tr><tr><td>潜变量吸收成每行 576 维、sink 并进在线 softmax</td><td>MLA 吸收式写法（DeepSeek）；sink 的写法借自 sglang-jax</td><td>不用另起核做归一化</td></tr><tr><td>dKV 确定性累加：每个小核子核独占 128 个 key</td><td>自己的</td><td>重跑逐位</td></tr><tr><td>梯度按 query 块给范围、分 8 组倒序跟主核重叠</td><td>自己的</td><td>前向＋反向 33.0 → 21.8 毫秒（32 头，合成挑法）</td></tr><tr><td>账本写成 Pallas：双调合并、倍增标记、移位网络压紧，并成一颗核</td><td>双调网络是经典算法；移位压紧和并成一颗核是自己的</td><td>每组 71 → 约 3.5 毫秒</td></tr><tr><td>一单拼到 1024 行；前向核的行分两组交错</td><td>自己的（两笔账 ＋ 实测重叠）</td><td>1024 行那一刀 13.20 → 11.24 毫秒；两组交错快约 5.5%，逐位不变</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>公开实现按 2026-11-23 读到的版本（openxla/tokamax、sgl-project/sglang-jax）。这两个公开实现都只有前向，不出 lse、没有反向；训练要的反向、dKV、lse 都是新写的。</p></details>
 
 </details>
@@ -4936,7 +4948,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="1324" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="1324" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="1351" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一轮先量清楚卡在哪：先是搬一行太贵，再是数据，再是核外的零碎和账本</tspan></text>
-</svg><figcaption><b>每一段从上往下看：条越来越短，跨过虚线就变绿。</b><span class="capmore"><br><em>三段口径不同，只在段内跟各自的稠密比；最下面是账本，单独一条线。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（单设备、同一进程里稀疏和稠密各测；稠密是本讲模型调优用的块稀疏配置，按块掩码）。① 合成挑法「一半挑最近、一半在更早的里随机」，32 头一单 8 个 query（ρ 2.28）、64 头一单 4 个（ρ 1.45），rank 0，只看前向。第 3 轮 12.5 对稠密 4.87，还慢 2.6 倍；第 7 轮不切段 14.0 / 17.4。合成挑法上前向 ＋ 反向：第 5 轮 60.6 / 79.4，第 9–11 轮小工散射累加、规约分组倒序 27.1 → 21.8 / 34.1 → 30.6（稠密 15.0 / 29.7）。</p>
+</svg><figcaption><b>每一段从上往下看：条越来越短，跨过虚线就变绿。</b><span class="capmore"><br><em>三段口径不同，只在段内跟各自的稠密比；最下面是账本，单独一条线。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（单设备、同一进程里稀疏和稠密各测；稠密是本讲模型调优用的块稀疏配置，按块掩码）。① 段的稠密虚线取第 3 轮那次读数 4.87 ／ 9.72（第 7–8 轮同批是 4.85 ／ 9.79）。合成挑法「一半挑最近、一半在更早的里随机」，32 头一单 8 个 query（ρ 2.28）、64 头一单 4 个（ρ 1.45），rank 0，只看前向。第 3 轮 12.5 对稠密 4.87，还慢 2.6 倍；第 7 轮不切段 14.0 / 17.4。合成挑法上前向 ＋ 反向：第 5 轮 60.6 / 79.4，第 9–11 轮小工散射累加、规约分组倒序 27.1 → 21.8 / 34.1 → 30.6（稠密 15.0 / 29.7）。</p>
 <p>② 真实挑选：公开的 Hy4 预览版权重在 CPU 上抓的一篇 32K 长文，按上下文并行 8 的负载均衡切法取每个设备的本地 query；8 个设备取最慢的那个；默认运行库设置、每次调用后同步（含主机派发）。</p>
 <p>③ 换成生产配置用的运行库设置，连续派发 10 次取平均（设备时间口径，训练里整步异步派发就是这样）；稠密在这个设置下也快了一截，所以第 20 轮看着比第 14 轮快、其实是换了尺子。M ＝ 一单 query 数 × 头数：32 头一单 32 个、64 头一单 16 个。</p>
 <p>账本：第 1 轮 71 ms（两次 840 万元素的 scatter ＋ 逐段切片）→ 排序替掉 scatter 7.8–9.9 → 全局一张表 8.9 → 两次排序写成 Pallas 双调网络 5.6 → 压紧写成 Pallas 移位网络 3.7–4.1 → 合并、标记、压紧一个核 3.1–3.6（一单加倍那一轮一度回到 5 ms 多）。</p></details></figure>
@@ -5009,13 +5021,13 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <details class="foldfig"><summary><b>试过、没用的</b></summary>
   <p>四次矩阵乘拼成一次（编译器本来就合在一起）、成员位改成加性偏置、网格按块循环段（反而慢 4–15%）、暂存三层缓冲（编不过）、反向核也分两组（更慢且不再逐位）、只在行最大值变大时才缩放累加器（更慢）、前向指数改 BF16（不快）。</p>
 </details>
-<details class="foldfig"><summary><b>账本摊进每层、一行两篇文档拼满、各个设备的范围、数值</b></summary>
-  <p>把账本按每 4 层一份摊进去：32K 是 1.19、1.52 倍，256K 是 5.6、7.8 倍（推断）。一行两篇拼满（稠密按文档跳块，本来就省了一截）：快 1.19／1.36 倍，含账本 1.07／1.28 倍。32K 上 8 个设备里稀疏 7.75–10.04 毫秒（32 头）、12.16–16.02 毫秒（64 头），稠密 12.65–12.98、25.03–25.73。256K 只有一本书、一层的挑选，ρ 会随文本变。核内改精确算术时，各输出对规格的相对差都不超过 3e-6，BF16 下梯度比规格直接用 BF16 跑还准一点。</p>
+<details class="foldfig"><summary><b>账本摊进每层、各个设备的范围、256K 单测的切法</b></summary>
+  <p>把账本按每 4 层一份摊进去：32K 是 1.19、1.52 倍，256K 是 5.6、7.8 倍（推断）。32K 上 8 个设备里稀疏 7.75–10.04 毫秒（32 头）、12.16–16.02 毫秒（64 头），稠密 12.65–12.98、25.03–25.73。BF16 下梯度比规格直接用 BF16 跑还准一点。256K 单测按上下文并行 32 切（每设备 8192 个 query），跟 11.5 整模型的切法不同。</p>
 </details>
 
 
   <h3 id="s11-5">11.5　放进整模型：32K 慢，256K 快</h3>
-  <p>先在一台主机的整层代理里试（注意力 ＋ MoE 一个程序，64 头）：单层反而慢 8.7 毫秒，注意力短了，原来盖在它底下的 MoE 通信露了出来（第五节那条规矩，展开见折叠）。再接进整个模型（32 头的模型），32K 和 256K 用同一种切法放大：</p>
+  <p>先在一台主机的整层代理里试（注意力 ＋ MoE 一个程序，64 头）：单层反而慢 8.7 毫秒、两层串起来才持平，注意力短了，原来盖在它底下的 MoE 通信露了出来（第五节那条规矩，展开见折叠）。再接进整个模型（32 头的模型），32K 和 256K 用同一种切法放大：</p>
 <details class="foldfig"><summary><b>整层代理：单测快了，省下的师傅时间变成了等通信</b></summary>
 <figure class="fbox fwide" id="fig-dsa-layer"><svg viewBox="0 0 1400 576" width="100%" role="img" aria-label="一台主机 8 个设备上的整层代理，注意力加 MoE 一个程序前向加反向，64 头。只跑 MoE 30.2 毫秒；只跑注意力，稠密 28.0、稀疏 21.6。整层：稠密 43.3，比两部分相加少 14.9，MoE 的通信藏在注意力底下；稀疏 52.0，比两部分相加还多一点，一点没藏住；稀疏整层比稠密慢 8.7。主核等通信：稠密层 2.2 毫秒，稀疏层 14.3。两层串起来：稠密 99.3、稀疏 99.0，持平。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">单测快了，放进整层：省下的师傅时间，变成了等通信</text>
@@ -5131,10 +5143,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="614" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="614" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="641" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力占得越多，稀疏省得越多；256K 离下限还差三块：挑下标、小核搬运的等待、多露出的通信</tspan></text>
-</svg><figcaption><b>先比灰色那段：32K 本来就短，256K 占了大半；稀疏把它砍掉以后，红色的新增开销在 32K 上比省下的还多。</b><span class="capmore"><br><em>同一种切法放大，每设备 token 数相同；挑选是合成的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（64 片 v7x，每设备 16K 个 token：32K 上下文并行 2 ＋ FSDP 64，256K 上下文并行 16 ＋ FSDP 8，参数都切 128 份；稠密与稀疏同配置）。日志步时 32K 4.503 对 5.167 秒，256K 15.337 对 7.880 秒（同一批）。</p>
+</svg><figcaption><b>先比灰色那段：32K 本来就短，256K 占了大半；稀疏把它砍掉以后，红色的新增开销在 32K 上比省下的还多。</b><span class="capmore"><br><em>条长是 profile 中位步，倍数用日志步时；同一种切法放大，每设备 token 数相同；挑选是合成的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（64 片 v7x，每设备 16K 个 token：32K 上下文并行 2 ＋ FSDP 64，256K 上下文并行 16 ＋ FSDP 8，参数都切 128 份；稠密与稀疏同配置）。日志步时 32K 4.503 对 5.167 秒，256K 15.337 对 7.880 秒（同一批）。</p>
 <p>这个模型没有训过的 indexer：挑选用按真实挑选统计拟合的合成选择（32K ρ(32) 2.85，比真实偏高 12–15%；256K 3.71，偏低约 10%，按真实挑选约多 0.2 秒，推算），indexer 照常算。</p>
-<p>本课推导（下限）：稠密 15.27 秒里只有注意力核 11.86 秒会随稀疏缩，缩到稀疏这一侧的计算量（稀疏注意力 115.0 ＋ indexer 197.4 万亿次）÷ 稠密注意力 7388.7 ＝ 4.2%，约 0.50 秒；投影等 1.40 秒和其余 2.01 秒不动：下限约 3.9 秒，上限约 3.9 倍。</p></details></figure>
-  <p><b>32K 慢 15%（5.17 对 4.50 秒），256K 快 1.95 倍（7.88 对 15.34 秒）</b>，加上蒸馏是 1.73 倍。同一颗核，为什么短的慢、长的快？</p>
+<p>本课推导（下限）：稠密 15.27 秒里只有注意力核 11.86 秒会随稀疏缩，缩到稀疏这一侧的计算量（稀疏注意力 115.0 ＋ indexer 197.4 万亿次）÷ 稠密注意力 7388.7 ＝ 4.2%，约 0.50 秒；投影等 1.40 秒和其余 2.01 秒不动：下限约 3.9 秒，上限约 3.9 倍。稀疏这边的投影实测只要 0.70 秒（吸收式不用为核构完整的 K/V），按它算上限还能再高一些（约 4.8 倍），这里取保守的 3.9。</p></details></figure>
+  <p><b>32K 慢 15%（5.17 对 4.50 秒），256K 快 1.95 倍（7.88 对 15.34 秒）</b>（条长是 profile 里的中位步，倍数用日志步时）；再算上训练 indexer 的蒸馏（11.7）是 1.73 倍。同一颗核，为什么短的慢、长的快？</p>
 <figure class="fbox fwide" id="fig-dsa-share"><svg viewBox="0 0 1400 680" width="100%" role="img" aria-label="为什么长序列才快。左：每设备 16K 个 token 不变，稠密一步要算的量里注意力占多少：32K 是 923.6 对其余 551.6 万亿次，占 63%；256K 是 7388.7 对 523.6，占 93%；注意力核自己的效率两种长度都在 52% 到 54%。右：横轴序列长度，纵轴每设备每步万亿次运算，按对数画。稠密注意力随长度成正比涨，其余矩阵乘不变，两条线在约 17K 相交；稀疏注意力几乎不随长度变，约 115；indexer 打分随长度涨，但只有稠密注意力的 2.6%。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每设备的 token 不变，变的是每个 query 要看多少 key：注意力从 63% 涨到 93%</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：稠密一步要算的量（万亿次／设备／步）的构成；右：四类计算随序列长度怎么涨（纵轴按对数画，本课推导，32 头的模型，每设备 16K 个 query）</text>
@@ -5222,7 +5234,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="2" y="606" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="633" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列越长，稠密里注意力越占大头，稀疏能省的越多；短序列上注意力本来就不大，省不出多少</tspan></text>
 </svg><figcaption><b>右图看灰线和橙线在哪交叉：约 17K 以后注意力就是大头。绿线几乎是平的。</b><span class="capmore"><br><em>纵轴按对数画；本课推导，锚点是左边两根实测分子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测分子（每设备每步，前向 ＋ 反向）：其余矩阵乘 ＝ 投影、稠密与专家 FFN、输出头（含 MTP 层）484.5，加 MTP 输出头 35.0、视觉塔（按实际图像，32K 32.1、256K 4.1）；稠密注意力 ＝ 2 · t · T · 32 头 · 512 ÷ 2 × 3 × 35 层，32K 923.6、256K 7388.7；注意力核效率 ＝ 923.6 ÷ 1.55 s、7388.7 ÷ 11.86 s，再 ÷ 1155。</p>
-<p>本课推导：交点 ＝ 32768 × 484.5 ÷ 923.6 ≈ 17,200（只跟其余矩阵乘比；连 MTP 头和视觉塔一起比约 18K）。稀疏注意力照框架的写法（每个 query 2048 个 key、不计并集白算）；indexer 打分 ＝ 每个 query 对全部可见 key 算 32 头 × 128 维、只在 11 层、只有前向。其余矩阵乘那条只画线性层 484.5。</p></details></figure>
+<p>本课推导：交点 ＝ 32768 × 484.5 ÷ 923.6 ≈ 17,200（只跟其余矩阵乘比；加上 MTP 头约 18K，再加视觉塔约 20K）。稀疏注意力照框架的写法（每个 query 2048 个 key、不计并集白算）；indexer 打分 ＝ 每个 query 对全部可见 key 算 32 头 × 128 维、只在 11 层、只有前向。其余矩阵乘那条只画线性层 484.5。</p></details></figure>
   <p>两种长度每设备都是 16K 个 query，MoE、投影、优化器的活一样多；变的是每个 query 平均要看的 key：因果下约半个序列，32K 约 16K 个，256K 约 128K 个。注意力占稠密计算的比例从 63% 涨到 93%，注意力核自己的效率一直在 52–54%：稠密 256K 的有效 MFU 45% 比 32K 的 28% 高，不是核变好了，是注意力占多了。按这个模型推，<b>注意力和其余矩阵乘一样多的长度约 17K</b>（本课推导）。</p>
   <p>32K 的注意力核只有 1.55 秒，全省掉也就这么多；稀疏核（连核外粘合）省了 0.46 秒，indexer、账本、等小核 0.49 秒、多露出的通信 0.38 秒先把它吃掉了。256K 的注意力核有 11.86 秒，稀疏把它缩到 1.48 秒，新增的开销也涨了，省下的远多于付出的。<b>32K 的现实目标是持平，收益在长序列。</b></p>
 <details class="foldfig"><summary><b>这些整模型读数的口径</b></summary>
@@ -5231,16 +5243,18 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 
   <h3 id="s11-6">11.6　离上限还差多少：阿姆达尔、MFU 的口径、GPU 的 4 倍</h3>
-  <p>能快多少有上限。稠密 256K 一步 15.27 秒里，会随稀疏缩的只有注意力核那 11.86 秒；投影等 1.4 秒、MoE 和其余约 2 秒不缩。注意力核缩到稀疏这一侧的计算量（稠密注意力的 4.2%），整步下限约 3.9 秒，<b>上限约 3.9 倍</b>（本课推导；把投影也按 4.2% 缩，会把上限算高）。现在 7.82 秒，差的约 3.9 秒里，约 2.9 秒在注意力这一侧（indexer 1.80、等小核 0.68、核本身的效率），约 1.1 秒在外面，主要是多露出的通信。</p>
+  <p>能快多少有上限（阿姆达尔定律：只有被加速的那部分会缩，其余照旧）。稠密 256K 那一步（profile 中位步 15.27 秒）里，会随稀疏缩的只有注意力核那 11.86 秒；投影等 1.4 秒、MoE 和其余约 2 秒不缩。注意力核缩到稀疏这一侧的计算量（稠密注意力的 4.2%），整步下限约 3.9 秒，<b>上限约 3.9 倍</b>（本课推导；把投影也按 4.2% 缩，会把上限算高）。现在 7.82 秒，差的约 3.9 秒里，约 2.9 秒在注意力这一侧（indexer 1.80、等小核 0.68、核本身的效率），约 1.1 秒在外面，主要是多露出的通信。</p>
 <figure class="fbox fwide" id="fig-dsa-mfu"><svg viewBox="0 0 1400 842" width="100%" role="img" aria-label="同一步 7.88 秒，三种分子。稠密等价：按稠密那一步该算的 7912.3 万亿次，有效 MFU 86.9%，比稠密自己的 45% 还高，说的是同样的训练量只用了一半时间。框架自带计数 2523.4，27.7%，其中 74% 是按 35 层、前向加反向数的 indexer。实际执行 836.1，9.2%。下：indexer 的三层折扣，每对的运算是主干注意力的四分之一，只有前向再剩三分之一，只在 35 层里的 11 层算再剩 11/35，合起来是稠密注意力的 2.6%。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">稀疏以后的 MFU：同一步，三种分子差十倍；稀疏后实际只有一成左右，却快了一倍</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Ⓐ 256K、不开蒸馏的那一步（7.88 秒）按三种分子算的 MFU（分母相同：步时 × 1155）；Ⓑ indexer 为什么只占一点：三层折扣（本课推导）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稠密等价</text>
-<rect x="109.72" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="130" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">框架按 35 层 × 前反向数的 indexer</text>
-<rect x="427.76" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="448" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">实际执行</text>
+<rect x="109.72" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="130" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">框架自带计数</text>
+<rect x="250.8" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="271" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">其中按 35 层 × 前反向数的 indexer</text>
+<rect x="568.84" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="589" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">实际执行</text>
 <rect x="0" y="102" width="1400" height="312" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -5248,22 +5262,22 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 三种分子（256K，同一步）</tspan></text>
 <text class="svgsm" x="314" y="200" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密等价：照稠密该算的数</tspan></text>
 <text class="svgsm" x="314" y="222" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">分子 7912.3 万亿次</text>
-<rect x="330" y="182" width="782.414793328499" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="1122" y="203" fill="#80868b" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">86.9%</tspan></text>
-<text class="svgsm" x="1192" y="203" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">同样的训练量用了一半时间；不是利用率</text>
+<rect x="330" y="182" width="660.7058254773991" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1000" y="203" fill="#80868b" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">86.9%</tspan></text>
+<text class="svgsm" x="1070" y="203" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">同样的训练量用了一半时间</text>
 <text class="svgsm" x="314" y="274" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">框架自带计数</tspan></text>
 <text class="svgsm" x="314" y="296" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">分子 2523.4 万亿次</text>
-<rect x="330" y="256" width="249.52864394488765" height="30" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="395.4426791482629" y="256" width="184.08596479662472" height="30" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="589" y="277" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">27.7%</tspan></text>
-<text class="svgsm" x="750" y="277" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">比实际执行高估 3 倍</text>
+<rect x="330" y="256" width="210.7130771090162" height="30" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="385.26270683631094" y="256" width="155.4503702727053" height="30" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="550" y="277" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">27.7%</tspan></text>
+<text class="svgsm" x="687" y="277" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">比实际执行高估 3 倍</text>
 <text class="svgsm" x="314" y="348" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">实际执行：这一步真做了的</tspan></text>
 <text class="svgsm" x="314" y="370" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">分子 836.1 万亿次</text>
-<rect x="330" y="330" width="82.67848902366669" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="422" y="351" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.2%</tspan></text>
-<text class="svgsm" x="750" y="351" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">衡量硬件用得好不好，看这一个</text>
-<line x1="734.6087788048676" y1="170" x2="734.6087788048676" y2="390" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5,4"/>
-<text class="svgsm" x="740" y="406" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密自己那一步（15.24 秒）的有效 MFU 45.0%</tspan></text>
+<rect x="330" y="330" width="69.81739073109631" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="409" y="351" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.2%</tspan></text>
+<text class="svgsm" x="687" y="351" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">衡量硬件用得好不好，看这一个</text>
+<line x1="671.6696354352215" y1="170" x2="671.6696354352215" y2="390" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5,4"/>
+<text class="svgsm" x="677" y="406" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密锁定基线（15.238 秒）的有效 MFU 45.0%</tspan></text>
 <rect x="0" y="468" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="468" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="0" y="470" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -5286,17 +5300,17 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="2" y="768" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="795" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稀疏后 MFU 低，是分子变小了，不是硬件闲着：省掉的乘法本来就不该再算进分子</tspan></text>
 </svg><figcaption><b>同一步、同一个分母，三根条差十倍，差的全在分子怎么数。</b><span class="capmore"><br><em>下面那几根红条：indexer 的量一层一层打折。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>本课推导：MFU ＝ 分子 ÷（7.880 秒 × 1155）。稠密等价分子 ＝ 同长度稠密格的有效分子 7912.3；实际执行 ＝ 线性层 484.5 ＋ MTP 头 35.0 ＋ 视觉 4.1 ＋ 稀疏注意力 115.0 ＋ indexer 打分 195.0 ＋ indexer 投影 2.4 ＝ 836.1；框架自带计数 2523.4，其中 indexer 打分 1861.6（按 35 层 × 3 数）。</p>
-<p>实际执行里稀疏注意力照框架按 256 ＋ 256 维、每个 query 2048 个 key 数，不计并集的白算；核在矩阵单元上实际做的是吸收式 576 ＋ 512 维、ρ 倍的行，比分子多。所以实际执行 MFU 低，一半是分子扣得干净，一半是 indexer、等小核、露出的通信这些不产生分子的时间。</p>
+<p>实际执行里稀疏注意力照框架按 256 ＋ 256 维、每个 query 2048 个 key 数，不计并集的白算；核在矩阵单元上实际做的是吸收式 576 ＋ 512 维、ρ 倍的行，比分子多。所以实际执行 MFU 低有两个原因：一是分子扣得干净，二是 indexer、等小核、露出的通信这些不产生分子的时间。</p>
 <p>Ⓑ：7388.7 × 1/4 × 1/3 × 11/35 ≈ 193.5，加上按头加权那一项是 195.0；对稠密注意力是 2.6%。</p></details></figure>
   <p>快了一倍，MFU 却只有一成左右，看分子怎么数。<b>稠密等价</b>拿稠密该算的数当分子，86.9%，比稠密自己的 45% 还高，说的只是「同样的训练量用了一半时间」；<b>实际执行</b>只数这一步真做了的，9.2%，硬件用得好不好看它。它低，是省掉的乘法本来就不该再进分子，剩下的时间又有一截花在 indexer、等小核、露出的通信这些不产生分子的事上。<b>框架自带的计数</b>把 indexer 按全部层、前向加反向数了，27.7%，高估 3 倍：indexer 每对只算主干的 1/4，只有前向，只在 35 层里的 11 层算，三层折扣下来只有稠密注意力的 2.6%。</p>
-  <p>GPU 上同类算子快多少？一组 GPU 上的读数（Blackwell 一代，DeepSeek V3.2 的形状：128 头、indexer 64 头），256K 单层注意力模块快 4.44 倍，同样口径我们约 2.8 倍。差在三处（推断）：<b>头多不用拼单</b>，128 头一个 query 就有 128 行，不拼单行数也够，没有白算、也不要账本；<b>GPU 天生按行取数</b>，每个线程按地址去读，散着取 2048 行就是普通的读，不用另一种核搬、也不用先写进暂存；<b>indexer 可以用 FP8</b>，DeepSeek V3.2 的论文写明它的 indexer 头少、能用 FP8 实现，而 256K 上我们最大的一项开销正是 indexer。</p>
+  <p>GPU 上同类算子快多少？一组 GPU 上的读数（Blackwell 一代，DeepSeek V3.2 的形状：128 头、indexer 64 头），256K 单层注意力模块快 4.44 倍；我们按单层口径折算约 2.8 倍。差在三处（推断）：<b>头多不用拼单</b>，128 头一个 query 就有 128 行，不拼单行数也够，没有白算、也不要账本；<b>GPU 天生按行取数</b>，每个线程按地址去读，散着取 2048 行就是普通的读，不用另一种核搬、也不用先写进暂存；<b>indexer 可以用 FP8</b>，DeepSeek V3.2 的论文写明它的 indexer 头少、能用 FP8 实现，而 256K 上我们最大的一项开销正是 indexer。</p>
 <details class="foldfig"><summary><b>GPU 那组读数和我们的对照</b></summary>
-  <p>GPU 那组是单层注意力模块（含全部投影）的前向 ＋ 反向，对照是同卡稠密 MLA：32K 1.16 倍、64K 1.77 倍、128K 2.78 倍、256K 4.44 倍；带蒸馏 0.94、1.48、2.32、4.07 倍。我们同口径（256K，同一份 profile）：稠密的注意力这一侧 13.26 秒；稀疏是投影 0.70 ＋ 核 1.48 ＋ 等小核 0.68 ＋ indexer 1.80 ＋ 账本 0.09 ＝ 4.75 秒，约 2.8 倍；带蒸馏 5.53 秒，约 2.4 倍。模型形状不同（128 头的稠密一侧注意力占比更大），只作量级参照；追到约 4 倍，注意力这一侧要降到 3.3 秒，差的和 indexer 一项相当。DeepSeek V3.2 的技术报告没有给训练步时的加速比。</p>
+  <p>GPU 那组是单层注意力模块（含全部投影）的前向 ＋ 反向，对照是同卡稠密 MLA：32K 1.16 倍、64K 1.77 倍、128K 2.78 倍、256K 4.44 倍；带蒸馏 0.94、1.48、2.32、4.07 倍。我们按单层口径折算（256K，整模型同一份 profile 里注意力这一侧的分项相加）：稠密的注意力这一侧 13.26 秒；稀疏是投影 0.70 ＋ 核 1.48 ＋ 等小核 0.68 ＋ indexer 1.80 ＋ 账本 0.09 ＝ 4.75 秒，约 2.8 倍；带蒸馏 5.53 秒，约 2.4 倍。模型形状不同（128 头的稠密一侧注意力占比更大），只作量级参照；追到 4.44 倍，注意力这一侧要降到约 3.0 秒，差的约 1.8 秒，正好和 indexer 一项相当。DeepSeek V3.2 的技术报告没有给训练步时的加速比。</p>
 </details>
 
 
   <h3 id="s11-7">11.7　indexer 和蒸馏：能少算就少算</h3>
-  <p>indexer 自己也要训：它向主干注意力看齐来学（蒸馏，主干的注意力分布当教师、indexer 的打分当学生）。训练分两段，先只训 indexer 的热身，再全模型一起训的稀疏阶段。</p>
+  <p>indexer 自己也要训：它向主干注意力看齐来学（蒸馏：主干的注意力分布当教师、indexer 的打分当学生）。训练分两段，先只训 indexer 的热身，再全模型一起训的稀疏阶段。indexer 也不是每层都有：每 4 层一组，第一层自己打分挑下标（F 层），后面 3 层借它的（S 层），另加第 0 层、最后一层和 MTP 层，35 层里只有 11 层挑。</p>
 <figure class="fbox fwide" id="fig-dsa-aux"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="上：indexer 只在 35 层里的 11 层算：第 0 层、每 4 层一组的首层、最后一层和 MTP 层，蓝色；其余 24 层灰色，借本组首层挑出的下标。借来的下标拿到它自己最优挑法 94% 到 99% 的概率质量。下：热身阶段只训 indexer，256K 一步从 84.2 秒到 70.5 秒再到 24.3 秒，24.3 秒里 20.4 秒是覆盖全部可见 key 的教师；稀疏阶段的蒸馏只在挑中的 2048 个 key 上，32K 多 0.85 秒、256K 多 0.96 秒，不随长度涨。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">indexer 少挑几层，蒸馏少看几个 key</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Ⓐ 哪几层跑 indexer（蓝 ＝ 自己打分挑下标的 F 层，灰 ＝ 借本组下标的 S 层）；Ⓑ 两个训练阶段里蒸馏的代价（256K，一步的秒数）</text>
@@ -5424,7 +5438,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="1288" y="182" width="33" height="46" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.6"/>
 <text class="svgsm" x="1304" y="211" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">F</tspan></text>
 <text class="svgsm" x="1304" y="250" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">MTP</text>
-<text class="svgsm" x="30" y="286" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">S 层用本组 F 层的挑选，拿到的概率质量是它自己最优挑法的 94–99%</tspan></text>
+<text class="svgsm" x="30" y="286" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">S 层用本组 F 层的挑选：挑中的注意力权重，是它自己最优挑法能挑中的 94–99%</tspan></text>
 <rect x="0" y="344" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="344" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="0" y="346" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -5446,17 +5460,17 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="644" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="644" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="671" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">热身的教师看全部可见 key，按长度的平方涨；稀疏阶段只看挑中的 2048 个，不涨</tspan></text>
-</svg><figcaption><b>上面数蓝格：35 层只有 11 层自己挑；下面看最后一根灰条里红的那段：热身的教师占 84%。</b><span class="capmore"><br><em>整模型实测，256K，合成挑选。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（同上整模型配置，256K，合成挑选）：热身旧版 84.2 秒（主干稠密、所有参数求导、教师用 XLA 流式算）→ 70.5 秒（主干走稀疏核、只对 indexer 求导、主干不做反向也不为反向存激活；32K 估计显存 88.7 → 23.2 GiB）→ 24.3 秒（教师四个核写成 Pallas）。按 1000 步算约 23.4 → 6.7 小时（推算，按这一格的批量）。</p>
+</svg><figcaption><b>上面数蓝格：35 层只有 11 层自己挑；下面看最后一根灰条里红的那段：热身的教师占 84%。</b><span class="capmore"><br><em>整模型实测，256K，合成挑选。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（同上整模型配置，256K，合成挑选）：热身旧版 84.2 秒（主干稠密、所有参数求导、教师用 XLA 流式算）→ 70.5 秒（主干走稀疏核、只对 indexer 求导、主干不做反向也不为反向存激活；估计显存 91.9 → 23.6 GiB）→ 24.3 秒（教师四个核写成 Pallas）。按 1000 步算约 23.4 → 6.7 小时（推算，按这一格的批量）。</p>
 <p>热身的教师覆盖每个 query 的全部可见 key（O(T²)），256K 上比稀疏阶段多约 T ÷ 2k ≈ 64 倍的对数；稀疏阶段只在挑中集合上算，跟框架原来先算稠密再掩码的写法数学等价、只差求和顺序。</p>
 <p>S 层蒸馏：KL 里跟学生有关的项对教师是线性的，所以逐层 KL 取平均与「组内平均教师算一个 KL」梯度相同、loss 差一个常数（CPU 核对梯度 1e-7 量级）；32K 实测 F 层蒸馏 6.03 秒、各层各算一次 8.13 秒。</p></details></figure>
   <ul>
-    <li><b>只在 11 层挑</b>：每 4 层一组，第一层自己打分挑下标（F 层），后面 3 层借它的（S 层）。隔 4 层的两个 F 层挑法只重合六七成，所以只能组内借。</li>
-    <li><b>S 层也要蒸馏时，学生只算一次</b>：组内各层的教师先平均，再跟 F 层的学生算一次，梯度和逐层各算一次一样；每层各重算一次学生，32K 一步多 2.1 秒。</li>
-    <li><b>热身只对 indexer 求导，是精确的</b>：主干冻着，下标不可导、教师也断开了梯度，主干那几项 loss 走不到 indexer；所以主干整个不做反向、不为反向存激活，一步省 14 秒，再把教师写成 Pallas 核又省 46 秒。</li>
+    <li><b>为什么只能组内借</b>：隔 4 层的两个 F 层，挑法只重合六七成。</li>
+    <li><b>S 层也要蒸馏时，学生只算一次</b>：KL 里跟学生有关的那一项对教师是线性的，所以组内各层的教师先平均、再跟 F 层的学生算一次，梯度跟逐层各算一次一样；每层各重算一次学生，32K 一步多 2.1 秒。</li>
+    <li><b>热身只对 indexer 求导，是精确的</b>：热身时主干冻着。indexer 只通过挑出的下标影响主干，下标不可导；教师那一路也断开了梯度。所以主干那几项 loss 本来就传不到 indexer，主干整个不做反向、不为反向存激活，一步省 14 秒；再把教师写成 Pallas 核，又省 46 秒。</li>
   </ul>
 
   <h3 id="s11-8">11.8　三条做法：锁基线、上卡验、向成熟核取经</h3>
-  <p><b>倍数的分母先锁定。</b>256K 稠密同一份配置复测三次是 15.30–15.34 秒（±0.2% 内）；再补一刀（一个每层都跑的小整数循环，跑到不动点就停，结果逐位不变）锁在 15.238 秒、有效 MFU 44.96%。分母取稠密能做到的最好，稀疏和稠密放进同一个作业各出一个数再相除；换锁定的分母，1.95 倍变成约 1.93 倍（推导，待同作业重测）。</p>
+  <p><b>倍数的分母先锁定。</b>256K 稠密同一份配置复测三次是 15.30–15.34 秒（±0.2% 内）；再补一刀：稠密注意力核旁边有一段每层都跑、早就算完还在空转的小循环，让它算完就停（结果逐位不变），锁在 15.238 秒、有效 MFU 44.96%。分母取稠密能做到的最好，稀疏和稠密放进同一个作业各出一个数再相除；换锁定的分母，1.95 倍变成约 1.93 倍（推导，待同作业重测）。</p>
   <p><b>核的代码体积一变，静态预测就不可信。</b>给稠密核挑块形状时，按编译产物数静态指令包，预测前向快 13.9%，上卡慢 7.7%；另一项预测慢 3.3%，实测慢 21%。共同点是整颗核的代码变大了（约 3.9 万包 → 5.3–8.0 万包），推断有取指的代价，静态计数看不到。这类改动必须上卡。</p>
   <p><b>向成熟核取经，读它的提交史。</b>把两份公开的 splash 实现逐个提交读一遍，每一处修过的坑、加过的技巧，对到自己的核上写四件事：它怎么做、为什么、我们怎么做、结论。结果最要紧的 5 项全是防坑：</p>
 

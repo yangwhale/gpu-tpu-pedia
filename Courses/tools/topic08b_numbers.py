@@ -1020,7 +1020,7 @@ DSA_WARM_TEACHER = (20.4, 24.2)                                # 四个稠密教
 assert round(DSA_WARM_TEACHER[0] / DSA_WARM_TEACHER[1] * 100) == 84
 DSA_WARM_HOURS = (round(1000 * DSA_WARM[0] / 3600, 1), round(1000 * DSA_WARM[2] / 3600, 1))
 assert DSA_WARM_HOURS == (23.4, 6.7)
-DSA_WARM_MEM_32K = (88.7, 23.2)                                # 只对 indexer 求导，主干不再为反向存激活（估计总量 GiB）
+DSA_WARM_MEM_256K = (91.9, 23.6)                              # 256K：旧版 → 主干稀疏、只对 indexer 求导（估计总量 GiB）
 # 稠密基线先锁定：同一份配置复测 15.299–15.337 s（±0.2% 内），锁定那一项快 94 ms、loss 逐位
 DSA_DENSE_RETEST = (15.337, 15.299, 15.332)
 assert max(DSA_DENSE_RETEST) / min(DSA_DENSE_RETEST) - 1 < 0.003
