@@ -1750,6 +1750,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </tbody></table>
   <p>单颗核的效率也一样先数对运算量：注意力的融合反向核一次做 5 个矩阵乘（重算 QKᵀ、dP、dV、dK、dQ），少数了就会读成只到峰值的 33%，数对了是约 72%。</p>
   <p>有效分子管不到的，并报两个参考量：注意力按实际执行的块算的「核执行」量；每芯片每秒处理多少 token（不依赖运算量怎么数，跨口径比较用它）。</p>
+  <p>注意力换成稀疏以后，分子还要再分一次：照稠密该算的数当分子，回答「同样的训练量用了多久」；只数这一步真做了的，才看硬件用得好不好。同一步两者能差近十倍（11.6）。</p>
 
 </details>
 
@@ -1834,8 +1835,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s2-4">2.4　测量本身会骗人</h3>
 
-  <table class="t9 mini" id="tab-traps"><caption>测量本身会骗人：这次调优里真踩过的五个坑</caption><thead><tr><th>坑</th><th>当时读到什么</th><th>怎么躲</th></tr></thead><tbody><tr><td>作业的第一格整体偏慢</td><td>有一次整格慢 3%</td><td>第一格不拿来当比较基准（放一个预热用的对照），读数窗口往后取</td></tr><tr><td>抓 profile 的那一步</td><td>主机步时多约 0.3 秒</td><td>窗口避开抓 profile 和写盘那两步</td></tr><tr><td>数据管线供不上</td><td>一格报 1.379 秒；前面几步其实约 2 秒，抓 profile 那一停，管线攒够了缓冲才快起来</td><td>先看逐步步时平不平，不平先别读</td></tr><tr><td>合成数据的图像槽太多</td><td>「加视觉塔」读成慢 27.5%；按真实数据的槽数只慢 5.6%</td><td>合成数据的形状要跟真实数据对齐</td></tr><tr><td>只录了一颗芯片</td><td>读出「注意力核每单位运算慢 2.3 倍」</td><td>按最忙的设备读（第四节）</td></tr></tbody></table>
-  <details class="figsrc"><summary>出处与口径</summary><p>实测：前四条都出自这次调优的作业日志；第四条是一份合成图文数据每行有 16384 个图像槽（只填了约 0.7%，真实数据填约 77%），视觉塔按槽算、空槽也算；把每行槽数改成跟真实数据同比例（2048）以后重测。</p><p>每一条当时都让我们读错过一次方向，所以这里不讲来历，只列读法。</p><p>数据管线那一条的后话：一个约 2 秒一步的 9 层配置（倒序阶梯里用的截层），每台加载主机只开 1 个加载进程时，整步被一台主机拖住（它每步等数据约 636 毫秒）；开到 4 个，步时 2.037 → 1.374 秒、2.044 → 1.133 秒。加载进程数不能超过每台主机分到的数据文件数，超了先报错，其余主机卡在集合通信上，半小时后才报切片故障。</p></details>
+  <table class="t9 mini" id="tab-traps"><caption>测量本身会骗人：这次调优里真踩过的六个坑</caption><thead><tr><th>坑</th><th>当时读到什么</th><th>怎么躲</th></tr></thead><tbody><tr><td>作业的第一格整体偏慢</td><td>有一次整格慢 3%</td><td>第一格不拿来当比较基准（放一个预热用的对照），读数窗口往后取</td></tr><tr><td>抓 profile 的那一步</td><td>主机步时多约 0.3 秒</td><td>窗口避开抓 profile 和写盘那两步</td></tr><tr><td>数据管线供不上</td><td>一格报 1.379 秒；前面几步其实约 2 秒，抓 profile 那一停，管线攒够了缓冲才快起来</td><td>先看逐步步时平不平，不平先别读</td></tr><tr><td>合成数据的图像槽太多</td><td>「加视觉塔」读成慢 27.5%；按真实数据的槽数只慢 5.6%</td><td>合成数据的形状要跟真实数据对齐</td></tr><tr><td>只录了一颗芯片</td><td>读出「注意力核每单位运算慢 2.3 倍」</td><td>按最忙的设备读（第四节）</td></tr><tr><td>拿编译产物的静态指令数挑核的块形状</td><td>预测快 13.9% 的那个，上卡慢 7.7%</td><td>核的代码一变大就别信静态数，上卡（11.8）</td></tr></tbody></table>
+  <details class="figsrc"><summary>出处与口径</summary><p>实测：前四条都出自这次调优的作业日志，最后一条是第十一节给稠密注意力核挑块形状时的上卡读数；第四条是一份合成图文数据每行有 16384 个图像槽（只填了约 0.7%，真实数据填约 77%），视觉塔按槽算、空槽也算；把每行槽数改成跟真实数据同比例（2048）以后重测。</p><p>每一条当时都让我们读错过一次方向，所以这里不讲来历，只列读法。</p><p>数据管线那一条的后话：一个约 2 秒一步的 9 层配置（倒序阶梯里用的截层），每台加载主机只开 1 个加载进程时，整步被一台主机拖住（它每步等数据约 636 毫秒）；开到 4 个，步时 2.037 → 1.374 秒、2.044 → 1.133 秒。加载进程数不能超过每台主机分到的数据文件数，超了先报错，其余主机卡在集合通信上，半小时后才报切片故障。</p></details>
 
 <details class="foldfig"><summary><b>算的块比要的多：块里只要有一个点要算，整块都算</b></summary>
 
@@ -4334,7 +4335,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>专题三讲过，DSA 省的是「读多少」：那是推理，一次只来一个新 query，从 32K 里挑 2048 个，少读 16 倍。训练不一样：32768 个 query 同时都在，几乎每个 key 都有人挑，读省不了；也不用省，一层的 KV 读一遍约 10 微秒（本课推导）。<b>训练里省的是 query 和 key 两两相乘的次数：满因果约 5.4 亿对，每人只挑 2048 个是约 6700 万对，32K 少 8 倍，256K 少 64 倍（本课推导）。</b></p>
   <p>可现成的块稀疏核是按块跳的：一块 512 个 query × 512 个 key，块里只要有一对被挑中，整块就得算。下图左边是一份玩具账：</p>
 <figure class="fbox fwide" id="fig-dsa-moe"><svg viewBox="0 0 1400 646" width="100%" role="img" aria-label="左：一个 query 块的 4 个 query（位置 12 到 15）各从 16 个 key 里挑 4 个，蓝格是挑中的；key 按 4 个一块切，4 块里每块都至少有一个蓝格，所以 4 块都要整块算，跟稠密一样。右：把这 4 个 query 挑中的 key 收拢成一摞，并集 8 行（0、5、9、11、12、13、14、15），整单对着这 8 行一起乘，没挑的格子用成员位掩掉。这一单就像 MoE 的一个专家，收拢来的 key 行就像分给它的 token。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每个 query 只挑 2048 个，块稀疏却一块都跳不掉；先收拢再乘，就是一次 MoE</text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每个 query 只挑 2048 个，块稀疏却一块都跳不掉；拼单收拢再乘，就是一次 MoE</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">玩具账：一单 4 个 query（位置 12–15），每人从 16 个 key 里挑 4 个（真实是从 32768 里挑 2048）；蓝格 ＝ 挑中，灰格 ＝ 因果看不见</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">挑中</text>
@@ -4448,7 +4449,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="700" y="102" width="700" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="700" y="104" width="700" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="700" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="714" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 先收拢再乘：这一单就是一个专家</tspan></text>
+<text class="svglbl" x="714" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 拼一单、收拢再乘：这一单就是一个专家</tspan></text>
 <text class="svgsm" x="813" y="186" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
 <text class="svgsm" x="847" y="186" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
 <text class="svgsm" x="881" y="186" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9</tspan></text>
@@ -4519,7 +4520,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>块激活率：32K、k ＝ 2048／512／128、块 512 × 512 和 1024 × 2048、均匀挑与偏向最近，12 种组合全部 100%（模拟）；k 从 2048 压到 128 时现成的动态块稀疏核 987.8 → 987.6 ms（另一代芯片上的实测）。</p>
 <p>ρ（并集膨胀比）＝ 一单的并集行数 ÷ k；真实值是公开的 Hy4 预览版权重在 CPU 上抓的 32K 长文 top-k 统计（4 个 F 层、两份数据的均值）：ρ(4) 1.31–1.49、ρ(8) 1.50–1.87、ρ(16) 1.71–2.38。</p>
 <p>MoE 的对应关系：专家 ↔ query 块，token ↔ 并集里的 key 行；前向是按组矩阵乘 ＋ 分段 softmax，反向 dKV ＝ 按 key 把部分行加回去，对拍到 1e-6。</p></details></figure>
-  <p>每个 query 挑的是散的 6%，一块里一个都没挑中几乎不可能，块激活率 100%，算量跟稠密一样。要省，就得反过来：<b>先把几个 query 要的 key 收拢成紧凑的一摞，再整块乘</b>（上图右边）。</p>
+  <p>每个 query 挑的是散的 6%，一块里一个都没挑中几乎不可能，块激活率 100%，算量跟稠密一样（第三节站 8 的跳块能省，是因为跨文档那些块整块是空的；这里是一个个 token 散着挑，块里总有人挑）。要省，就得反过来：<b>先把几个 query 要的 key 收拢成紧凑的一摞，再整块乘</b>（上图右边）。</p>
 <details class="foldfig"><summary><b>一层的 KV 读一遍为什么只要 10 微秒、两两相乘的次数怎么数</b></summary>
   <p>吸收式 MLA 一层每个 token 存 576 个 BF16（512 维潜变量 ＋ 64 维位置部分），32768 个 token 约 37.7 MB；按每设备约 3.7 TB/s（每芯片 7.38 TB/s 平分给两个设备，平分是假设）读一遍约 10 微秒，一层注意力前向加反向是毫秒级（本课推导）。</p>
   <p>满因果的对数：32768 × 32769 ÷ 2 ≈ 5.4 亿；每个 query 挑满 2048 个：32768 × 2048 ≈ 6700 万（上界，前 2048 个 query 能挑的不到 2048 个）。256K 同样算：约 344 亿对 5.4 亿，64 倍。</p>
@@ -5223,14 +5224,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>右图看灰线和橙线在哪交叉：约 17K 以后注意力就是大头。绿线几乎是平的。</b><span class="capmore"><br><em>纵轴按对数画；本课推导，锚点是左边两根实测分子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测分子（每设备每步，前向 ＋ 反向）：其余矩阵乘 ＝ 投影、稠密与专家 FFN、输出头（含 MTP 层）484.5，加 MTP 输出头 35.0、视觉塔（按实际图像，32K 32.1、256K 4.1）；稠密注意力 ＝ 2 · t · T · 32 头 · 512 ÷ 2 × 3 × 35 层，32K 923.6、256K 7388.7；注意力核效率 ＝ 923.6 ÷ 1.55 s、7388.7 ÷ 11.86 s，再 ÷ 1155。</p>
 <p>本课推导：交点 ＝ 32768 × 484.5 ÷ 923.6 ≈ 17,200（只跟其余矩阵乘比；连 MTP 头和视觉塔一起比约 18K）。稀疏注意力照框架的写法（每个 query 2048 个 key、不计并集白算）；indexer 打分 ＝ 每个 query 对全部可见 key 算 32 头 × 128 维、只在 11 层、只有前向。其余矩阵乘那条只画线性层 484.5。</p></details></figure>
   <p>两种长度每设备都是 16K 个 query，MoE、投影、优化器的活一样多；变的是每个 query 平均要看的 key：因果下约半个序列，32K 约 16K 个，256K 约 128K 个。注意力占稠密计算的比例从 63% 涨到 93%，注意力核自己的效率一直在 52–54%：稠密 256K 的有效 MFU 45% 比 32K 的 28% 高，不是核变好了，是注意力占多了。按这个模型推，<b>注意力和其余矩阵乘一样多的长度约 17K</b>（本课推导）。</p>
-  <p>32K 的注意力核只有 1.55 秒，全省掉也就这么多；稀疏核省了 0.46 秒，indexer、账本、等小核 0.49 秒、多露出的通信 0.38 秒先把它吃掉了。256K 的注意力核有 11.86 秒，稀疏把它缩到 1.48 秒，新增的开销也涨了，省下的远多于付出的。<b>32K 的现实目标是持平，收益在长序列。</b></p>
+  <p>32K 的注意力核只有 1.55 秒，全省掉也就这么多；稀疏核（连核外粘合）省了 0.46 秒，indexer、账本、等小核 0.49 秒、多露出的通信 0.38 秒先把它吃掉了。256K 的注意力核有 11.86 秒，稀疏把它缩到 1.48 秒，新增的开销也涨了，省下的远多于付出的。<b>32K 的现实目标是持平，收益在长序列。</b></p>
 <details class="foldfig"><summary><b>这些整模型读数的口径</b></summary>
   <p>64 片 v7x：32K 上下文并行 2 ＋ FSDP 64，256K 上下文并行 16 ＋ FSDP 8，参数和优化器状态都切 128 份，稠密与稀疏同配置；32K 取第 20–35 步均值，256K 取第 12–21 步中位数，稠密与稀疏同一批。这个模型没有训过的 indexer：挑选用按真实挑选统计拟合的合成选择（32K ρ 2.85，比真实偏高 12–15%；256K ρ 3.71，偏低约 10%，按真实挑选约多 0.2 秒，推算），indexer 照常算；随机初始化的 indexer 相邻 query 几乎不重合（ρ 5.3），会把核的活放大一倍，不能拿来测性能。</p>
 </details>
 
 
   <h3 id="s11-6">11.6　离上限还差多少：阿姆达尔、MFU 的口径、GPU 的 4 倍</h3>
-  <p>能快多少有上限。稠密 256K 一步 15.27 秒里，会随稀疏缩的只有注意力核那 11.86 秒；投影等 1.4 秒、MoE 和其余约 2 秒不缩。注意力核缩到稀疏这一侧的计算量（稠密注意力的 4.2%），整步下限约 3.9 秒，<b>上限约 3.9 倍</b>（本课推导；把投影也按 4.2% 缩会算出约 5.9 倍，那是高估）。现在 7.82 秒，差的约 3.9 秒里，约 2.9 秒在注意力这一侧（indexer 1.80、等小核 0.68、核本身的效率），约 1.1 秒在外面，主要是多露出的通信。</p>
+  <p>能快多少有上限。稠密 256K 一步 15.27 秒里，会随稀疏缩的只有注意力核那 11.86 秒；投影等 1.4 秒、MoE 和其余约 2 秒不缩。注意力核缩到稀疏这一侧的计算量（稠密注意力的 4.2%），整步下限约 3.9 秒，<b>上限约 3.9 倍</b>（本课推导；把投影也按 4.2% 缩，会把上限算高）。现在 7.82 秒，差的约 3.9 秒里，约 2.9 秒在注意力这一侧（indexer 1.80、等小核 0.68、核本身的效率），约 1.1 秒在外面，主要是多露出的通信。</p>
 <figure class="fbox fwide" id="fig-dsa-mfu"><svg viewBox="0 0 1400 842" width="100%" role="img" aria-label="同一步 7.88 秒，三种分子。稠密等价：按稠密那一步该算的 7912.3 万亿次，有效 MFU 86.9%，比稠密自己的 45% 还高，说的是同样的训练量只用了一半时间。框架自带计数 2523.4，27.7%，其中 74% 是按 35 层、前向加反向数的 indexer。实际执行 836.1，9.2%。下：indexer 的三层折扣，每对的运算是主干注意力的四分之一，只有前向再剩三分之一，只在 35 层里的 11 层算再剩 11/35，合起来是稠密注意力的 2.6%。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">稀疏以后的 MFU：同一步，三种分子差十倍；稀疏后实际只有一成左右，却快了一倍</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Ⓐ 256K、不开蒸馏的那一步（7.88 秒）按三种分子算的 MFU（分母相同：步时 × 1155）；Ⓑ indexer 为什么只占一点：三层折扣（本课推导）</text>
@@ -5459,7 +5460,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p><b>核的代码体积一变，静态预测就不可信。</b>给稠密核挑块形状时，按编译产物数静态指令包，预测前向快 13.9%，上卡慢 7.7%；另一项预测慢 3.3%，实测慢 21%。共同点是整颗核的代码变大了（约 3.9 万包 → 5.3–8.0 万包），推断有取指的代价，静态计数看不到。这类改动必须上卡。</p>
   <p><b>向成熟核取经，读它的提交史。</b>把两份公开的 splash 实现逐个提交读一遍，每一处修过的坑、加过的技巧，对到自己的核上写四件事：它怎么做、为什么、我们怎么做、结论。结果最要紧的 5 项全是防坑：</p>
 
-  <table class="t9 mini" id="tab-dsa-splash"><caption>照成熟核的提交史补的五项：全是防坑，不是提速</caption><thead><tr><th>成熟核踩过的坑</th><th>放到这颗核上会怎样</th><th>补法</th></tr></thead><tbody><tr><td>掩码用负无穷时，一行第一块全被掩掉</td><td>初值也是负无穷时 exp(−∞ − (−∞)) ＝ NaN，整行 NaN</td><td>在线 softmax 的初值加有限下限，出口除零保护</td></tr><tr><td>从没访问过的输出块不会被写</td><td>容量溢出又没开回放时，容量外的输出是没写过的内存</td><td>每块至少写一段；或配置上拦住</td></tr><tr><td>对外返回的统计量被静默丢了梯度</td><td>有人对 lse 求导（比如 z-loss），梯度静默为 0</td><td>统计量显式截断梯度</td></tr><tr><td>合法性检查太慢被关掉</td><td>下标升序、不重复的前提被违反时，并集静默算错</td><td>便宜的静态检查报具体错，贵的进调试开关</td></tr><tr><td>测试只在作者那边</td><td>改核不会被拦</td><td>解释模式的单测矩阵进主仓库</td></tr></tbody></table>
+  <table class="t9 mini" id="tab-dsa-splash"><caption>照成熟核的提交史补的五项：全是防坑，不是提速</caption><thead><tr><th>成熟核踩过的坑</th><th>放到这颗核上会怎样</th><th>补法</th></tr></thead><tbody><tr><td>在线 softmax 的初值用了负无穷（环形版修过一次）</td><td>没有 sink 的模型里，一单的第一段没挑这一行：exp(−∞ − (−∞)) ＝ NaN，整行 NaN</td><td>初值加有限下限，出口除零保护</td></tr><tr><td>从没访问过的输出块不会被写</td><td>容量溢出又没开回放时，容量外的输出是没写过的内存</td><td>每块至少写一段；或配置上拦住</td></tr><tr><td>对外返回的统计量被静默丢了梯度</td><td>有人对 lse 求导（比如 z-loss），梯度静默为 0</td><td>统计量显式截断梯度</td></tr><tr><td>合法性检查太慢被关掉</td><td>下标升序、不重复的前提被违反时，并集静默算错</td><td>便宜的静态检查报具体错，贵的进调试开关</td></tr><tr><td>测试只在作者那边</td><td>改核不会被拦</td><td>解释模式的单测矩阵进主仓库</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>本课归纳：两份公开实现（jax 里的 splash、tokamax 的 splash 2.0）逐个提交读过，每项写四件事：它怎么做、为什么（对应的提交或实测）、我们怎么做、结论（必须／可以／不适用）。必须的这 5 项已实现、CPU 上验过，卡上待验；可以采用的 7 项（如统计量按车道复制存、以 2 为底的指数）按预期收益排了队。</p></details>
 
 <details class="foldfig"><summary><b>考考自己</b>：同事说：我写的稀疏核单测比稠密快 1.6 倍，接进 32K 的模型整步一定快。你先问什么？</summary><p>一，32K 的注意力占稠密一步多少（这里 1.55 秒，全省掉也就这么多），稀疏新增的 indexer、账本、等小核要多少；二，省下的主核时间原来是不是正盖着别的通信（11.5、第五节）；三，分母锁定了没有、是不是同一个作业里量的整步。这次 32K 整步慢 15%，256K 快 1.95 倍。</p></details>
