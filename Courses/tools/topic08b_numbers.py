@@ -938,3 +938,93 @@ DSA_LAYER = {"moe": 30.2, "att_dense": 28.0, "att_sparse": 21.6, "layer_dense": 
              "hidden_dense": 14.9, "wait_dense": 2.2, "wait_sparse": 14.3, "two_dense": 99.3, "two_sparse": 99.0}
 assert abs(DSA_LAYER["moe"] + DSA_LAYER["att_dense"] - DSA_LAYER["layer_dense"] - DSA_LAYER["hidden_dense"]) < 0.11
 assert round(DSA_LAYER["layer_sparse"] - DSA_LAYER["layer_dense"], 1) == 8.7
+
+# ── 第十一节续：整模型（32 头的模型，64 片 v7x，每设备 16K token；2026-11-25 补）────────────────
+# 32K：上下文并行 2 ＋ FSDP 64；256K：上下文并行 16 ＋ FSDP 8。两种长度每设备的 token、参数切分份数都一样。
+# 选择：这个模型没有训过的 indexer，用按真实挑选统计拟合的合成选择（32K ρ(32) 2.85，256K 3.71），indexer 照常算。
+DSA_WM_32K = {"dense": 4.503, "dsa": 5.167, "kd": 6.029, "kd_all": 8.132}       # 第 20–35 步均值
+DSA_WM_256K = {"dense": 15.337, "dense_lock": 15.238, "dsa": 7.880, "kd": 8.843}  # 第 12–21 步中位数；dense 与 dsa 同一批
+DSA_WM_X = (round(DSA_WM_256K["dense"] / DSA_WM_256K["dsa"], 2), round(DSA_WM_256K["dense"] / DSA_WM_256K["kd"], 2))
+assert DSA_WM_X == (1.95, 1.73), DSA_WM_X
+DSA_WM_X_LOCK = round(DSA_WM_256K["dense_lock"] / DSA_WM_256K["dsa"], 2)          # 换成锁定的稠密基线（推导，待同作业重测）
+assert DSA_WM_X_LOCK == 1.93
+DSA_WM_SLOW_32K_PCT = round((DSA_WM_32K["dsa"] / DSA_WM_32K["dense"] - 1) * 100)  # 32K 慢 15%
+assert DSA_WM_SLOW_32K_PCT == 15
+DSA_KD_COST = (round(DSA_WM_32K["kd"] - 5.180, 2), round(DSA_WM_256K["kd"] - DSA_WM_256K["dsa"], 2))   # 32K 对同代码不开 KD 的 5.180
+assert DSA_KD_COST == (0.85, 0.96)
+DSA_KD_S_EXTRA = round(DSA_WM_32K["kd_all"] - DSA_WM_32K["kd"], 1)              # S 层也各算一个 KL：多 2.1 s
+assert DSA_KD_S_EXTRA == 2.1
+
+# 分子（TFLOP／设备／步）。稠密有效分子 ＝ 线性层 ＋ MTP 头 ＋ 视觉 ＋ 注意力
+DSA_LIN, DSA_MTP = 484.5, 35.0                                 # 投影、稠密／专家 FFN、输出头（含 MTP 层，×3）；MTP 输出头与输入投影
+DSA_VIT = {"32k": 32.1, "256k": 4.1}
+DSA_ATT_DENSE = {"32k": 923.6, "256k": 7388.7}               # 2·t·T·H·512／2 × 3 × 35 层
+_t = 16384
+assert abs(2 * _t * 262144 * 32 * 512 / 2 * 3 * 35 / 1e12 - DSA_ATT_DENSE["256k"]) < 0.1
+assert abs(DSA_ATT_DENSE["256k"] / 8 - DSA_ATT_DENSE["32k"]) < 0.1
+DSA_NUM_DENSE = {k: DSA_LIN + DSA_MTP + DSA_VIT[k] + DSA_ATT_DENSE[k] for k in ("32k", "256k")}
+assert round(DSA_NUM_DENSE["32k"], 1) == 1475.2 and round(DSA_NUM_DENSE["256k"], 1) == 7912.3
+DSA_ATT_SHARE = {k: DSA_ATT_DENSE[k] / DSA_NUM_DENSE[k] * 100 for k in DSA_NUM_DENSE}   # 63% → 93%
+assert round(DSA_ATT_SHARE["32k"]) == 63 and round(DSA_ATT_SHARE["256k"]) == 93
+DSA_SPLASH_EFF = {"32k": 51.6, "256k": 53.9}                  # 注意力核自己的效率：923.6／1.55 s、7388.7／11.86 s ÷ 1155
+assert abs(DSA_ATT_DENSE["256k"] / 11.86 / PEAK_DEV * 100 - 53.9) < 0.1 and abs(DSA_ATT_DENSE["32k"] / 1.55 / PEAK_DEV * 100 - 51.6) < 0.1
+# 注意力与其余矩阵乘（投影、FFN、输出头）一样多的长度（本课推导）：注意力 ∝ T
+DSA_CROSS_T = 32768 * DSA_LIN / DSA_ATT_DENSE["32k"]
+assert 17000 < DSA_CROSS_T < 17400, DSA_CROSS_T                  # ≈ 17K
+def dsa_sparse_att(T, k=2048):                                   # 稀疏注意力的分子（照框架的 k 区域公式，非吸收式 256＋256 维，不计并集白算）
+    return 2 * _t * T * 32 * 512 * (k / T - (k / T) ** 2 / 2) * 3 * 35 / 1e12
+def dsa_indexer_score(T):                                        # indexer 打分：11 个 F 层、只前向
+    return (2 * _t * T * 32 * 128 + 2 * _t * T * 32) / 2 * 11 / 1e12
+assert round(dsa_sparse_att(32768), 1) == 111.8 and round(dsa_sparse_att(262144), 1) == 115.0
+assert round(dsa_indexer_score(32768), 1) == 24.4 and round(dsa_indexer_score(262144), 1) == 195.0
+# indexer 的三层折扣（本课推导）：每对 32×128 对主干 32×512 → 1/4；只前向 → 1/3；只在 35 层里的 11 层 → 11/35
+DSA_IDX_DISCOUNT = (1 / 4) * (1 / 3) * (11 / 35)
+assert abs(DSA_ATT_DENSE["256k"] * DSA_IDX_DISCOUNT - 193.5) < 0.2 and round(DSA_IDX_DISCOUNT * 100, 1) == 2.6
+DSA_F_LAYERS, DSA_ALL_LAYERS = 11, 35                          # 层 0、8 组的首层、最后一层、MTP；其余 24 层借下标
+DSA_S_MASS = (94, 99)                                          # S 层借 F 层的挑选，拿到自己最优 top-k 概率质量的 94–99%
+# 三种分子下的 MFU（256K，不开 KD，7.880 s）
+DSA_NUM_EXEC = {"32k": (690.3, 717.9), "256k": (836.1, 863.7)}    # 实际执行：不开 KD／F 层 KD
+DSA_NUM_FRAME = {"32k": 919.4, "256k": 2523.4}                    # 框架自带计数（indexer 按 35 层 ×3）
+DSA_FRAME_IDX_256K = 1861.6
+assert round(dsa_indexer_score(262144) * 35 / 11 * 3, 1) == 1861.6
+_mfu = lambda num, s: num / (s * PEAK_DEV) * 100
+DSA_MFU3_256K = (_mfu(DSA_NUM_DENSE["256k"], 7.880), _mfu(DSA_NUM_FRAME["256k"], 7.880), _mfu(DSA_NUM_EXEC["256k"][0], 7.880))
+assert [round(x, 1) for x in DSA_MFU3_256K] == [86.9, 27.7, 9.2], DSA_MFU3_256K
+DSA_MFU_DENSE_256K = _mfu(DSA_NUM_DENSE["256k"], DSA_WM_256K["dense"])      # 44.67%
+DSA_MFU_DENSE_LOCK = _mfu(DSA_NUM_DENSE["256k"], DSA_WM_256K["dense_lock"])  # 44.96%
+assert round(DSA_MFU_DENSE_256K, 2) == 44.67 and round(DSA_MFU_DENSE_LOCK, 2) == 44.96
+assert round(_mfu(DSA_NUM_EXEC["32k"][0], DSA_WM_32K["dsa"]), 2) == 11.57
+# 一步拆账（毫秒，profile 中位步）：注意力核 | 注意力其余（投影等）| DSA 新增（indexer、账本、等小核）| MoE 与其余计算 | 露出的通信 | 视觉塔、优化器、空闲
+DSA_STEP = {
+    "32k_dense": (1550.0, 723.7, 0.0, 1169.6 + 344.0, 346.3, 357.2),
+    "32k_dsa": (1092.7, 680.9, 264.3 + 91.8 + 129.2, 1318.1 + 443.4, 723.3, 367.5),
+    "256k_dense": (11860.0, 1400.0, 0.0, 1211.7 + 339.1, 302.6, 158.9),
+    "256k_dsa": (1476.2, 701.5, 1797.0 + 94.8 + 679.5, 1326.4 + 433.2, 1142.0, 164.9)}
+for _k, _v in (("32k_dense", 4490.8), ("32k_dsa", 5111.2), ("256k_dense", 15272.3), ("256k_dsa", 7815.5)):
+    assert abs(sum(DSA_STEP[_k]) - _v) < 0.2, (_k, sum(DSA_STEP[_k]))
+DSA_IDX_MS = {"32k": 264.3, "256k": 1797.0}; DSA_SCWAIT_MS = {"32k": 129.2, "256k": 679.5}
+# 阿姆达尔（本课推导）：只有注意力核那 11.86 s 会缩，缩到 312.4／7388.7；其余 3.41 s 不动
+DSA_ATT_SIDE_TF = 115.0 + 195.0 + 2.4
+DSA_ATT_SIDE_FRAC = DSA_ATT_SIDE_TF / DSA_ATT_DENSE["256k"]
+assert round(DSA_ATT_SIDE_FRAC * 100, 1) == 4.2
+DSA_AMDAHL_FLOOR = (15272.3 - 11860.0) / 1000 + 11.86 * DSA_ATT_SIDE_FRAC
+DSA_AMDAHL_X = 15.2723 / DSA_AMDAHL_FLOOR
+assert abs(DSA_AMDAHL_FLOOR - 3.91) < 0.02 and round(DSA_AMDAHL_X, 1) == 3.9, (DSA_AMDAHL_FLOOR, DSA_AMDAHL_X)
+DSA_ATT_SIDE_NOW = 0.70 + 1.48 + 0.68 + 1.80 + 0.09            # 注意力这一侧现在 4.75 s
+DSA_ATT_X_OURS = (round(13.26 / DSA_ATT_SIDE_NOW, 1), round(13.26 / 5.53, 1))
+assert DSA_ATT_X_OURS == (2.8, 2.4)
+DSA_GPU_X = (4.44, 4.07)                                       # GPU、128 头的形状，单层注意力模块（含投影）256K：不开 KD／开 KD
+# 热身阶段（256K，只训 indexer）
+DSA_WARM = (84.2, 70.49, 24.29)                                # 旧版 → 主干稀疏且只对 indexer 求导 → 教师进 Pallas 核
+DSA_WARM_TEACHER = (20.4, 24.2)                                # 四个稠密教师核 ／ profile 中位步
+assert round(DSA_WARM_TEACHER[0] / DSA_WARM_TEACHER[1] * 100) == 84
+DSA_WARM_HOURS = (round(1000 * DSA_WARM[0] / 3600, 1), round(1000 * DSA_WARM[2] / 3600, 1))
+assert DSA_WARM_HOURS == (23.4, 6.7)
+DSA_WARM_MEM_32K = (88.7, 23.2)                                # 只对 indexer 求导，主干不再为反向存激活（估计总量 GiB）
+# 稠密基线先锁定：同一份配置复测 15.299–15.337 s（±0.2% 内），锁定那一项快 94 ms、loss 逐位
+DSA_DENSE_RETEST = (15.337, 15.299, 15.332)
+assert max(DSA_DENSE_RETEST) / min(DSA_DENSE_RETEST) - 1 < 0.003
+# 静态指令数预测在核代码变大时失效：预测 → 实测
+DSA_STATIC_MISS = (("单段免比较 · 前向核", -13.9, 7.7), ("单段免比较 · 反向核", -9.1, 6.2), ("前向 kv 块 4096", 3.3, 21.0))
+# 拼单的两笔账（32K、上下文并行 8、每设备每层前向；计算 ＝ 0.595 ms × ρ，64 头底数 1.19；收集 ＝ 行数 ÷ 4.2 亿行／秒）
+DSA_QB_ACCT = ((8, 1.87, 197), (16, 2.38, 125), (32, 3.02, 79), (64, 3.82, 50))    # (单子大小 QB, ρ, 收集行数 万)

@@ -2,8 +2,8 @@
 r"""专题九 · 第十一节「稀疏注意力核：把挑中的 key 当成 MoE 来算」的图（2026-11-24 补）。
 
 fig8b-dsa-moe     回答：每个 query 只挑 2048 个 key，现成的块稀疏核为什么一点不省？怎么改成能省的？
-                  —— Ⓐ 玩具账：4 个 query × 16 个 key，每人挑 4 个，4 块里 4 块都要算；Ⓑ 把这一桌要的 key 收拢成一摞（并集 8 行），
-                  整桌一起乘：这一桌就是 MoE 的一个专家，收拢来的 key 行就是分给它的 token。
+                  —— Ⓐ 玩具账：4 个 query × 16 个 key，每人挑 4 个，4 块里 4 块都要算；Ⓑ 把这一单要的 key 收拢成一摞（并集 8 行），
+                  整单一起乘：这一单就是 MoE 的一个专家，收拢来的 key 行就是分给它的 token。
 fig8b-dsa-arch    回答：这颗核的软件架构长什么样？—— 五步（indexer 分块 top-k → 账本 → 小核收行 → 主核流式计算 → 小核散射累加 dKV），
                   标出每步在主核 Pallas／小核 Pallas／XLA 上跑，下半是前向、反向两条时间线上谁跟谁重叠。
 fig8b-dsa-perrow  回答：照 MoE 的分工，为什么搬行要交给小核？—— Ⓐ 每搬一行后面跟多少活：MoE 约 3800 万次乘加、DSA 约 111 万；
@@ -41,9 +41,9 @@ assert abs(ROW_NS(DSA_MAC_ROW) - 1.93) < 0.01 and abs(ROW_NS(MOE_MAC_ROW) - 65.4
 def fig_moe():
     f = Fig(W, "左：一个 query 块的 4 个 query（位置 12 到 15）各从 16 个 key 里挑 4 个，蓝格是挑中的；key 按 4 个一块切，"
                "4 块里每块都至少有一个蓝格，所以 4 块都要整块算，跟稠密一样。右：把这 4 个 query 挑中的 key 收拢成一摞，并集 8 行（0、5、9、11、12、13、14、15），"
-               "整桌对着这 8 行一起乘，没挑的格子用成员位掩掉。这一桌就像 MoE 的一个专家，收拢来的 key 行就像分给它的 token。")
+               "整单对着这 8 行一起乘，没挑的格子用成员位掩掉。这一单就像 MoE 的一个专家，收拢来的 key 行就像分给它的 token。")
     y0 = f.header("每个 query 只挑 2048 个，块稀疏却一块都跳不掉；先收拢再乘，就是一次 MoE",
-                  "玩具账：一桌 4 个 query（位置 12–15），每人从 16 个 key 里挑 4 个（真实是从 32768 里挑 2048）；蓝格 ＝ 挑中，灰格 ＝ 因果看不见",
+                  "玩具账：一单 4 个 query（位置 12–15），每人从 16 个 key 里挑 4 个（真实是从 32768 里挑 2048）；蓝格 ＝ 挑中，灰格 ＝ 因果看不见",
                   [(BL, "挑中"), (RD, "这一块要整块算"), (GR, "收拢后的一摞")])
     PH = 420
     LW = 670
@@ -75,7 +75,7 @@ def fig_moe():
 
     RX = LW + 30
     RWd = W - RX
-    py2 = f.panel(RX, y0, RWd, PH, "Ⓑ 先收拢再乘：这一桌就是一个专家", GR)
+    py2 = f.panel(RX, y0, RWd, PH, "Ⓑ 先收拢再乘：这一单就是一个专家", GR)
     gx2, gy2 = RX + 96, py2 + 64
     for c, k in enumerate(TOY_UNION):
         f.t(gx2 + c * CS + CS / 2.0, gy2 - 10, str(k), GR, True, 12, "middle")
@@ -104,11 +104,11 @@ def fig_moe():
             f.t(cx[j], yt2 + 32 + i * 30, s, (GR if i else INK) if j else (GR if i else GY2), True if j == 0 else (i == 1), 15)
     f.t(RX + 30, yt2 + 106, "真实的 ρ：相邻 4 个 query 只有 1.31–1.49，相邻 8 个 1.50–1.87", GY, size=13.5)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "训练里省的是乘法：先把一桌要的 key 收拢成一摞，再整块乘", [])
+    yb = f.band(py + PH + 20, "ok", "训练里省的是乘法：先把一单要的 key 收拢成一摞，再整块乘", [])
     yb = f.src(yb + 10,
                "玩具挑选是编的（4 个 query、16 个 key、每人挑 4 个）；真实挑选：32K 长文，每个 query 挑 2048 个，「最近 512 个几乎全挑、其余散在整个历史上」。",
                "块激活率：32K、k ＝ 2048／512／128、块 512 × 512 和 1024 × 2048、均匀挑与偏向最近，12 种组合全部 100%（模拟）；k 从 2048 压到 128 时现成的动态块稀疏核 987.8 → 987.6 ms（另一代芯片上的实测）。",
-               "ρ（并集膨胀比）＝ 一桌的并集行数 ÷ k；真实值是公开的 Hy4 预览版权重在 CPU 上抓的 32K 长文 top-k 统计（4 个 F 层、两份数据的均值）：ρ(4) %.2f–%.2f、ρ(8) %.2f–%.2f、ρ(16) %.2f–%.2f。" % (N.DSA_RHO[4] + N.DSA_RHO[8] + N.DSA_RHO[16]),
+               "ρ（并集膨胀比）＝ 一单的并集行数 ÷ k；真实值是公开的 Hy4 预览版权重在 CPU 上抓的 32K 长文 top-k 统计（4 个 F 层、两份数据的均值）：ρ(4) %.2f–%.2f、ρ(8) %.2f–%.2f、ρ(16) %.2f–%.2f。" % (N.DSA_RHO[4] + N.DSA_RHO[8] + N.DSA_RHO[16]),
                "MoE 的对应关系：专家 ↔ query 块，token ↔ 并集里的 key 行；前向是按组矩阵乘 ＋ 分段 softmax，反向 dKV ＝ 按 key 把部分行加回去，对拍到 1e-6。")
     f.save("fig8b-dsa-moe.svg", yb + 14)
 
@@ -150,7 +150,7 @@ def fig_perrow():
     yb = f.band(pyb + PB + 20, "ok", "固定开销按行算的活，交给专门搬行的小核；主核只看到连续的大块", [])
     yb = f.src(yb + 10,
                "本课推导（Ⓐ）：MoE 一行 token 进本讲模型的专家（隐藏 6144、专家中间维 2048）：gate ＋ up 6144 × 4096 ＋ down 2048 × 6144 ≈ 3775 万次乘加；"
-               "DSA 一行 key 跟 M × (576 ＋ 512) 次，M ＝ 一桌 query 数 × 头数 ＝ 1024 时约 111 万；按每设备峰值 1155 TFLOP/s 折成纳秒，是理想值。",
+               "DSA 一行 key 跟 M × (576 ＋ 512) 次，M ＝ 一单 query 数 × 头数 ＝ 1024 时约 111 万；按每设备峰值 1155 TFLOP/s 折成纳秒，是理想值。",
                "实测（单设备微基准）：主核每行一条 DMA 13–16 ns／行，1 KB 到 12 KB 行几乎不变；潜变量整份放进片上暂存、主核按行取，离线编译产物里每行约 11 条标量指令；"
                "小核间接收集两颗每秒 4.2 亿行（含写回），带加法的间接写每秒 3.9 亿行。",
                "实测（Ⓑ）：32 头、合成挑法、rank 0；不切段时小核收 6.0 ms、主核算 6.6 ms，串在一个程序里约 14 ms；切段以后编译器把小核的收集和主核的核交错排。")
@@ -158,17 +158,17 @@ def fig_perrow():
 
 
 def fig_arch():
-    f = Fig(W, "稀疏核的软件架构，五步。第一步 indexer 分块选 top-k（设计中，还没实现，现在用现成的整行 top-k）。第二步账本：主核上一颗 Pallas 核做合并、标记、压紧，"
+    f = Fig(W, "稀疏核的软件架构，五步。第一步 indexer 按 query 块打分（主核 Pallas 核），再在小核上做基数选择，每个 query 出 2048 个下标。第二步账本：主核上一颗 Pallas 核做合并、标记、压紧，"
                "再用 XLA 出段表，每组层算一次、前向反向共用。第三步小核按段把并集 key 行收进暂存。第四步主核的流式核每段连续读一块，做矩阵乘和在线 softmax；"
                "反向算 dQ 和每行的部分梯度。第五步小核把部分梯度按 key 加回 dKV。下半是时间线：前向小核收第 i ＋ 1 段时主核算第 i 段；"
                "反向倒序算，部分梯度分 8 组交给小核加，第一组跟后面几段的计算重叠。")
     y0 = f.header("稀疏核的软件架构：五步，三种执行单元，两两重叠",
-                  "框的颜色 ＝ 谁来跑：蓝 主核（TensorCore）上的 Pallas 核；紫 小核（SparseCore）上的 Pallas 核；灰 编译器（XLA）自己生成的计算；虚框 ＝ 设计中、还没实现",
+                  "框的颜色 ＝ 谁来跑：蓝 主核（TensorCore）上的 Pallas 核；紫 小核（SparseCore）上的 Pallas 核；灰 编译器（XLA）自己生成的计算",
                   [(BL, "主核 Pallas"), (PU, "小核 Pallas"), (GY2, "XLA")])
     PA = 330
     py = f.panel(0, y0, W, PA, "Ⓐ 一层稀疏注意力的数据流（定稿配置）", BL)
     steps = [
-        ("① 分块选 top-k", "indexer 按 query 块打分", "每个 query 2048 个下标", BL, True),
+        ("① 分块选 top-k", "indexer 按 query 块打分", "小核基数选择 · 2048 个下标", BL, False),
         ("② 账本", "合并 → 标记 → 压紧（一个核）", "段表 · 成员位 · 散射范围", BL, False),
         ("③ 收行", "按段收并集 key 行进暂存", "每秒 4.2 亿行", PU, False),
         ("④ 流式计算", "QK → 掩码 → softmax → PV", "反向：dQ、部分梯度行", BL, False),
@@ -184,7 +184,7 @@ def fig_arch():
         f.t(x + 14, BY + 90, t3, GY, False, 13.5, w=BW - 20)
         unit = {BL: "主核 Pallas", PU: "小核 Pallas"}[col]
         if i == 0:
-            unit = "主核 · 设计中，未实现"
+            unit = "主核 Pallas ＋ 小核选择"
         if i == 1:
             unit = "主核 Pallas ＋ XLA 段表"
         f.t(x + 14, BY + BH - 16, unit, col, True, 13, w=BW - 20)
@@ -230,9 +230,9 @@ def fig_arch():
     f._pan = None
     yb = f.band(pyb + PB + 20, "ok", "照 MoE 的分工：账本在外面算一次，小核搬，主核只做连续的大块乘法，两种核交错排", [])
     yb = f.src(yb + 10,
-               "①：现在用的是现成的整行 top-k；按 query 块分块出下标、并把账本的并集那一步接到 indexer 每块最后一步，是设计里的下一步，还没上卡。",
+               "①：indexer 按 1024 个 query 一块打分（融合的 Pallas 核，不落整行分数），选 top-k 用小核上的基数选择（借自 tokamax），第 k 名有并列时按框架原来的规则重选；把账本的并集那一步接到 indexer 每块最后一步，是下一步。",
                "②：账本是整数计算，放在求导之外（照 MoE 的做法：整数映射只依赖专家号，只有收集本身求导）；合并、标记同一个 key 的成员位、把并集压到前面，三步在一颗 Pallas 核里做完，段表和逐段数组是 XLA。",
-               "时间线是示意：段的个数照定稿配置（8 段、8 组），块长不按比例；0.85 ms 来自合成挑法、切 8 段那一格的 profile，11.1 ms 的拆账来自真实挑选、一桌 1024 行那一版的 profile（32 头）。")
+               "时间线是示意：段的个数照定稿配置（8 段、8 组），块长不按比例；0.85 ms 来自合成挑法、切 8 段那一格的 profile，11.1 ms 的拆账来自真实挑选、一单 1024 行那一版的 profile（32 头）。")
     f.save("fig8b-dsa-arch.svg", yb + 14)
 
 
@@ -245,11 +245,11 @@ def fig_ladder():
             ("第 7–8 轮　交给小工搬，切 16 段", N.DSA_FWD_V4_K16)]),
         ("② 前向 ＋ 反向 · 换成真实挑选 · 默认设置", real["dense"], 1, [
             ("第 12 轮　换成真实挑选", real["r12"]),
-            ("第 13 轮　一桌的 query 加倍、段长 1024", real["qb"]),
+            ("第 13 轮　一单的 query 加倍、段长 1024", real["qb"]),
             ("第 14 轮　层里的整数活挪进账本", real["r14"])]),
         ("③ 前向 ＋ 反向 · 生产设置 · 设备时间", prod["dense"], 2, [
             ("第 20 轮　换口径复测", prod["r20"]),
-            ("第 21 轮　一桌再加倍（M ＝ 1024）", prod["r21"]),
+            ("第 21 轮　一单再加倍（M ＝ 1024）", prod["r21"]),
             ("第 24 轮　去掉核外零碎", prod["r24"]),
             ("第 28 轮　前向两组行交错", prod["r28"])]),
     ]
@@ -302,11 +302,11 @@ def fig_ladder():
     f._pan = None
     yb = f.band(pym + PM + 20, "ok", "每一轮先量清楚卡在哪：先是搬一行太贵，再是数据，再是核外的零碎和账本", [])
     yb = f.src(yb + 10,
-               "实测（单设备、同一进程里稀疏和稠密各测；稠密是本讲模型调优用的块稀疏配置，按块掩码）。① 合成挑法「一半挑最近、一半在更早的里随机」，32 头一桌 8 个 query（ρ 2.28）、64 头一桌 4 个（ρ 1.45），rank 0，只看前向。"
+               "实测（单设备、同一进程里稀疏和稠密各测；稠密是本讲模型调优用的块稀疏配置，按块掩码）。① 合成挑法「一半挑最近、一半在更早的里随机」，32 头一单 8 个 query（ρ 2.28）、64 头一单 4 个（ρ 1.45），rank 0，只看前向。"
                "第 3 轮 12.5 对稠密 4.87，还慢 2.6 倍；第 7 轮不切段 14.0 / 17.4。合成挑法上前向 ＋ 反向：第 5 轮 60.6 / 79.4，第 9–11 轮小工散射累加、规约分组倒序 27.1 → 21.8 / 34.1 → 30.6（稠密 15.0 / 29.7）。",
                "② 真实挑选：公开的 Hy4 预览版权重在 CPU 上抓的一篇 32K 长文，按上下文并行 8 的负载均衡切法取每个设备的本地 query；8 个设备取最慢的那个；默认运行库设置、每次调用后同步（含主机派发）。",
-               "③ 换成生产配置用的运行库设置，连续派发 10 次取平均（设备时间口径，训练里整步异步派发就是这样）；稠密在这个设置下也快了一截，所以第 20 轮看着比第 14 轮快、其实是换了尺子。M ＝ 一桌 query 数 × 头数：32 头一桌 32 个、64 头一桌 16 个。",
-               "账本：第 1 轮 71 ms（两次 840 万元素的 scatter ＋ 逐段切片）→ 排序替掉 scatter 7.8–9.9 → 全局一张表 8.9 → 两次排序写成 Pallas 双调网络 5.6 → 压紧写成 Pallas 移位网络 3.7–4.1 → 合并、标记、压紧一个核 3.1–3.6（一桌加倍那一轮一度回到 5 ms 多）。")
+               "③ 换成生产配置用的运行库设置，连续派发 10 次取平均（设备时间口径，训练里整步异步派发就是这样）；稠密在这个设置下也快了一截，所以第 20 轮看着比第 14 轮快、其实是换了尺子。M ＝ 一单 query 数 × 头数：32 头一单 32 个、64 头一单 16 个。",
+               "账本：第 1 轮 71 ms（两次 840 万元素的 scatter ＋ 逐段切片）→ 排序替掉 scatter 7.8–9.9 → 全局一张表 8.9 → 两次排序写成 Pallas 双调网络 5.6 → 压紧写成 Pallas 移位网络 3.7–4.1 → 合并、标记、压紧一个核 3.1–3.6（一单加倍那一轮一度回到 5 ms 多）。")
     f.save("fig8b-dsa-ladder.svg", yb + 14)
 
 
@@ -338,7 +338,7 @@ def fig_result():
         f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "长度越长，稠密按长度的平方涨、稀疏只按长度涨：32K 小胜，256K 大胜；零溢出、重跑逐位", [])
     yb = f.src(yb + 10,
-               "实测（定稿代码：一桌 32 头 32 个 query、64 头 16 个，即 M ＝ 1024；段长 1024；生产配置的运行库设置；连续派发 10 次取平均）：32K 8 个设备都测，取最慢的那个比最慢的那个；账本每组 3.1–3.5 ms。",
+               "实测（定稿代码：一单 32 头 32 个 query、64 头 16 个，即 M ＝ 1024；段长 1024；生产配置的运行库设置；连续派发 10 次取平均）：32K 8 个设备都测，取最慢的那个比最慢的那个；账本每组 3.1–3.5 ms。",
                "256K：一本 PG-19 书前 262144 个 token、一层的真实挑选，测 5 个设备（第 0、8、15、23、31 个），稠密取同设置的读数；账本每组 6.9–8.4 ms；一本书一层，ρ 会随文本变。",
                "数值：核内改精确算术时，输出、lse、dQ、dKV、d sink 对规格最大相对差 ≤ 3e-6；dKV 原来多个小核子核往同一个 key 加、顺序不定，改成每个子核独占一段 key 以后，全部输出重跑逐位。",
                "一行两篇文档拼满（稠密按文档跳块）：快 1.19 / 1.36 倍，含账本 1.07 / 1.28 倍。")
@@ -383,6 +383,260 @@ def fig_layer():
     f.save("fig8b-dsa-layer.svg", yb + 14)
 
 
+# ── 2026-11-25 补：拼单两笔账、整模型、上限与口径、indexer 与蒸馏 ─────────────────────────────
+
+def fig_qb():
+    import math
+    f = Fig(W, "拼单的两笔账。相邻几个 query 拼一单，把各自挑的 key 合成一张单子，一起收、一起算。横轴是一单几个 query：8、16、32、64。"
+               "每档两根柱：蓝 ＝ 算的时间，随 ρ 涨（每个 query 要跟整张单子算）；紫 ＝ 收行的时间，单子越大、要收的行越少（197 万、125 万、79 万、50 万行）。"
+               "一层的时间取两者中较大的那根。32 头：较大值 4.68、2.97、1.88、2.27 毫秒，一单 32 个最省；64 头每个 query 的活是两倍，较大值 4.68、2.97、3.59、4.54，一单 16 个最省。两种都是一单 1024 行。")
+    y0 = f.header("拼单的两笔账：单子越大，收得越少、白算越多；取两者较大的那根最小",
+                  "每档两根柱：蓝 ＝ 算（随 ρ 涨），紫 ＝ 收行（随单子变大而降）；绿框 ＝ 两根里较大的那根最矮的一档；每设备每层前向，毫秒（本课推导，代入实测的 ρ 和收行速率）",
+                  [(BL, "算"), (PU, "收行"), (GR, "最优档")])
+    PH = 400
+    half = (W - 30) / 2.0
+    for k, (title, base, hcol, heads) in enumerate((("32 头：一单 32 个 query 最省（32 × 32 ＝ 1024 行）", 0.595, C32, 32),
+                                                    ("64 头：一单 16 个 query 最省（16 × 64 ＝ 1024 行）", 1.19, C64, 64))):
+        px = k * (half + 30)
+        py = f.panel(px, y0, half, PH, title, hcol)
+        bx0, by = px + 70, py + 320
+        SC = 52.0
+        f.line(bx0 - 10, by, px + half - 20, by, LINE, 1.2, arrow=False)
+        vals = []
+        for i, (qb, rho, rows) in enumerate(N.DSA_QB_ACCT):
+            comp = base * rho
+            gat = rows * 1e4 / (N.DSA_SC_GATHER_MROWS * 1e6) * 1e3
+            vals.append(max(comp, gat))
+        best = vals.index(min(vals))
+        for i, (qb, rho, rows) in enumerate(N.DSA_QB_ACCT):
+            comp = base * rho
+            gat = rows * 1e4 / (N.DSA_SC_GATHER_MROWS * 1e6) * 1e3
+            gx = bx0 + i * 145
+            f.box(gx, by - comp * SC, 44, comp * SC, BL, BL, 3)
+            f.box(gx + 50, by - gat * SC, 44, gat * SC, PU, PU, 3)
+            f.t(gx + 22, by - comp * SC - 8, "%.2f" % comp, BL, True, 13, "middle")
+            f.t(gx + 72, by - gat * SC - 8, "%.2f" % gat, PU, True, 13, "middle")
+            if i == best:
+                top = max(comp, gat) * SC
+                f.box(gx - 8, by - top - 30, 110, top + 30, "none", GR, 6, sw=2.4)
+            f.t(gx + 47, by + 24, "一单 %d 个" % qb, INK, True, 14, "middle")
+            f.t(gx + 47, by + 46, "ρ %.2f · %d 万行" % (rho, rows), GY, False, 12.5, "middle")
+        f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "收行受限时，单子往大走：两种模型都停在一单 1024 行，上卡扫出来的也是这一档", [])
+    yb = f.src(yb + 10,
+               "本课推导：算 ＝ 每设备每层前向的理想时间（32 头 0.595 ms、64 头 1.19 ms）× ρ；这几档一单的行数（query 数 × 头数）都已经够多，矩阵单元喂得饱，计算账只随 ρ 涨。"
+               "收行 ＝ 行数 ÷ 小核每秒 4.2 亿行。32K、上下文并行 8 的一个设备（4096 个 query）。",
+               "ρ（并集膨胀比）＝ 一单的并集行数 ÷ 2048，取真实挑选 32K 各层的上沿；一单翻倍，ρ 只涨 1.17–1.27 倍，所以行数降 37–41%。",
+               "上卡：一单 512 行 → 1024 行，32 头 13.20 → 11.24 ms、64 头 21.86 → 18.29 ms（一层前向 ＋ 反向，最慢的设备）。")
+    f.save("fig8b-dsa-qb.svg", yb + 14)
+
+
+def fig_share():
+    import math
+    f = Fig(W, "为什么长序列才快。左：每设备 16K 个 token 不变，稠密一步要算的量里注意力占多少：32K 是 923.6 对其余 551.6 万亿次，占 63%；256K 是 7388.7 对 523.6，占 93%；"
+               "注意力核自己的效率两种长度都在 52% 到 54%。右：横轴序列长度，纵轴每设备每步万亿次运算，按对数画。稠密注意力随长度成正比涨，其余矩阵乘不变，两条线在约 17K 相交；"
+               "稀疏注意力几乎不随长度变，约 115；indexer 打分随长度涨，但只有稠密注意力的 2.6%。")
+    y0 = f.header("每设备的 token 不变，变的是每个 query 要看多少 key：注意力从 63% 涨到 93%",
+                  "左：稠密一步要算的量（万亿次／设备／步）的构成；右：四类计算随序列长度怎么涨（纵轴按对数画，本课推导，32 头的模型，每设备 16K 个 query）",
+                  [(GY2, "稠密注意力"), (OR, "其余矩阵乘"), (GR, "稀疏注意力"), (RD, "indexer 打分")])
+    PH = 484
+    LW = 430
+    py = f.panel(0, y0, LW, PH, "Ⓐ 稠密一步的构成（实测分子）", GY2)
+    bx, by, BH = 90, py + 400, 330
+    for i, k in enumerate(("32k", "256k")):
+        att = N.DSA_ATT_DENSE[k]; tot = N.DSA_NUM_DENSE[k]; rest = tot - att
+        x = bx + i * 170
+        ha = BH * att / tot
+        f.box(x, by - BH, 90, BH - ha, OR, OR, 3)
+        f.box(x, by - ha, 90, ha, GY2, GY2, 3)
+        f.t(x + 45, by - ha / 2.0 + 6, "%d%%" % round(N.DSA_ATT_SHARE[k]), "#fff", True, 17, "middle")
+        f.t(x + 45, by + 24, "32K" if i == 0 else "256K", INK, True, 15, "middle")
+        f.t(x + 45, by + 46, "注意力 %.0f ／ 共 %.0f" % (att, tot), GY, False, 12.5, "middle")
+    f._pan = None
+    RX = LW + 30
+    RWd = W - RX
+    py2 = f.panel(RX, y0, RWd, PH, "Ⓑ 四类计算随长度怎么涨（本课推导）", BL)
+    ax0, ax1 = RX + 90, RX + RWd - 150
+    ay0, ay1 = py2 + 400, py2 + 60            # 下 ＝ 1，上 ＝ 10000
+    Ts = [8192, 16384, 32768, 65536, 131072, 262144]
+    X = lambda T: ax0 + (math.log2(T) - 13) / 5.0 * (ax1 - ax0)
+    Y = lambda v: ay0 - math.log10(v) / 4.0 * (ay0 - ay1)
+    for v in (1, 10, 100, 1000, 10000):
+        f.line(ax0, Y(v), ax1, Y(v), LINE2, 1, arrow=False)
+        f.t(ax0 - 10, Y(v) + 5, "%d" % v, GY, False, 12.5, "end")
+    for T in Ts:
+        f.t(X(T), ay0 + 24, "%dK" % (T // 1024), INK, True, 13.5, "middle")
+    series = [(GY2, "稠密注意力", lambda T: N.DSA_ATT_DENSE["32k"] * T / 32768),
+              (OR, "其余矩阵乘", lambda T: N.DSA_LIN),
+              (GR, "稀疏注意力", lambda T: N.dsa_sparse_att(T)),
+              (RD, "indexer 打分", lambda T: N.dsa_indexer_score(T))]
+    for col, lab, fn in series:
+        pts = [(X(T), Y(fn(T))) for T in Ts]
+        f.path(pts, col, 3.0, arrow=False)
+        for (x, y) in pts:
+            f.box(x - 4, y - 4, 8, 8, col, col, 4)
+        f.t(ax1 + 12, pts[-1][1] + 5, "%s %.0f" % (lab, fn(262144)), col, True, 13.5)
+    xc = X(N.DSA_CROSS_T)
+    f.line(xc, ay1 + 10, xc, ay0, GY, 1.4, dash="5,4", arrow=False)
+    f.t(xc + 8, ay1 + 24, "约 17K：注意力 ＝ 其余矩阵乘", INK, True, 14)
+    f.t(X(32768) + 8, Y(N.DSA_ATT_DENSE["32k"]) - 12, "%.0f" % N.DSA_ATT_DENSE["32k"], GY, True, 12.5)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "序列越长，稠密里注意力越占大头，稀疏能省的越多；短序列上注意力本来就不大，省不出多少", [])
+    yb = f.src(yb + 10,
+               "实测分子（每设备每步，前向 ＋ 反向）：其余矩阵乘 ＝ 投影、稠密与专家 FFN、输出头（含 MTP 层）484.5，加 MTP 输出头 35.0、视觉塔（按实际图像，32K 32.1、256K 4.1）；"
+               "稠密注意力 ＝ 2 · t · T · 32 头 · 512 ÷ 2 × 3 × 35 层，32K 923.6、256K 7388.7；注意力核效率 ＝ 923.6 ÷ 1.55 s、7388.7 ÷ 11.86 s，再 ÷ 1155。",
+               "本课推导：交点 ＝ 32768 × 484.5 ÷ 923.6 ≈ 17,200（只跟其余矩阵乘比；连 MTP 头和视觉塔一起比约 18K）。稀疏注意力照框架的写法（每个 query 2048 个 key、不计并集白算）；"
+               "indexer 打分 ＝ 每个 query 对全部可见 key 算 32 头 × 128 维、只在 11 层、只有前向。其余矩阵乘那条只画线性层 484.5。")
+    f.save("fig8b-dsa-share.svg", yb + 14)
+
+
+def fig_step():
+    f = Fig(W, "整模型一步的拆账，32 头的模型，64 片，每设备 16K 个 token，同一种切法放大。32K：稠密 4.49 秒，其中注意力核 1.55；稀疏 5.11 秒，注意力核 1.09，"
+               "但多了 indexer、账本、等小核 0.49，露出的通信从 0.35 涨到 0.72，比稠密慢。256K：稠密 15.27 秒，注意力核 11.86；稀疏 7.82 秒，注意力核 1.48，"
+               "多了 indexer 1.80、等小核 0.68、账本 0.09，露出的通信 1.14，快约 1.95 倍。虚线是阿姆达尔下限约 3.9 秒：只有注意力核那段会缩，其余不变。")
+    y0 = f.header("放进整模型：32K 慢 15%，256K 快 1.95 倍",
+                  "每行一步（毫秒，profile 中位步，同一把尺子）；灰 ＝ 注意力核，浅灰 ＝ 注意力的投影等，红 ＝ 稀疏新增（indexer、账本、等小核），橙 ＝ MoE 与其余计算，紫 ＝ 露出的通信",
+                  [(GY2, "注意力核"), ("#bdc1c6", "投影等"), (RD, "稀疏新增"), (OR, "MoE 等"), (PU, "露出的通信"), (LINE, "其余")])
+    PH = 440
+    py = f.panel(0, y0, W, PH, "一步的时间去哪了（32 头的模型 · 64 片 · 每设备 16K token · 合成挑选）", BL)
+    X0, SC = 250, 0.066
+    cols = (GY2, "#bdc1c6", RD, OR, PU, LINE)
+    rows = (("32K 稠密", "32k_dense"), ("32K 稀疏", "32k_dsa"), ("256K 稠密", "256k_dense"), ("256K 稀疏", "256k_dsa"))
+    for i, (lab, key) in enumerate(rows):
+        yy = py + 46 + i * 80 + (14 if i >= 2 else 0)
+        f.t(X0 - 16, yy + 24, lab, INK, True, 16, "end")
+        x = X0
+        segs = N.DSA_STEP[key]
+        for j, v in enumerate(segs):
+            if v <= 0:
+                continue
+            f.box(x, yy + 4, v * SC, 32, cols[j], "#fff" if j < 5 else LINE, 2)
+            if v * SC > 64 and j in (0, 2, 3):
+                f.t(x + v * SC / 2.0, yy + 26, "%.2f" % (v / 1000), "#fff", True, 13, "middle")
+            x += v * SC
+        tot = sum(segs)
+        tag = "%.2f 秒" % (tot / 1000)
+        if key == "32k_dsa":
+            tag += " · 日志步时慢 %d%%" % N.DSA_WM_SLOW_32K_PCT
+        if key == "256k_dsa":
+            tag += " · 日志步时快 %.2f 倍" % N.DSA_WM_X[0]
+        f.t(x + 10, yy + 26, tag, GR if key == "256k_dsa" else (RD if key == "32k_dsa" else GY), True, 15)
+    yA = py + 46 + 3 * 80 + 14
+    xa = X0 + N.DSA_AMDAHL_FLOOR * 1000 * SC
+    f.line(xa, yA - 8, xa, yA + 50, INK, 1.8, dash="5,4", arrow=False)
+    f.t(xa - 6, yA + 66, "阿姆达尔下限 ≈ %.1f 秒（只有注意力核会缩）" % N.DSA_AMDAHL_FLOOR, INK, True, 14, "end")
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "注意力占得越多，稀疏省得越多；256K 离下限还差三块：挑下标、小核搬运的等待、多露出的通信", [])
+    yb = f.src(yb + 10,
+               "实测（64 片 v7x，每设备 16K 个 token：32K 上下文并行 2 ＋ FSDP 64，256K 上下文并行 16 ＋ FSDP 8，参数都切 128 份；稠密与稀疏同配置）。日志步时 32K 4.503 对 5.167 秒，256K 15.337 对 7.880 秒（同一批）。",
+               "这个模型没有训过的 indexer：挑选用按真实挑选统计拟合的合成选择（32K ρ(32) 2.85，比真实偏高 12–15%；256K 3.71，偏低约 10%，按真实挑选约多 0.2 秒，推算），indexer 照常算。",
+               "本课推导（下限）：稠密 15.27 秒里只有注意力核 11.86 秒会随稀疏缩，缩到稀疏这一侧的计算量（稀疏注意力 115.0 ＋ indexer 197.4 万亿次）÷ 稠密注意力 7388.7 ＝ 4.2%，约 0.50 秒；投影等 1.40 秒和其余 2.01 秒不动：下限约 3.9 秒，上限约 3.9 倍。")
+    f.save("fig8b-dsa-step.svg", yb + 14)
+
+
+def fig_mfu():
+    f = Fig(W, "同一步 7.88 秒，三种分子。稠密等价：按稠密那一步该算的 7912.3 万亿次，有效 MFU 86.9%，比稠密自己的 45% 还高，说的是同样的训练量只用了一半时间。"
+               "框架自带计数 2523.4，27.7%，其中 74% 是按 35 层、前向加反向数的 indexer。实际执行 836.1，9.2%。下：indexer 的三层折扣，每对的运算是主干注意力的四分之一，"
+               "只有前向再剩三分之一，只在 35 层里的 11 层算再剩 11/35，合起来是稠密注意力的 2.6%。")
+    y0 = f.header("稀疏以后的 MFU：同一步，三种分子差十倍；稀疏后实际只有一成左右，却快了一倍",
+                  "Ⓐ 256K、不开蒸馏的那一步（7.88 秒）按三种分子算的 MFU（分母相同：步时 × 1155）；Ⓑ indexer 为什么只占一点：三层折扣（本课推导）",
+                  [(GY2, "稠密等价"), (RD, "框架按 35 层 × 前反向数的 indexer"), (GR, "实际执行")])
+    PA = 312
+    py = f.panel(0, y0, W, PA, "Ⓐ 三种分子（256K，同一步）", BL)
+    X0, SC = 330, 9.0
+    m = N.DSA_MFU3_256K
+    rows = (("稠密等价：照稠密该算的数", m[0], N.DSA_NUM_DENSE["256k"], GY2, "同样的训练量用了一半时间；不是利用率"),
+            ("框架自带计数", m[1], N.DSA_NUM_FRAME["256k"], OR, "比实际执行高估 3 倍"),
+            ("实际执行：这一步真做了的", m[2], N.DSA_NUM_EXEC["256k"][0], GR, "衡量硬件用得好不好，看这一个"))
+    for i, (lab, v, num, col, note) in enumerate(rows):
+        yy = py + 46 + i * 74
+        f.t(X0 - 16, yy + 22, lab, INK, True, 15, "end")
+        f.t(X0 - 16, yy + 44, "分子 %.1f 万亿次" % num, GY, False, 13, "end")
+        f.box(X0, yy + 4, v * SC, 30, col, col, 3)
+        if i == 1:
+            fr = N.DSA_FRAME_IDX_256K / num
+            f.box(X0 + v * SC * (1 - fr), yy + 4, v * SC * fr, 30, RD, RD, 3)
+        f.t(X0 + v * SC + 10, yy + 25, "%.1f%%" % v, col, True, 16)
+        f.t(max(X0 + v * SC + 80, X0 + N.DSA_MFU_DENSE_LOCK * SC + 16) if i else X0 + v * SC + 80, yy + 25, note, GY, False, 13.5)
+    xd = X0 + N.DSA_MFU_DENSE_LOCK * SC
+    f.line(xd, py + 38, xd, py + 46 + 3 * 74 - 10, INK, 1.4, dash="5,4", arrow=False)
+    f.t(xd + 6, py + 46 + 3 * 74 + 6, "稠密自己那一步（15.24 秒）的有效 MFU %.1f%%" % N.DSA_MFU_DENSE_LOCK, INK, True, 13.5)
+    f._pan = None
+    PB = 250
+    pyb = f.panel(0, py + PA + 24, W, PB, "Ⓑ indexer 的三层折扣：它的量是稠密注意力的几分之一（256K）", RD)
+    steps = (("稠密注意力（每对 32 头 × 512 维，前向 ＋ 反向，35 层）", 1.0),
+             ("每对只算 32 头 × 128 维：× 1/4", 1 / 4.0),
+             ("只有前向（挑下标不求导）：× 1/3", 1 / 12.0),
+             ("只在 11 层算（其余 24 层借下标）：× 11/35", N.DSA_IDX_DISCOUNT))
+    SC2 = 800.0
+    for i, (lab, v) in enumerate(steps):
+        yy = pyb + 44 + i * 46
+        f.t(X0 - 16, yy + 20, lab, INK, True, 13.5, "end") if False else None
+        f.t(30, yy + 20, lab, INK, True, 14)
+        x1 = 520
+        f.box(x1, yy + 4, max(v * SC2, 3), 24, RD if i == 3 else "#f6aea9", RD if i == 3 else "#f6aea9", 3)
+        f.t(x1 + max(v * SC2, 3) + 10, yy + 21, "%.1f%%" % (v * 100) if v < 1 else "100%", RD, True, 14)
+    f._pan = None
+    yb = f.band(pyb + PB + 20, "ok", "稀疏后 MFU 低，是分子变小了，不是硬件闲着：省掉的乘法本来就不该再算进分子", [])
+    yb = f.src(yb + 10,
+               "本课推导：MFU ＝ 分子 ÷（7.880 秒 × 1155）。稠密等价分子 ＝ 同长度稠密格的有效分子 7912.3；实际执行 ＝ 线性层 484.5 ＋ MTP 头 35.0 ＋ 视觉 4.1 ＋ 稀疏注意力 115.0 ＋ indexer 打分 195.0 ＋ indexer 投影 2.4 ＝ 836.1；"
+               "框架自带计数 2523.4，其中 indexer 打分 1861.6（按 35 层 × 3 数）。",
+               "实际执行里稀疏注意力照框架按 256 ＋ 256 维、每个 query 2048 个 key 数，不计并集的白算；核在矩阵单元上实际做的是吸收式 576 ＋ 512 维、ρ 倍的行，比分子多。所以实际执行 MFU 低，一半是分子扣得干净，一半是 indexer、等小核、露出的通信这些不产生分子的时间。",
+               "Ⓑ：7388.7 × 1/4 × 1/3 × 11/35 ≈ 193.5，加上按头加权那一项是 195.0；对稠密注意力是 2.6%。")
+    f.save("fig8b-dsa-mfu.svg", yb + 14)
+
+
+def fig_aux():
+    f = Fig(W, "上：indexer 只在 35 层里的 11 层算：第 0 层、每 4 层一组的首层、最后一层和 MTP 层，蓝色；其余 24 层灰色，借本组首层挑出的下标。"
+               "借来的下标拿到它自己最优挑法 94% 到 99% 的概率质量。下：热身阶段只训 indexer，256K 一步从 84.2 秒到 70.5 秒再到 24.3 秒，"
+               "24.3 秒里 20.4 秒是覆盖全部可见 key 的教师；稀疏阶段的蒸馏只在挑中的 2048 个 key 上，32K 多 0.85 秒、256K 多 0.96 秒，不随长度涨。")
+    y0 = f.header("indexer 少挑几层，蒸馏少看几个 key",
+                  "Ⓐ 哪几层跑 indexer（蓝 ＝ 自己打分挑下标的 F 层，灰 ＝ 借本组下标的 S 层）；Ⓑ 两个训练阶段里蒸馏的代价（256K，一步的秒数）",
+                  [(BL, "F 层"), (GY2, "S 层"), (RD, "教师")])
+    PA = 188
+    py = f.panel(0, y0, W, PA, "Ⓐ 35 层里只有 11 层跑 indexer（32 头的模型：34 层 ＋ 1 层 MTP，每 4 层一组）", BL)
+    BW, GAP, X0 = 33, 4, 30
+    yb0 = py + 50
+    for i in range(35):
+        isF = (i == 0) or (i == 33) or (i == 34) or ((i - 1) % 4 == 0 and 1 <= i <= 32)
+        x = X0 + i * (BW + GAP)
+        col = BL if isF else GY2
+        f.box(x, yb0, BW, 46, col if isF else "#fff", col, 4, sw=1.6)
+        f.t(x + BW / 2.0, yb0 + 29, "F" if isF else "S", "#fff" if isF else GY, True, 14, "middle")
+        lab = "MTP" if i == 34 else str(i)
+        f.t(x + BW / 2.0, yb0 + 68, lab, GY, False, 11.5, "middle")
+        if not isF and 1 <= i <= 32:
+            f0 = X0 + (1 + 4 * ((i - 1) // 4)) * (BW + GAP) + BW / 2.0
+            if (i - 1) % 4 == 1:
+                f.path([(f0, yb0 - 4), (f0, yb0 - 14), (x + BW * 3 + GAP * 2 - 4, yb0 - 14)], BL, 1.4, arrow=False)
+    f.t(X0, yb0 + 104, "S 层用本组 F 层的挑选，拿到的概率质量是它自己最优挑法的 94–99%", INK, True, 14)
+    f._pan = None
+    PB = 250
+    pyb = f.panel(0, py + PA + 24, W, PB, "Ⓑ 蒸馏的代价：热身阶段的教师按长度的平方涨，稀疏阶段的不涨", RD)
+    XB, SCb = 470, 9.6
+    rows = (("热身 · 旧版：主干稠密、对全部参数求导", N.DSA_WARM[0], 0),
+            ("热身 · 主干稀疏、只对 indexer 求导", N.DSA_WARM[1], 0),
+            ("热身 · 再把教师写进 Pallas 核", N.DSA_WARM[2], N.DSA_WARM_TEACHER[0]))
+    for i, (lab, v, tch) in enumerate(rows):
+        yy = pyb + 44 + i * 50
+        f.t(XB - 16, yy + 22, lab, INK, True, 14.5, "end")
+        f.box(XB, yy + 4, v * SCb, 28, "#f6aea9" if i < 2 else GY2, "#f6aea9" if i < 2 else GY2, 3)
+        if tch:
+            f.box(XB, yy + 4, tch * SCb, 28, RD, RD, 3)
+            f.t(XB + tch * SCb / 2.0, yy + 23, "教师 %.1f（84%%）" % tch, "#fff", True, 13, "middle")
+        f.t(XB + v * SCb + 10, yy + 23, "%.1f 秒" % v, RD if i < 2 else INK, True, 15)
+    yy = pyb + 44 + 3 * 50 + 6
+    f.t(30, yy + 20, "稀疏阶段的蒸馏：教师和学生只在每个 query 挑中的 2048 个 key 上算，32K 多 %.2f 秒、256K 多 %.2f 秒，不随长度涨" % N.DSA_KD_COST, GR, True, 14.5)
+    f._pan = None
+    yb = f.band(pyb + PB + 20, "ok", "热身的教师看全部可见 key，按长度的平方涨；稀疏阶段只看挑中的 2048 个，不涨", [])
+    yb = f.src(yb + 10,
+               "实测（同上整模型配置，256K，合成挑选）：热身旧版 84.2 秒（主干稠密、所有参数求导、教师用 XLA 流式算）→ 70.5 秒（主干走稀疏核、只对 indexer 求导、主干不做反向也不为反向存激活；32K 估计显存 88.7 → 23.2 GiB）→ 24.3 秒（教师四个核写成 Pallas）。"
+               "按 1000 步算约 23.4 → 6.7 小时（推算，按这一格的批量）。",
+               "热身的教师覆盖每个 query 的全部可见 key（O(T²)），256K 上比稀疏阶段多约 T ÷ 2k ≈ 64 倍的对数；稀疏阶段只在挑中集合上算，跟框架原来先算稠密再掩码的写法数学等价、只差求和顺序。",
+               "S 层蒸馏：KL 里跟学生有关的项对教师是线性的，所以逐层 KL 取平均与「组内平均教师算一个 KL」梯度相同、loss 差一个常数（CPU 核对梯度 1e-7 量级）；32K 实测 F 层蒸馏 6.03 秒、各层各算一次 8.13 秒。")
+    f.save("fig8b-dsa-aux.svg", yb + 14)
+
+
 if __name__ == "__main__":
     fig_moe()
     fig_arch()
@@ -390,3 +644,8 @@ if __name__ == "__main__":
     fig_ladder()
     fig_result()
     fig_layer()
+    fig_qb()
+    fig_share()
+    fig_step()
+    fig_mfu()
+    fig_aux()
