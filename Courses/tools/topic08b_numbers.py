@@ -1015,7 +1015,7 @@ DSA_ATT_X_OURS = (round(13.26 / DSA_ATT_SIDE_NOW, 1), round(13.26 / 5.53, 1))
 assert DSA_ATT_X_OURS == (2.8, 2.4)
 DSA_GPU_X = (4.44, 4.07)                                       # GPU、128 头的形状，单层注意力模块（含投影）256K：不开 KD／开 KD
 # 热身阶段（256K，只训 indexer）
-DSA_WARM = (84.2, 70.49, 24.29)                                # 旧版 → 主干稀疏且只对 indexer 求导 → 教师进 Pallas 核
+DSA_WARM = (84.2, 70.49, 24.29, 14.3)                                # 旧版 → 主干稀疏且只对 indexer 求导 → 教师进 Pallas 核
 DSA_WARM_TEACHER = (20.4, 24.2)                                # 四个稠密教师核 ／ profile 中位步
 assert round(DSA_WARM_TEACHER[0] / DSA_WARM_TEACHER[1] * 100) == 84
 DSA_WARM_HOURS = (round(1000 * DSA_WARM[0] / 3600, 1), round(1000 * DSA_WARM[2] / 3600, 1))
@@ -1050,7 +1050,40 @@ DSA_MFU_DENSE_SAMEJOB = _mfu(DSA_NUM_DENSE["256k"], 15.329)   # 44.69%
 assert round(DSA_MFU_DENSE_SAMEJOB, 2) == 44.69
 # 全层蒸馏一夜的阶段（256K，各阶段对同作业稠密）
 DSA_KD_STAGES = (("修前：每个 S 层重算一遍学生", 11.566), ("S 层不重算学生", 9.944), ("再去三处重复：存残差、教师进核、反向核顺手出教师", 9.128),
-                 ("加 indexer 有序 top-k 与流水、散射原地累加", 8.068), ("小核收集 4 路、F 层学生改写", 7.488), ("最终", 7.457))
+                 ("加 indexer 有序 top-k 与流水、散射原地累加", 8.068), ("小核收集 4 路、F 层学生改写", 7.488), ("行长截断、indexer 每次 512 个 query", 7.457), ("上午：教师只在反向", 7.092))
 DSA_KD_EXTRA_BEFORE_AFTER = (2.1, 0.95)                        # 开蒸馏比不开多出的时间
 DSA_IDX_256K = (1.80, 0.87)                                    # indexer 一夜：1.80 → 0.87 s；剩下打分核约 0.6 s 到向量单元下限
 DSA_OPGROUP_256K = (1.77, 3.42)                                # 单层核心注意力算子组（含蒸馏，不含投影）256K：修前 → 最终
+
+# ── 11-25 上午（教师只在反向、32K 学生两项、单层算子组、真实挑选、容量、确定性、热身）──
+DSA_TBO_256K = (15.357, 7.465, 7.092)                         # 同作业：稠密、改前全层蒸馏、教师只在反向
+DSA_TBO_X = (round(DSA_TBO_256K[0] / DSA_TBO_256K[1], 2), round(DSA_TBO_256K[0] / DSA_TBO_256K[2], 2))
+assert DSA_TBO_X == (2.06, 2.17), DSA_TBO_X
+DSA_TBO_32K = (4.606, 6.097, 5.845)                           # 32K 同作业：稠密、改前、教师只在反向（只 S 层）
+DSA_32K_AM = (4.603, 6.097, 5.667)                            # 32K 再加 F 层教师进核 ＋ 学生反向从缓存起（学生散射不上小核）
+DSA_KD_OVERHEAD = {"256K": (0.95, 0.58), "32K": (1.0, 0.58)}  # 开蒸馏比不开多出的时间
+assert round(7.092 - 6.510, 2) == 0.58
+DSA_TBO_COST = {"fwd_teacher_ms": 243, "bwd_extra_ms": 37}     # 前向教师核每步 243 ms；反向核顺手出教师多约 37 ms（拆账）
+DSA_TBO_MFU = (96.6, 10.38)                                    # 256K 7.092 s：稠密等价、实际执行（分子 850.1）
+assert round(_mfu(DSA_NUM_DENSE["256k"], 7.092) - 96.6, 1) == 0.0 or abs(_mfu(DSA_NUM_DENSE["256k"], 7.092) - 96.6) < 0.1
+assert abs(_mfu(850.1, 7.092) - 10.38) < 0.01
+# 单层核心注意力算子组（单层、CP＝1、不含投影，生产层均 (10F ＋ 24S)／34 含蒸馏），对开 sink 的稠密核
+DSA_OPG_64K = {"splash_ms": 359.2, "before_ms": 278, "after_ms": 237}
+assert round(359.2 / 278, 2) == 1.29 and round(359.2 / 237, 2) == 1.52
+DSA_OPG_2X_GAP = round(237 - 359.2 / 2)                         # 到 2 倍还差每层约 57 ms
+assert DSA_OPG_2X_GAP == 57
+DSA_OPG_HIST = {"32K": (0.56, 0.84, 0.95), "64K": (0.89, 1.29, 1.52), "128K": (1.28, 2.27, None), "256K": (1.77, 3.42, None)}  # 修前、夜间组合、上午
+# 64K 整模型天花板：稠密 6.014 s 里不随稀疏变的 2.90 s
+DSA_64K_CEIL = round(6.014 / 2.90, 2)
+assert 2.0 < DSA_64K_CEIL < 2.1, DSA_64K_CEIL
+DSA_64K_EXTRA = (("稀疏核", 1.10), ("露出的通信", 0.68), ("蒸馏", 0.65), ("indexer、账本", 0.35), ("核外粘合", 0.35), ("等待", 0.12))
+assert abs(sum(v for _, v in DSA_64K_EXTRA) - 3.27) < 0.03   # 分项四舍五入
+# 真实挑选回放
+DSA_REAL_32K = (5.967, 6.062, 2.52, 2.85)                      # 真实、合成步时；真实、合成 ρ(32)
+DSA_REAL_256K_RHO = (3.86, 3.71)
+DSA_CAP = {"256K": {"need_max": 726, "cap_old": (1.4, 720), "cap_new": (1.5, 768)}, "32K": {"need_max": 525, "cap": (1.2, 624)}}
+assert 720 < 726 < 768 and 525 < 624
+DSA_SCATTER_OFF_SLOW = (0.15, 2.2)                             # 关原地散射：以前慢约 0.15 s，现在 256K 慢约 2.2 s
+DSA_WARM_NOW = 14.3                                            # 热身一步（前向统计跨重算保存、教师核 query 块 32）
+DSA_WARM_NOW_HOURS = round(1000 * DSA_WARM_NOW / 3600)
+assert DSA_WARM_NOW_HOURS == 4
