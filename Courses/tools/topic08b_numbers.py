@@ -1100,7 +1100,10 @@ assert round((8.735 / 7.460 - 1) * 100) == 17
 DSA_OPG_REAL = {"32K": (95.0, 97.9, 83.6), "64K": (358.7, 215.2, 197.8), "128K": (1390.7, 516.3, 478.9)}   # 稠密核、推荐配置、本轮全部（真实挑选，ms）
 assert [round(v[0] / v[2], 2) for v in DSA_OPG_REAL.values()] == [1.14, 1.81, 2.9]
 assert [round(v[0] / v[1], 2) for v in DSA_OPG_REAL.values()] == [0.97, 1.67, 2.69]
-DSA_OPG_64K_GAP_NOW = round(197.8 - 358.7 / 2)                 # 到 2 倍还差每层约 18 ms
-assert DSA_OPG_64K_GAP_NOW == 18
+DSA_OPG_REAL_NOQ = {"32K": 86.4, "64K": 203.6, "128K": 490.5}    # 主报：不含「q 行主序」（整模型慢 0.67 s，暂不推荐）
+assert [round(DSA_OPG_REAL[k][0] / v, 2) for k, v in DSA_OPG_REAL_NOQ.items()] == [1.1, 1.76, 2.84]
+DSA_QROW_256K = (7.181, 7.852)
+DSA_OPG_64K_GAP_NOW = round(203.6 - 358.7 / 2)                 # 到 2 倍还差每层约 24 ms
+assert DSA_OPG_64K_GAP_NOW == 24
 DSA_TARGET_3X = round(15.335 / 3, 1)                           # 256K 整模型 3 倍要压到约 5.1 s
 assert DSA_TARGET_3X == 5.1
