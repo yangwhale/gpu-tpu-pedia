@@ -1107,3 +1107,44 @@ DSA_OPG_64K_GAP_NOW = round(203.6 - 358.7 / 2)                 # 到 2 倍还差
 assert DSA_OPG_64K_GAP_NOW == 24
 DSA_TARGET_3X = round(15.335 / 3, 1)                           # 256K 整模型 3 倍要压到约 5.1 s
 assert DSA_TARGET_3X == 5.1
+
+# ── 11-25 晚：主报改真实挑选回放 ＋ 当前推荐配置；第二轮消融；到 3 倍的设计账 ──
+DSA_REAL_LEN = {"32K": (4.601, 5.527), "64K": (6.015, 5.548), "128K": (8.986, 6.146), "256K": (15.316, 7.029)}   # 同作业：稠密、稀疏全层蒸馏（真实挑选）
+DSA_REAL_LEN_X = {k: round(v[0] / v[1], 2) for k, v in DSA_REAL_LEN.items()}
+assert DSA_REAL_LEN_X == {"32K": 0.83, "64K": 1.08, "128K": 1.46, "256K": 2.18}, DSA_REAL_LEN_X
+DSA_N2_ADOPT = (("单层那三刀（反向去掉蒸馏门控、学生梯度转置、indexer 每块 1024 个 query）", -0.10), ("q 拆分（核直接收 q 的两块）", -0.05))
+assert round(7.185 - 7.081, 2) == 0.10 and round(7.081 - 7.029, 2) == 0.05
+DSA_N2_REJECT = (   # (候选, 256K 整模型多出的秒数, 时间去了哪)，真实挑选、同作业
+    ("query 按行主序喂核", 0.67, "主核省 0.07；小核散射等待 ＋0.36、专家梯度规约等待 ＋0.21"),
+    ("一单 16 个 query", 0.54, "核省 0.10；小核散射等待 ＋0.52"),
+    ("专家梯度规约分块（最好的 4 块）", 0.03, "块间串行、每块在小核上单独排队，规约露出 460 → 602 毫秒"),
+    ("学生梯度散射不走小核", 0.70, "没拆 profile，直接不用"),
+    ("确定性向量散射（后备）", 1.71, "逐位有保证，但小核散射 0.86 → 2.29 秒"),
+    ("在途 4 块 ＋ q 拆分", 0.77, "两刀都改小核上的调度，叠加反而慢"),
+    ("q 拆分用在 128K", 0.87, "专家梯度规约等待 ＋1.15"),
+)
+assert round(7.852 - 7.181, 2) == 0.67 and round(7.717 - 7.179, 2) == 0.54 and round(7.217 - 7.187, 2) == 0.03
+assert round(7.876 - 7.179, 2) == 0.70 and round(7.854 - 7.081, 2) == 0.77 and round(7.016 - 6.146, 2) == 0.87
+DSA_DET_PAIRS = 55 + 3 * 3                                       # 现行 11 次运行两两 55 对 ＋ 三种换时序组合各 3 次
+assert DSA_DET_PAIRS == 64
+DSA_RHO_REORDER = (3.864, 3.818)                                 # 同一分片内重排 query：最好只降 1.2%
+assert round((1 - 3.818 / 3.864) * 100, 1) == 1.2
+# 3 倍的账（256K，秒）：稠密 profile 15.26 里 splash 11.84，其余 3.41 不随稀疏变
+DSA_3X = {"dense": 15.32, "rest": 3.41, "dsa": 7.03}
+DSA_3X_TARGET = round(DSA_3X["dense"] / 3, 2)
+DSA_3X_ROOM = round(DSA_3X_TARGET - DSA_3X["rest"], 2)
+DSA_3X_NOW = round(DSA_3X["dsa"] - DSA_3X["rest"], 2)
+assert (DSA_3X_TARGET, DSA_3X_ROOM, DSA_3X_NOW) == (5.11, 1.70, 3.62)
+DSA_3X_MINUS1 = round((DSA_3X["dense"] - 1) / (DSA_3X["dsa"] - 1), 2)   # 非注意力两边同减 1 秒
+assert DSA_3X_MINUS1 == 2.37
+# 前向（256K，拆账那一步：DSA 7.117 s profile，同作业稠密 15.266 s），毫秒
+DSA_FWD = {"dsa": {"pallas": 1171.5, "xla": 764.9, "coll": 580.5, "sc": 115.6}, "dense": {"pallas": 4952.9, "xla": 614.6, "coll": 142.4, "sc": 4.8}}
+DSA_FWD_TOT = (2635.4, 5716.5)
+assert abs(sum(DSA_FWD["dsa"].values()) - 2632.5) < 0.1 and round(DSA_FWD_TOT[1] / DSA_FWD_TOT[0], 2) == 2.17
+DSA_FWD_3X = round(DSA_FWD_TOT[1] / 3, 1)
+assert DSA_FWD_3X == 1905.5
+DSA_FWD_AG = (483, 14.7)                                         # FSDP 权重 all-gather 露出：DSA、稠密（同样收 121.7 GB）
+# indexer：收 KV 而不是传 Q（每设备 16384 个 token）
+DSA_IDX_K_MIB = 16384 * 128 * 2 / 2 ** 20                         # 4 MiB
+DSA_IDX_Q_MIB = 16384 * 32 * 128 * 2 / 2 ** 20                    # 128 MiB
+assert DSA_IDX_K_MIB == 4 and DSA_IDX_Q_MIB == 128 and round(DSA_IDX_Q_MIB * 15 / 1024, 1) == 1.9

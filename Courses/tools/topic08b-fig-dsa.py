@@ -638,32 +638,30 @@ def fig_aux():
 
 
 def fig_len():
-    import math
-    L = N.DSA_FIN_LEN
+    L, R = N.DSA_FIN_LEN, N.DSA_REAL_LEN
     ks = ("32K", "64K", "128K", "256K")
-    SHOWN = {"32K": ("0.90", "0.76"), "64K": ("1.13", "0.97"), "128K": ("1.57", "1.35"), "256K": ("2.36", "2.06")}   # 照记录的写法（2.355、0.755 进位）
-    for k, (a, b) in SHOWN.items():
-        assert abs(float(a) - L[k][0] / L[k][1]) < 0.006 and abs(float(b) - L[k][0] / L[k][2]) < 0.006, k
-    f = Fig(W, "集中优化以后，四个长度的整模型读数，每设备都是 16K 个 token，同作业对稠密。不开蒸馏：32K 0.90 倍，64K 1.13 倍，128K 1.57 倍，256K 2.36 倍。"
-               "全层蒸馏：0.76、0.97、1.35、2.06 倍。开蒸馏比不开多 0.89 到 1.01 秒，四个长度差不多。稠密步时 4.59、6.01、8.99、15.33 秒。")
-    y0 = f.header("四个长度：越长越快；不开蒸馏 32K–64K 之间打平，带蒸馏 64K–128K 之间",
-                  "左：每个长度一组三根柱，一步几秒（同作业）；右：对稠密快几倍，虚线 ＝ 打平；每设备都是 16K 个 token，32 头的模型，64 片，合成挑选",
-                  [(GY2, "稠密"), (GR, "稀疏，不开蒸馏"), (BL, "稀疏，全层蒸馏")])
+    OLD = {"32K": "0.76", "64K": "0.97", "128K": "1.35", "256K": "2.06"}   # 前一版全层蒸馏（照记录的写法，0.755 进位）
+    for k, v in OLD.items():
+        assert abs(float(v) - L[k][0] / L[k][2]) < 0.006, k
+    f = Fig(W, "四个长度的整模型读数，每设备都是 16K 个 token，同作业对稠密。最新一版（真实挑选回放、当前推荐配置、全层蒸馏）：32K 0.83 倍，64K 1.08 倍，128K 1.46 倍，256K 2.18 倍；"
+               "256K 一步 7.03 秒，稠密 15.32 秒。前一版（合成挑选、教师还在前向）全层蒸馏是 0.76、0.97、1.35、2.06 倍。")
+    y0 = f.header("四个长度：越长越快，64K 起快过稠密，256K 2.18 倍",
+                  "左：每个长度一组三根柱，一步几秒（同作业）；右：对稠密快几倍，虚线 ＝ 打平；每设备都是 16K 个 token，32 头的模型，64 片，全层蒸馏",
+                  [(GY2, "稠密"), ("#a8c7fa", "前一版（合成挑选）"), (BL, "最新（真实挑选回放）")])
     PH = 380
     LW = 700
     py = f.panel(0, y0, LW, PH, "Ⓐ 一步几秒", GY2)
     bx0, by, SC = 70, py + 300, 16.0
     for i, k in enumerate(ks):
-        d, y, kd = L[k]
         gx = bx0 + i * 155
-        for j, (v, col) in enumerate(((d, GY2), (y, GR), (kd, BL))):
+        for j, (v, col) in enumerate(((R[k][0], GY2), (L[k][2], "#a8c7fa"), (R[k][1], BL))):
             f.box(gx + j * 40, by - v * SC, 34, v * SC, col, col, 3)
-            f.t(gx + j * 40 + 17, by - v * SC - 8, "%.1f" % v, col, True, 12.5, "middle")
+            f.t(gx + j * 40 + 17, by - v * SC - 8, "%.1f" % v, GY if col == "#a8c7fa" else col, True, 12.5, "middle")
         f.t(gx + 57, by + 24, k, INK, True, 15, "middle")
     f._pan = None
     RX = LW + 30
     RWd = W - RX
-    py2 = f.panel(RX, y0, RWd, PH, "Ⓑ 对稠密快几倍", GR)
+    py2 = f.panel(RX, y0, RWd, PH, "Ⓑ 对稠密快几倍", BL)
     ax0, ax1 = RX + 70, RX + RWd - 60
     ay0, ay1 = py2 + 300, py2 + 50
     Y = lambda v: ay0 - (v - 0.5) / 2.0 * (ay0 - ay1)
@@ -673,20 +671,131 @@ def fig_len():
         f.t(ax0 - 10, Y(v) + 5, "%.1f×" % v, GY, False, 12.5, "end")
     for i, k in enumerate(ks):
         f.t(X(i), ay0 + 24, k, INK, True, 14, "middle")
-    for col, idx, dy in ((GR, 1, -12), (BL, 2, 22)):
-        pts = [(X(i), Y(L[k][0] / L[k][idx])) for i, k in enumerate(ks)]
+    for col, vals, dy in (("#a8c7fa", [L[k][0] / L[k][2] for k in ks], 22), (BL, [N.DSA_REAL_LEN_X[k] for k in ks], -12)):
+        pts = [(X(i), Y(v)) for i, v in enumerate(vals)]
         f.path(pts, col, 3.0, arrow=False)
         for i, (x, yv) in enumerate(pts):
             f.box(x - 5, yv - 5, 10, 10, col, col, 5)
-            f.t(x, yv + dy, SHOWN[ks[i]][idx - 1], col, True, 13, "middle")
+            f.t(x, yv + dy, OLD[ks[i]] if col != BL else "%.2f" % N.DSA_REAL_LEN_X[ks[i]], GY if col != BL else BL, True, 13, "middle")
     f.t(ax1 - 4, Y(1.0) + 20, "打平", GY, True, 13, "end")
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "这一版开蒸馏比不开多 0.89–1.01 秒，四个长度差不多（蒸馏只在挑中的 key 上算）；教师挪进反向后降到约 0.58 秒", [])
+    yb = f.band(y0 + PH + 20, "ok", "同一份核，长度越长赢得越多：省掉的是注意力，注意力随长度涨，其余不涨", [])
     yb = f.src(yb + 10,
-               "实测（同一份代码；每个长度稠密与稀疏同一作业）：64 片 v7x，上下文并行 2／4／8／16，每设备 16K 个 token；256K 第 12–21 步中位数，64K／128K 第 20–35 步，32K 常驻作业第 12–19 步。"
-               "32K 没开 indexer 流水和学生散射那两项（在 32K 上更慢）。挑选是按真实挑选统计拟合的合成选择；256K 合成的 ρ 比真实偏低约 10%。",
-               "全层蒸馏 ＝ 组内 S 层也用自己的注意力当教师各算一个 KL（主报口径）。")
+               "实测（每个长度稠密与稀疏同一作业，第 12–21 步中位数）：64 片 v7x，上下文并行 2／4／8／16，每设备 16K 个 token。最新一版回放公开的 Hy4 预览版在真实长文上挑出的 top-k，"
+               "教师只在反向；32K–128K 用推荐配置加单层那三刀（32K 另开在途 4 块），256K 用 q 拆分那一套（不开在途 4 块）。稠密 4.601／6.015／8.986／15.316 秒，稀疏 5.527／5.548／6.146／7.029 秒。",
+               "前一版：合成挑选（按真实挑选统计拟合），教师还在前向；稠密 4.589／6.014／8.991／15.329 秒，全层蒸馏 6.082／6.229／6.654／7.457 秒。全层蒸馏 ＝ 组内 S 层也用自己的注意力当教师各算一个 KL（主报口径）。")
     f.save("fig8b-dsa-len.svg", yb + 14)
+
+
+def fig_3x():
+    D = N.DSA_3X
+    f = Fig(W, "256K 到 3 倍的账。稠密一步 15.32 秒，其中约 3.41 秒（MoE、投影、通信、视觉、优化器）稀疏碰不到。3 倍要一步 5.11 秒，减掉这 3.41 秒，"
+               "留给注意力和稀疏带来的全部额外开销只有约 1.7 秒；现在这部分约 3.6 秒。前向单看：稀疏 2.64 秒，稠密 5.72 秒，只快 2.17 倍；"
+               "2.64 秒里 1.94 秒在算、0.70 秒在等。前向 3 倍要 1.91 秒，等待全消掉也只到 1.94 秒。等待里最大的一块是权重收集露出 483 毫秒，稠密收同样多的字节只露出 15 毫秒。")
+    y0 = f.header("到 3 倍：留给注意力的只有 1.7 秒，现在用了 3.6 秒",
+                  "Ⓐ 整步（秒，256K）：灰 ＝ 稀疏碰不到的部分；Ⓑ 前向（秒）：在算 ＋ 在等",
+                  [("#bdc1c6", "稀疏碰不到（3.41）"), (GY2, "稠密注意力"), (BL, "注意力 ＋ 稀疏的额外开销"), (RD, "在等")])
+    PA = 250
+    py = f.panel(0, y0, W, PA, "Ⓐ 整步：3.41 秒先占掉，3 倍只剩 1.7 秒", BL)
+    X0, SC = 300, 62.0
+    rows = (("稠密 15.32 秒", D["dense"] - D["rest"], GY2, ""),
+            ("稀疏，现在 7.03 秒", N.DSA_3X_NOW, BL, "注意力 ＋ 额外开销 %.2f 秒" % N.DSA_3X_NOW),
+            ("3 倍的目标 5.11 秒", N.DSA_3X_ROOM, "none", "只剩 %.2f 秒" % N.DSA_3X_ROOM))
+    for i, (lab, v, col, tag) in enumerate(rows):
+        yy = py + 50 + i * 58
+        f.t(X0 - 16, yy + 22, lab, INK, True, 15, "end")
+        f.box(X0, yy + 4, D["rest"] * SC, 30, "#bdc1c6", "#bdc1c6", 3)
+        f.t(X0 + D["rest"] * SC / 2, yy + 24, "3.41", INK, True, 13.5, "middle")
+        x1 = X0 + D["rest"] * SC
+        if col == "none":
+            f.box(x1, yy + 4, v * SC, 30, "none", GR, 3, sw=2, dash="5,3")
+            f.t(x1 + v * SC + 10, yy + 24, tag, GR, True, 14.5)
+        else:
+            f.box(x1, yy + 4, v * SC, 30, col, col, 3)
+            if tag:
+                f.t(x1 + v * SC + 10, yy + 24, tag, col, True, 14.5)
+            else:
+                f.t(x1 + v * SC / 2, yy + 24, "注意力 %.2f" % v, "#fff", True, 14, "middle")
+    f._pan = None
+    PB = 230
+    pyb = f.panel(0, py + PA + 24, W, PB, "Ⓑ 前向：只快 2.17 倍；等待全消掉也只到 1.94 秒", RD)
+    SC2 = 150.0
+    F = N.DSA_FWD
+    for i, (lab, k) in enumerate((("稠密前向 5.72 秒", "dense"), ("稀疏前向 2.64 秒", "dsa"))):
+        yy = pyb + 50 + i * 62
+        f.t(X0 - 16, yy + 22, lab, INK, True, 15, "end")
+        calc = (F[k]["pallas"] + F[k]["xla"]) / 1000
+        wait = (F[k]["coll"] + F[k]["sc"]) / 1000
+        f.box(X0, yy + 4, calc * SC2, 30, GY2 if k == "dense" else BL, GY2 if k == "dense" else BL, 3)
+        f.box(X0 + calc * SC2, yy + 4, wait * SC2, 30, RD, RD, 3)
+        f.t(X0 + 10, yy + 24, "在算 %.2f" % calc, "#fff", True, 13.5)
+        f.t(X0 + (calc + wait) * SC2 + 10, yy + 24, "在等 %.2f" % wait, RD, True, 13.5)
+    xt = X0 + N.DSA_FWD_3X / 1000 * SC2
+    f.line(xt, pyb + 150, xt, pyb + 30, GR, 2.2, dash="5,3", arrow=False)
+    f.t(xt + 8, pyb + 180, "前向 3 倍要 %.2f 秒：在算那段也得再短" % (N.DSA_FWD_3X / 1000), GR, True, 14)
+    f._pan = None
+    yb = f.band(pyb + PB + 20, "warn", "一刀 0.1 秒的微调够不着要砍的 2 秒；在等的那 0.7 秒里，最大一块是稠密里本来盖得住的权重收集", [])
+    yb = f.src(yb + 10,
+               "本课推导：3 倍 ＝ 15.32 ÷ 3 ＝ 5.11 秒；3.41 秒 ＝ 稠密 profile 一步 15.26 秒减去注意力核 11.84 秒；7.03 − 3.41 ＝ 3.62 秒。这 3.41 秒不是下限：两边同减 1 秒，倍数就是 14.32 ÷ 6.03 ≈ 2.37。",
+               "实测（同作业 profile，取一颗芯片的一个设备、中位步；稀疏这一步 7.12 秒，是 q 拆分之前的配置）：前向按算子名分前反向，在算 ＝ Pallas 核 1.17 ＋ XLA 融合 0.76，在等 ＝ 集合通信 0.58 ＋ 等小核 0.12。"
+               "前向每设备收 121.7 GB 权重，稠密露出 14.7 毫秒，稀疏 483 毫秒（专家权重 270、注意力的两块投影权重 193、其余）。")
+    f.save("fig8b-dsa-3x.svg", yb + 14)
+
+
+def fig_kvq():
+    f = Fig(W, "indexer 跨上下文并行的两种做法。现行：每个设备把本地 16384 个 token 的 indexer key 收齐成整条，key 只有 128 维、所有头共用，每设备 4 MiB，收 15 份共约 60 MiB，一次。"
+               "另一种：key 不动、把 query 绕着 16 个设备转一圈；query 有 32 个头 × 128 维，每设备 128 MiB，转 15 跳约 1.9 GiB，每跳还得带着当前的 top-2048 候选逐跳合并。")
+    y0 = f.header("indexer：收 key，不传 query —— key 比 query 小 32 倍",
+                  "每设备要搬的字节（上下文并行 16，每设备 16384 个 token）；条长按 MiB",
+                  [(GR, "收 key（现行）"), (RD, "传 query 转一圈")])
+    PH = 230
+    py = f.panel(0, y0, W, PH, "每设备搬多少", GR)
+    X0, SC = 320, 0.45
+    rows = (("收 key：4 MiB × 15 份", N.DSA_IDX_K_MIB * 15, GR, "约 60 MiB，收一次"),
+            ("传 query：128 MiB × 15 跳", N.DSA_IDX_Q_MIB * 15, RD, "约 1.9 GiB，还要逐跳合并 top-2048"))
+    for i, (lab, v, col, tag) in enumerate(rows):
+        yy = py + 50 + i * 70
+        f.t(X0 - 16, yy + 22, lab, INK, True, 15, "end")
+        f.box(X0, yy + 4, max(v * SC, 4), 30, col, col, 3)
+        f.t(X0 + v * SC + 12 if v * SC < 700 else X0 + 14, yy + 24, tag, col if v * SC < 700 else "#fff", True, 14.5)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "谁小搬谁：indexer 的 key 所有头共用、只有 128 维；主注意力同理，收的是 576 维共用潜变量，不是 32 个头展开的 K、V", [])
+    yb = f.src(yb + 10,
+               "本课推导：key 每 token 128 维 BF16，16384 × 128 × 2 B ＝ 4 MiB；query 每 token 32 头 × 128 维，128 MiB；比值 32。传 query 划算的场景是 query 比 key 小（解码时只有一个新 query、或 key 头多的结构）。",
+               "主注意力的潜变量收齐后每层约 300 MB（整条 262144 × 576 × 2 B）；profile 里它基本被盖住：F 层每层露出 0.69 毫秒，S 层 0。")
+    f.save("fig8b-dsa-kvq.svg", yb + 14)
+
+
+def fig_ablate():
+    A, Rj = N.DSA_N2_ADOPT, N.DSA_N2_REJECT
+    f = Fig(W, "256K 第二轮消融，真实挑选、同作业。采用两刀：单层那三刀合计快 0.10 秒，q 拆分再快 0.05 秒，到 7.03 秒。不采用的七刀全部变慢："
+               "query 行主序慢 0.67 秒，一单 16 个 query 慢 0.54 秒，专家梯度规约分块最好也慢 0.03 秒，学生散射不走小核慢 0.70 秒，确定性向量散射慢 1.71 秒，在途 4 块和 q 拆分叠加慢 0.77 秒，q 拆分用在 128K 慢 0.87 秒。"
+               "慢的那几刀，多出来的时间大都落在小核上的排队。")
+    y0 = f.header("第二轮：能拿的都拿了（7.18 → 7.03 秒）；变慢的刀，时间大都挪到了小核排队上",
+                  "每行一刀，条 ＝ 整模型一步多（右，红）或少（左，绿）几秒；右边写时间去了哪",
+                  [(GR, "采用"), (RD, "不采用")])
+    rows = [(l, v, GR, "") for l, v in A] + [(l, v, RD, why) for l, v, why in Rj]
+    PH = 50 + 48 * len(rows)
+    py = f.panel(0, y0, W, PH, "256K 整模型，一步多几秒（同作业）", RD)
+    XZ, SC = 560, 170.0
+    f.line(XZ, py + 30, XZ, py + PH - 10, GY, 1.4, arrow=False)
+    for i, (lab, v, col, why) in enumerate(rows):
+        yy = py + 40 + i * 48
+        short = lab.split("（")[0] if col == GR else lab
+        f.t(XZ - (abs(v) * SC if v < 0 else 0) - 14, yy + 20, short, INK, True, 14, "end")
+        if v < 0:
+            f.box(XZ + v * SC, yy + 4, -v * SC, 26, col, col, 3)
+            f.t(XZ + 10, yy + 22, "%.2f 秒" % v, col, True, 13.5)
+        else:
+            f.box(XZ, yy + 4, v * SC, 26, col, col, 3)
+            f.t(XZ + v * SC + 10, yy + 22, "＋%.2f　%s" % (v, why), col, True, 13)
+    f._pan = None
+    yb = f.band(py + PH + 20, "warn", "小核是一条串行队列：收行、散射、挑 top-k、集合通信都排在上面，主核省下的时间常常变成在这条队上等", [])
+    yb = f.src(yb + 10,
+               "实测（256K，回放真实挑选，全层蒸馏、教师只在反向；同作业、第 12–21 步中位）：起点 7.18–7.19 秒；单层三刀 7.081 秒（三次读数 7.081／7.085／7.081）；再加 q 拆分 7.029 秒（复跑逐位）。"
+               "不采用各行的「＋」都对同作业的起点（q 拆分那两行对各自长度的推荐配置）；时间去向来自同作业 profile 对减。专家梯度规约分块：2／4／8 块是 ＋0.72／＋0.03／＋0.12 秒。",
+               "还试过：KV 不做上下文并行重排、收行时换地址，−0.05 秒，但反向里一处求和开关前后结果不同、机制没查清，不采用；小核收集 2 路，持平。")
+    f.save("fig8b-dsa-ablate.svg", yb + 14)
 
 
 def fig_kd():
@@ -911,3 +1020,6 @@ if __name__ == "__main__":
     fig_scq()
     fig_cap()
     fig_64k()
+    fig_3x()
+    fig_kvq()
+    fig_ablate()

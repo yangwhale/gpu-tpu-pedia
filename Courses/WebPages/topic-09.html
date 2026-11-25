@@ -892,7 +892,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（主核、小核）、<b>专题五</b>（FSDP、all-gather）、<b>专题七</b>（MFU、读一条通信）、<b>专题八</b>（尺子）</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>一次课，主线约 106 分钟</b>（讲稿一字不落念完约 100 分钟，其余留给互动）</span>
+    <span class="chip">⏱ <b>一次课，主线约 109 分钟</b>（讲稿一字不落念完约 103 分钟，其余留给互动）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -1835,7 +1835,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s2-4">2.4　测量本身会骗人</h3>
 
-  <table class="t9 mini" id="tab-traps"><caption>测量本身会骗人：这次调优里真踩过的六个坑</caption><thead><tr><th>坑</th><th>当时读到什么</th><th>怎么躲</th></tr></thead><tbody><tr><td>作业的第一格整体偏慢</td><td>有一次整格慢 3%</td><td>第一格不拿来当比较基准（放一个预热用的对照），读数窗口往后取</td></tr><tr><td>抓 profile 的那一步</td><td>主机步时多约 0.3 秒</td><td>窗口避开抓 profile 和写盘那两步</td></tr><tr><td>数据管线供不上</td><td>一格报 1.379 秒；前面几步其实约 2 秒，抓 profile 那一停，管线攒够了缓冲才快起来</td><td>先看逐步步时平不平，不平先别读</td></tr><tr><td>合成数据的图像槽太多</td><td>「加视觉塔」读成慢 27.5%；按真实数据的槽数只慢 5.6%</td><td>合成数据的形状要跟真实数据对齐</td></tr><tr><td>只录了一颗芯片</td><td>读出「注意力核每单位运算慢 2.3 倍」</td><td>按最忙的设备读（第四节）</td></tr><tr><td>拿编译产物的静态指令数挑核的块形状</td><td>预测快 13.9% 的那个，上卡慢 7.7%</td><td>核的代码一变大就别信静态数，上卡（11.8）</td></tr></tbody></table>
+  <table class="t9 mini" id="tab-traps"><caption>测量本身会骗人：这次调优里真踩过的六个坑</caption><thead><tr><th>坑</th><th>当时读到什么</th><th>怎么躲</th></tr></thead><tbody><tr><td>作业的第一格整体偏慢</td><td>有一次整格慢 3%</td><td>第一格不拿来当比较基准（放一个预热用的对照），读数窗口往后取</td></tr><tr><td>抓 profile 的那一步</td><td>主机步时多约 0.3 秒</td><td>窗口避开抓 profile 和写盘那两步</td></tr><tr><td>数据管线供不上</td><td>一格报 1.379 秒；前面几步其实约 2 秒，抓 profile 那一停，管线攒够了缓冲才快起来</td><td>先看逐步步时平不平，不平先别读</td></tr><tr><td>合成数据的图像槽太多</td><td>「加视觉塔」读成慢 27.5%；按真实数据的槽数只慢 5.6%</td><td>合成数据的形状要跟真实数据对齐</td></tr><tr><td>只录了一颗芯片</td><td>读出「注意力核每单位运算慢 2.3 倍」</td><td>按最忙的设备读（第四节）</td></tr><tr><td>拿编译产物的静态指令数挑核的块形状</td><td>预测快 13.9% 的那个，上卡慢 7.7%</td><td>核的代码一变大就别信静态数，上卡（11.11）</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>实测：前四条都出自这次调优的作业日志，最后一条是第十一节给稠密注意力核挑块形状时的上卡读数；第四条是一份合成图文数据每行有 16384 个图像槽（只填了约 0.7%，真实数据填约 77%），视觉塔按槽算、空槽也算；把每行槽数改成跟真实数据同比例（2048）以后重测。</p><p>每一条当时都让我们读错过一次方向，所以这里不讲来历，只列读法。</p><p>数据管线那一条的后话：一个约 2 秒一步的 9 层配置（倒序阶梯里用的截层），每台加载主机只开 1 个加载进程时，整步被一台主机拖住（它每步等数据约 636 毫秒）；开到 4 个，步时 2.037 → 1.374 秒、2.044 → 1.133 秒。加载进程数不能超过每台主机分到的数据文件数，超了先报错，其余主机卡在集合通信上，半小时后才报切片故障。</p></details>
 
 <details class="foldfig"><summary><b>算的块比要的多：块里只要有一个点要算，整块都算</b></summary>
@@ -4329,7 +4329,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </div></section>
 <section id="s十一"><div class="wrap"><div class="stn"><span class="badge">第 十一 节</span><h2>稀疏注意力核：把挑中的 key 当成 MoE 来算</h2></div>
   <p class="station">旁线 · 公开 Hy4 的稀疏注意力（DSA）· 从一颗核到整模型</p>
-  <p class="lead">公开 Hy4 的注意力带一个稀疏索引器（indexer）：每个 query 只挑 2048 个 key 来看（前面调优的配置没开它）。按理 32K 上能少算 8 倍，交给现成的块稀疏核，一点没省。这一节讲为它写的一颗 Pallas 稀疏注意力核：怎么设计、怎么一轮一轮做快；放进整模型以后，<b>256K 带蒸馏快 2.16 倍、64K 刚快过稠密、32K 还慢</b>，为什么；以及蒸馏、小核排队、真实挑选这几处是怎么一刀一刀做下来的。</p>
+  <p class="lead">公开 Hy4 的注意力带一个稀疏索引器（indexer）：每个 query 只挑 2048 个 key 来看（前面调优的配置没开它）。按理 32K 上能少算 8 倍，交给现成的块稀疏核，一点没省。这一节讲为它写的一颗 Pallas 稀疏注意力核：怎么设计、怎么一轮一轮做快；放进整模型以后，<b>256K 带蒸馏快 2.18 倍、128K 1.46 倍、64K 1.08 倍、32K 还慢</b>（真实挑选回放），为什么；蒸馏、小核排队、真实挑选这几处是怎么一刀一刀做下来的；以及要到 3 倍，为什么得从设计上找。</p>
 
   <h3 id="s11-1">11.1　训练里省的是乘法，不是读 KV</h3>
   <p>专题三讲过，DSA 省的是「读多少」：那是推理，一次只来一个新 query，从 32K 里挑 2048 个，少读 16 倍。训练不一样：32768 个 query 同时都在，几乎每个 key 都有人挑，读省不了；也不用省，一层的 KV 读一遍约 10 微秒，一层注意力的计算却是毫秒级（本课推导）。读的字节不是瓶颈，后面要对付的是按行收的次数（11.3）。<b>训练里省的是 query 和 key 两两相乘的次数：满因果约 5.4 亿对，每人只挑 2048 个是约 6700 万对，32K 少 8 倍，256K 少 64 倍（本课推导）。</b></p>
@@ -5077,53 +5077,53 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>这是代理，不是真实的层：没有真实路由、没有按真实配置给小核分工，通信只在一台主机里。它只说明风险是真的；整层收益要在真实的层上量。</p></details></figure>
 </details>
 
-<figure class="fbox fwide" id="fig-dsa-len"><svg viewBox="0 0 1400 576" width="100%" role="img" aria-label="集中优化以后，四个长度的整模型读数，每设备都是 16K 个 token，同作业对稠密。不开蒸馏：32K 0.90 倍，64K 1.13 倍，128K 1.57 倍，256K 2.36 倍。全层蒸馏：0.76、0.97、1.35、2.06 倍。开蒸馏比不开多 0.89 到 1.01 秒，四个长度差不多。稠密步时 4.59、6.01、8.99、15.33 秒。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">四个长度：越长越快；不开蒸馏 32K–64K 之间打平，带蒸馏 64K–128K 之间</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：每个长度一组三根柱，一步几秒（同作业）；右：对稠密快几倍，虚线 ＝ 打平；每设备都是 16K 个 token，32 头的模型，64 片，合成挑选</text>
+<figure class="fbox fwide" id="fig-dsa-len"><svg viewBox="0 0 1400 576" width="100%" role="img" aria-label="四个长度的整模型读数，每设备都是 16K 个 token，同作业对稠密。最新一版（真实挑选回放、当前推荐配置、全层蒸馏）：32K 0.83 倍，64K 1.08 倍，128K 1.46 倍，256K 2.18 倍；256K 一步 7.03 秒，稠密 15.32 秒。前一版（合成挑选、教师还在前向）全层蒸馏是 0.76、0.97、1.35、2.06 倍。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">四个长度：越长越快，64K 起快过稠密，256K 2.18 倍</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：每个长度一组三根柱，一步几秒（同作业）；右：对稠密快几倍，虚线 ＝ 打平；每设备都是 16K 个 token，32 头的模型，64 片，全层蒸馏</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稠密</text>
-<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稀疏，不开蒸馏</text>
-<rect x="235.12" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="256" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稀疏，全层蒸馏</text>
+<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#a8c7fa" stroke="#a8c7fa" stroke-width="1.0"/>
+<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">前一版（合成挑选）</text>
+<rect x="266.48" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="287" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">最新（真实挑选回放）</text>
 <rect x="0" y="102" width="700" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="700" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <rect x="0" y="104" width="700" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="700" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#80868b" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 一步几秒</tspan></text>
-<rect x="70" y="358.576" width="34" height="73.424" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="70" y="358.384" width="34" height="73.616" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="87" y="350" fill="#80868b" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.6</tspan></text>
-<rect x="110" y="350.784" width="34" height="81.216" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="127" y="342" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.1</tspan></text>
-<rect x="150" y="334.688" width="34" height="97.312" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="167" y="326" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.1</tspan></text>
+<rect x="110" y="334.688" width="34" height="97.312" rx="3" fill="#a8c7fa" stroke="#a8c7fa" stroke-width="1.0"/>
+<text class="svgsm" x="127" y="326" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.1</tspan></text>
+<rect x="150" y="343.568" width="34" height="88.432" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="167" y="335" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.5</tspan></text>
 <text class="svgsm" x="127" y="456" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K</tspan></text>
-<rect x="225" y="335.776" width="34" height="96.224" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="225" y="335.76" width="34" height="96.24" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="242" y="327" fill="#80868b" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.0</tspan></text>
-<rect x="265" y="346.592" width="34" height="85.408" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="282" y="338" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.3</tspan></text>
-<rect x="305" y="332.336" width="34" height="99.664" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="322" y="324" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.2</tspan></text>
+<rect x="265" y="332.336" width="34" height="99.664" rx="3" fill="#a8c7fa" stroke="#a8c7fa" stroke-width="1.0"/>
+<text class="svgsm" x="282" y="324" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.2</tspan></text>
+<rect x="305" y="343.23199999999997" width="34" height="88.768" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="322" y="335" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.5</tspan></text>
 <text class="svgsm" x="282" y="456" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64K</tspan></text>
-<rect x="380" y="288.144" width="34" height="143.856" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="380" y="288.224" width="34" height="143.776" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="397" y="280" fill="#80868b" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.0</tspan></text>
-<rect x="420" y="340.304" width="34" height="91.696" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="437" y="332" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.7</tspan></text>
-<rect x="460" y="325.536" width="34" height="106.464" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="477" y="317" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.7</tspan></text>
+<rect x="420" y="325.536" width="34" height="106.464" rx="3" fill="#a8c7fa" stroke="#a8c7fa" stroke-width="1.0"/>
+<text class="svgsm" x="437" y="317" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.7</tspan></text>
+<rect x="460" y="333.664" width="34" height="98.336" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="477" y="325" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.1</tspan></text>
 <text class="svgsm" x="437" y="456" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K</tspan></text>
-<rect x="535" y="186.736" width="34" height="245.264" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="535" y="186.944" width="34" height="245.056" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="552" y="178" fill="#80868b" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">15.3</tspan></text>
-<rect x="575" y="327.84000000000003" width="34" height="104.16" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="592" y="319" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.5</tspan></text>
-<rect x="615" y="312.688" width="34" height="119.312" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="632" y="304" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7.5</tspan></text>
+<rect x="575" y="312.688" width="34" height="119.312" rx="3" fill="#a8c7fa" stroke="#a8c7fa" stroke-width="1.0"/>
+<text class="svgsm" x="592" y="304" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7.5</tspan></text>
+<rect x="615" y="319.536" width="34" height="112.464" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="632" y="311" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7.0</tspan></text>
 <text class="svgsm" x="592" y="456" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256K</tspan></text>
 <rect x="730" y="102" width="670" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="730" y="102" width="670" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="730" y="102" width="670" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="730" y="104" width="670" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="730" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="744" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 对稠密快几倍</tspan></text>
+<text class="svglbl" x="744" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 对稠密快几倍</tspan></text>
 <line x1="800" y1="432.0" x2="1340" y2="432.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="790" y="437" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">0.5×</text>
 <line x1="800" y1="369.5" x2="1340" y2="369.5" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5,4"/>
@@ -5138,32 +5138,32 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="980" y="456" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64K</tspan></text>
 <text class="svgsm" x="1160" y="456" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K</tspan></text>
 <text class="svgsm" x="1340" y="456" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256K</tspan></text>
-<path d="M 800.00 381.49 L 980.00 353.67 L 1160.00 298.40 L 1340.00 200.16" fill="none" stroke="#1e8e3e" stroke-width="3.0" stroke-linecap="round"/>
-<rect x="795.0" y="376.49271079590227" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="800" y="369" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.90</tspan></text>
-<rect x="975.0" y="348.6701011614837" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="980" y="341" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.13</tspan></text>
-<rect x="1155.0" y="293.3954807188972" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1160" y="286" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.57</tspan></text>
-<rect x="1335.0" y="195.16436251920123" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1340" y="188" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.36</tspan></text>
-<path d="M 800.00 400.18 L 980.00 373.81 L 1160.00 325.60 L 1340.00 237.54" fill="none" stroke="#1a73e8" stroke-width="3.0" stroke-linecap="round"/>
-<rect x="795.0" y="395.1848076290694" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="800" y="422" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.76</tspan></text>
-<rect x="975.0" y="368.81449670894204" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="980" y="395" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.97</tspan></text>
-<rect x="1155.0" y="320.59783588818755" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1160" y="347" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.35</tspan></text>
-<rect x="1335.0" y="232.54344910822044" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1340" y="259" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.06</tspan></text>
+<path d="M 800.00 400.18 L 980.00 373.81 L 1160.00 325.60 L 1340.00 237.54" fill="none" stroke="#a8c7fa" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="795.0" y="395.1848076290694" width="10" height="10" rx="5" fill="#a8c7fa" stroke="#a8c7fa" stroke-width="1.0"/>
+<text class="svgsm" x="800" y="422" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.76</tspan></text>
+<rect x="975.0" y="368.81449670894204" width="10" height="10" rx="5" fill="#a8c7fa" stroke="#a8c7fa" stroke-width="1.0"/>
+<text class="svgsm" x="980" y="395" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.97</tspan></text>
+<rect x="1155.0" y="320.59783588818755" width="10" height="10" rx="5" fill="#a8c7fa" stroke="#a8c7fa" stroke-width="1.0"/>
+<text class="svgsm" x="1160" y="347" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.35</tspan></text>
+<rect x="1335.0" y="232.54344910822044" width="10" height="10" rx="5" fill="#a8c7fa" stroke="#a8c7fa" stroke-width="1.0"/>
+<text class="svgsm" x="1340" y="259" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.06</tspan></text>
+<path d="M 800.00 390.75 L 980.00 359.50 L 1160.00 312.00 L 1340.00 222.00" fill="none" stroke="#1a73e8" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="795.0" y="385.75" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="800" y="378" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.83</tspan></text>
+<rect x="975.0" y="354.5" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="980" y="347" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.08</tspan></text>
+<rect x="1155.0" y="307.0" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1160" y="300" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.46</tspan></text>
+<rect x="1335.0" y="216.99999999999997" width="10" height="10" rx="5" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1340" y="209" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.18</tspan></text>
 <text class="svgsm" x="1336" y="389" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">打平</tspan></text>
 <rect x="0" y="502" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="502" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="502" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="529" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一版开蒸馏比不开多 0.89–1.01 秒，四个长度差不多（蒸馏只在挑中的 key 上算）；教师挪进反向后降到约 0.58 秒</tspan></text>
-</svg><figcaption><b>右图看两条线在哪穿过虚线，越长越快。</b><span class="capmore"><br><em>前一版的同作业读数；挑选是合成的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（同一份代码；每个长度稠密与稀疏同一作业）：64 片 v7x，上下文并行 2／4／8／16，每设备 16K 个 token；256K 第 12–21 步中位数，64K／128K 第 20–35 步，32K 常驻作业第 12–19 步。32K 没开 indexer 流水和学生散射那两项（在 32K 上更慢）。挑选是按真实挑选统计拟合的合成选择；256K 合成的 ρ 比真实偏低约 10%。</p>
-<p>全层蒸馏 ＝ 组内 S 层也用自己的注意力当教师各算一个 KL（主报口径）。</p></details></figure>
-  <p>上图是前一版：256K 不开蒸馏快 2.36 倍，全层蒸馏（训练 indexer 的主报口径，11.7）快 2.06 倍；不开蒸馏在 32K 和 64K 之间打平，全层蒸馏在 64K 和 128K 之间打平。最新一版再把教师挪进反向（11.7）：<b>256K 全层蒸馏 7.085 秒，对同作业稠密 15.335 秒快 2.16 倍；64K 5.835 秒对稠密 6.017 秒，1.03 倍，整模型 64K 也快过稠密了</b>；32K 再加两项学生的改动到 5.67 秒，对稠密 4.60 秒还慢；开蒸馏比不开多出的时间，两个长度都降到约 0.58 秒。同一颗核，为什么短的慢、长的快？先看优化之前那一版的拆账，道理一样，对比更直观：</p>
+<text class="svglbl" x="20" y="529" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一份核，长度越长赢得越多：省掉的是注意力，注意力随长度涨，其余不涨</tspan></text>
+</svg><figcaption><b>右图看深蓝线：64K 起穿过虚线，256K 到 2.18；浅蓝是前一版。</b><span class="capmore"><br><em>深蓝是真实挑选回放，浅蓝是合成挑选。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（每个长度稠密与稀疏同一作业，第 12–21 步中位数）：64 片 v7x，上下文并行 2／4／8／16，每设备 16K 个 token。最新一版回放公开的 Hy4 预览版在真实长文上挑出的 top-k，教师只在反向；32K–128K 用推荐配置加单层那三刀（32K 另开在途 4 块），256K 用 q 拆分那一套（不开在途 4 块）。稠密 4.601／6.015／8.986／15.316 秒，稀疏 5.527／5.548／6.146／7.029 秒。</p>
+<p>前一版：合成挑选（按真实挑选统计拟合），教师还在前向；稠密 4.589／6.014／8.991／15.329 秒，全层蒸馏 6.082／6.229／6.654／7.457 秒。全层蒸馏 ＝ 组内 S 层也用自己的注意力当教师各算一个 KL（主报口径）。</p></details></figure>
+  <p>上图深蓝是最新一版：主报改成回放真实挑选、当前推荐配置，<b>32K 0.83 倍、64K 1.08 倍、128K 1.46 倍、256K 2.18 倍（7.029 秒对同作业稠密 15.316 秒）</b>。浅蓝是前一版（合成挑选、教师还在前向），整条线往上抬了一截，主要来自把教师挪进反向（11.7）和第二轮那几刀（11.8）。64K 起整模型快过稠密，32K 还慢。同一颗核，为什么短的慢、长的快？先看优化之前那一版的拆账，道理一样，对比更直观：</p>
 <figure class="fbox fwide" id="fig-dsa-step"><svg viewBox="0 0 1400 688" width="100%" role="img" aria-label="整模型一步的拆账，32 头的模型，64 片，每设备 16K 个 token，同一种切法放大。32K：稠密 4.49 秒，其中注意力核 1.55；稀疏 5.11 秒，注意力核 1.09，但多了 indexer、账本、等小核 0.49，露出的通信从 0.35 涨到 0.72，比稠密慢。256K：稠密 15.27 秒，注意力核 11.86；稀疏 7.82 秒，注意力核 1.48，多了 indexer 1.80、等小核 0.68、账本 0.09，露出的通信 1.14，快约 1.95 倍。虚线是阿姆达尔下限约 3.9 秒：只有注意力核那段会缩，其余不变。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">集中优化之前那一版的拆账：32K 慢 15%，256K 快 1.95 倍</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每行一步（秒，profile 中位步，同一把尺子）；灰 ＝ 注意力核，浅灰 ＝ 注意力的投影等，红 ＝ 稀疏新增（indexer、账本、等小核），橙 ＝ MoE 与其余计算，紫 ＝ 露出的通</text>
@@ -5325,12 +5325,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>两种长度每设备都是 16K 个 query，MoE、投影、优化器的计算量一样多；变的是每个 query 平均要看的 key：因果下约半个序列，32K 约 16K 个，256K 约 128K 个。注意力占稠密计算量的比例从 63% 涨到 93%（按时间，32K 的注意力核只占一步的三分之一左右），注意力核自己的效率一直在 52–54%：稠密 256K 的有效 MFU 45% 比 32K 的 28% 高，不是核变好了，是注意力占多了。按这个模型推，<b>注意力和其余矩阵乘一样多的长度约 17K</b>（本课推导）。</p>
   <p>那一版里，32K 的注意力核只有 1.55 秒，全省掉也就这么多；稀疏核（连核外粘合）省了 0.46 秒，indexer、账本、等小核 0.49 秒、多露出的通信 0.38 秒先把它吃掉了。256K 的注意力核有 11.86 秒，稀疏把它缩到 1.48 秒，新增的开销也涨了，省下的远多于付出的。<b>32K 的现实目标是持平，收益在长序列。</b></p>
 <details class="foldfig"><summary><b>这些整模型读数的口径</b></summary>
-  <p>64 片 v7x：32K 上下文并行 2 ＋ FSDP 64，256K 上下文并行 16 ＋ FSDP 8，参数和优化器状态都切 128 份，稠密与稀疏同配置，每个长度稠密与稀疏同一作业；256K 取第 12–21 步中位数。最新一版：主报那一格 256K 稠密 15.335、全层蒸馏 7.085 秒同一作业；教师只在反向那一刀的同作业对照是改前 7.465、改后 7.092 秒（稠密 15.357）；64K 稠密 6.017、全层蒸馏 5.835 秒同一作业；32K 改前 6.097、教师只在反向 5.845 秒（同作业，稠密 4.606），再加 F 层教师进核与学生从缓存反向 5.667 秒（另一作业，稠密 4.603）。这个模型没有训过的 indexer：性能格用按真实挑选统计拟合的合成选择，indexer 照常算；换成真实挑选回放见 11.9。随机初始化的 indexer 相邻 query 几乎不重合（ρ 5.3），会把核的活放大一倍，不能拿来测性能。</p>
+  <p>64 片 v7x：32K 上下文并行 2 ＋ FSDP 64，256K 上下文并行 16 ＋ FSDP 8，参数和优化器状态都切 128 份，稠密与稀疏同配置，每个长度稠密与稀疏同一作业；256K 取第 12–21 步中位数。最新主报（四个长度，真实挑选回放）：稠密 4.601／6.015／8.986／15.316 秒，稀疏全层蒸馏 5.527／5.548／6.146／7.029 秒。合成挑选那一版：主报那一格 256K 稠密 15.335、全层蒸馏 7.085 秒同一作业；教师只在反向那一刀的同作业对照是改前 7.465、改后 7.092 秒（稠密 15.357）；64K 稠密 6.017、全层蒸馏 5.835 秒同一作业；32K 改前 6.097、教师只在反向 5.845 秒（同作业，稠密 4.606），再加 F 层教师进核与学生从缓存反向 5.667 秒（另一作业，稠密 4.603）。这个模型没有训过的 indexer：性能格用按真实挑选统计拟合的合成选择，indexer 照常算；换成真实挑选回放见 11.9。随机初始化的 indexer 相邻 query 几乎不重合（ρ 5.3），会把核的活放大一倍，不能拿来测性能。</p>
 </details>
 
 
   <h3 id="s11-6">11.6　离上限还差多少：阿姆达尔、两种口径、MFU、GPU 的 2 倍和 4 倍</h3>
-  <p>能快多少有上限（阿姆达尔定律：只有被加速的那部分会缩，其余照旧）。稠密 256K 一步 15.27 秒里，会缩的只有注意力核那 11.86 秒；把它按计算量缩到稀疏这一侧的 4.2%（按稠密注意力的效率、不计挑 top-k），其余不动，整步下限约 3.9 秒，<b>上限约 3.9 倍</b>（本课推导，保守口径）。现在全层蒸馏 2.16 倍，主要差在 indexer 打分（仍随长度平方涨）、小核车道上收集、散射、挑 top-k 和集合通信的排队。下一步的目标是 256K 整模型约 3 倍：稠密里不随稀疏缩的约 3.41 秒摆在那里，3 倍就是要从约 7.1 秒压到约 5.1 秒。</p>
+  <p>能快多少有上限（阿姆达尔定律：只有被加速的那部分会缩，其余照旧）。稠密 256K 一步 15.27 秒里，会缩的只有注意力核那 11.86 秒；把它按计算量缩到稀疏这一侧的 4.2%（按稠密注意力的效率、不计挑 top-k），其余不动，整步下限约 3.9 秒，<b>上限约 3.9 倍</b>（本课推导，保守口径）。现在全层蒸馏 2.18 倍，主要差在 indexer 打分（仍随长度平方涨）、小核车道上收集、散射、挑 top-k 和集合通信的排队。下一步的目标是 256K 整模型约 3 倍：稠密里不随稀疏缩的约 3.41 秒摆在那里，3 倍就是要从 7.03 秒压到约 5.1 秒；这条路为什么微调走不到，见 11.10。</p>
   <p><b>整模型倍数和单层倍数不是一回事。</b>64K 整模型现在快 1.03 倍，刚过稠密；可 64K 稠密一步 6.01 秒，注意力约占一半，其余 2.90 秒不随稀疏变：就算注意力变成零，整模型也只能快约 2 倍出头。所以跟只量注意力的参照（GPU 那组 64K 约 2 倍）比，要用同样只量注意力的口径：单层核心注意力算子组（单层、不切上下文、不含投影，生产层均 10 个 F 层 ＋ 24 个 S 层，都含蒸馏）。</p>
 <figure class="fbox fwide" id="fig-dsa-64k"><svg viewBox="0 0 1400 730" width="100%" role="img" aria-label="64K 的两种口径。上：整模型。稠密一步 6.01 秒，注意力约 3.11 秒，其余 2.90 秒不随稀疏变；就算注意力变成零，整步也只能快约 2.07 倍，所以整模型口径到不了 2 倍以上多少。下：单层核心注意力算子组（单层、不含投影、生产层均含蒸馏）。稠密核每层 359 毫秒；稀疏一组推荐配置 215.2 毫秒（1.67 倍），再加四刀 203.6 毫秒（1.76 倍）；到 2 倍要 179 毫秒，还差约 24 毫秒。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">对标 GPU 的 2 倍，要看单层算子组口径：64K 整模型的天花板只有约 2 倍</text>
@@ -5750,7 +5750,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p><b>同一个优化，长度不同取舍相反。</b>32K 再把 F 层的教师也进核、学生反向从缓存的结果起算，全层蒸馏 6.097 → 5.667 秒（稠密 4.603 秒），开蒸馏的开销 1.0 → 0.58 秒；但学生梯度的散射放到小核这一项，32K 上不开：短序列里小核的散射和收集互相卡住，反而更慢。indexer 打分与挑选流水也一样，256K 快约 0.26 秒，32K 反而更慢。推荐配置按长度分两套。</p>
 
   <h3 id="s11-8">11.8　小核上的排队：收集和散射要一起开，瓶颈会搬家</h3>
-  <p>小核这边做了两件事：收 key 行时同时发 4 路间接收集、异步写回（借自 tokamax 的写法，−0.31 秒）；梯度回加改成原地累加，并提前载入下一块（−0.15 秒）。后一项早先单独加上时只值这 0.15 秒，可在最终配置里把它关掉，256K 一步慢约 2.2 秒（合成挑选下的读数；真实挑选下只慢约 0.1 秒，所以照样开着，不吃亏）：</p></p>
+  <p>小核这边做了两件事：收 key 行时同时发 4 路间接收集、异步写回（借自 tokamax 的写法，−0.31 秒）；梯度回加改成原地累加，并提前载入下一块（−0.15 秒）。后一项早先单独加上时只值这 0.15 秒，可在最终配置里把它关掉，256K 一步慢约 2.2 秒（合成挑选下的读数；真实挑选下只慢约 0.1 秒，所以照样开着，不吃亏）：</p>
 <figure class="fbox fwide" id="fig-dsa-scq"><svg viewBox="0 0 1400 632" width="100%" role="img" aria-label="小核上的排队，三种情形。上：以前，主核的计算还长，小核上散射慢一点，排在后面的 MoE 梯度规约照样藏在主核计算底下，关掉原地散射只慢约 0.15 秒。中：现在主核的时间被其他优化压短了，非原地散射在小核上占得久，梯度规约排在它后面，主核做完只能等，256K 慢约 2.2 秒。下：原地散射，小核上占得短，规约及时做完。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">瓶颈会搬家：主核快了以后，小核上的排队整段露出来</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每组两条车道（示意，块长不按比例）：上 ＝ 主核，下 ＝ 小核；紫 ＝ 稀疏核的收行与散射，橙 ＝ MoE 的梯度规约，红 ＝ 主核停着等</text>
@@ -5790,7 +5790,55 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>看中间那组：紫块变长，橙块被挤到主核算完之后，红色出来了。</b><span class="capmore"><br><em>示意；只有慢 0.15 秒、慢 2.2 秒两个数是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测：256K 最终配置里关掉原地散射与预取，步时 7.465 → 9.69 秒（同作业两次读数逐位相同）；早先单独测这一项时只差 0.15 秒（9.948 → 9.800 秒，那时主核上的活还多）。</p>
 <p>profile 拆账：非原地散射每次扫完整个 key 范围，在小核上占得久；主核等 MoE 专家梯度规约的时间 0.38 → 1.83 秒，注意力 dKV 散射多 0.97 秒；学生梯度散射只占约 0.1 秒。示意图的块长不按比例。</p></details></figure>
   <p>profile 定了原因：非原地的散射每次都扫完整个 key 范围，在小核上占得久；排在它后面的 MoE 专家梯度规约，主核等它的时间从 0.38 秒涨到 1.83 秒，注意力 dKV 散射本身也多了 0.97 秒（学生梯度的散射只占约 0.1 秒，不是它）。以前主核上的活多，这段排队藏在主核计算底下；别的优化把主核时间压短以后，它整段露了出来。<b>瓶颈会搬家：每加一刀，前面测过的单项都可能换个分量，组合要在最终配置里重测。</b></p>
-  <p><b>性能优化也要守住确定性。</b>多路收集和原地散射都动了小核上加法和写回的时序。早先一次作业里，同一份程序跑 4 次，有 1 次从第 16 步起分叉，原因没定位。之后在当前代码上，全开配置（多路收集 ＋ 原地散射 ＋ 预取 ＋ 教师只在反向）同一程序连跑 3 次、再跨两个作业复跑，24 步的 loss、梯度范数、裁剪前的原始梯度范数、indexer loss 四项读数全部逐位相同，分叉没有再复现，才进推荐配置（第十节那一关）。</p>
+  <p><b>第二轮：能拿的都拿了，变慢的都落在小核上。</b>在真实挑选、教师只在反向的配置上，又逐刀同作业测了一轮。采用的只有两刀：单层算子组那几刀里的三刀（反向去掉蒸馏门控、学生梯度转置、indexer 每块 1024 个 query）合计 −0.10 秒；q 拆分（核直接收 q 的潜变量和位置两块，不在核外拼成 576 维，位置部分成对旋转）再 −0.05 秒，256K 到 7.029 秒。不采用的七刀，多出来的时间大都不在主核上：</p>
+<figure class="fbox fwide" id="fig-dsa-ablate"><svg viewBox="0 0 1400 708" width="100%" role="img" aria-label="256K 第二轮消融，真实挑选、同作业。采用两刀：单层那三刀合计快 0.10 秒，q 拆分再快 0.05 秒，到 7.03 秒。不采用的七刀全部变慢：query 行主序慢 0.67 秒，一单 16 个 query 慢 0.54 秒，专家梯度规约分块最好也慢 0.03 秒，学生散射不走小核慢 0.70 秒，确定性向量散射慢 1.71 秒，在途 4 块和 q 拆分叠加慢 0.77 秒，q 拆分用在 128K 慢 0.87 秒。慢的那几刀，多出来的时间大都落在小核上的排队。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第二轮：能拿的都拿了（7.18 → 7.03 秒）；变慢的刀，时间大都挪到了小核排队上</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每行一刀，条 ＝ 整模型一步多（右，红）或少（左，绿）几秒；右边写时间去了哪</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">采用</text>
+<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">不采用</text>
+<rect x="0" y="102" width="1400" height="482" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256K 整模型，一步多几秒（同作业）</tspan></text>
+<line x1="560" y1="162" x2="560" y2="604" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="529" y="192" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">单层那三刀</tspan></text>
+<rect x="543.0" y="176" width="17.0" height="26" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="570" y="194" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.10 秒</tspan></text>
+<text class="svgsm" x="537" y="240" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">q 拆分</tspan></text>
+<rect x="551.5" y="224" width="8.5" height="26" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="570" y="242" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.05 秒</tspan></text>
+<text class="svgsm" x="546" y="288" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">query 按行主序喂核</tspan></text>
+<rect x="560" y="272" width="113.9" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="683" y="290" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋0.67　主核省 0.07；小核散射等待 ＋0.36、专家梯度规约等待 ＋0.21</tspan></text>
+<text class="svgsm" x="546" y="336" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一单 16 个 query</tspan></text>
+<rect x="560" y="320" width="91.80000000000001" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="661" y="338" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋0.54　核省 0.10；小核散射等待 ＋0.52</tspan></text>
+<text class="svgsm" x="546" y="384" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家梯度规约分块（最好的 4 块）</tspan></text>
+<rect x="560" y="368" width="5.1" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="575" y="386" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋0.03　块间串行、每块在小核上单独排队，规约露出 460 → 602 毫秒</tspan></text>
+<text class="svgsm" x="546" y="432" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">学生梯度散射不走小核</tspan></text>
+<rect x="560" y="416" width="118.99999999999999" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="689" y="434" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋0.70　没拆 profile，直接不用</tspan></text>
+<text class="svgsm" x="546" y="480" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">确定性向量散射（后备）</tspan></text>
+<rect x="560" y="464" width="290.7" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="860" y="482" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1.71　逐位有保证，但小核散射 0.86 → 2.29 秒</tspan></text>
+<text class="svgsm" x="546" y="528" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在途 4 块 ＋ q 拆分</tspan></text>
+<rect x="560" y="512" width="130.9" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="700" y="530" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋0.77　两刀都改小核上的调度，叠加反而慢</tspan></text>
+<text class="svgsm" x="546" y="576" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">q 拆分用在 128K</tspan></text>
+<rect x="560" y="560" width="147.9" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="717" y="578" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋0.87　专家梯度规约等待 ＋1.15</tspan></text>
+<rect x="0" y="634" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="634" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="634" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="661" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">小核是一条串行队列：收行、散射、挑 top-k、集合通信都排在上面，主核省下的时间常常变成在这条队上等</tspan></text>
+</svg><figcaption><b>绿的两根很短，红的七根都往右：变慢的那几刀，右边写的去处大多是小核上的等待。</b><span class="capmore"><br><em>256K 整模型、真实挑选、同作业。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（256K，回放真实挑选，全层蒸馏、教师只在反向；同作业、第 12–21 步中位）：起点 7.18–7.19 秒；单层三刀 7.081 秒（三次读数 7.081／7.085／7.081）；再加 q 拆分 7.029 秒（复跑逐位）。不采用各行的「＋」都对同作业的起点（q 拆分那两行对各自长度的推荐配置）；时间去向来自同作业 profile 对减。专家梯度规约分块：2／4／8 块是 ＋0.72／＋0.03／＋0.12 秒。</p>
+<p>还试过：KV 不做上下文并行重排、收行时换地址，−0.05 秒，但反向里一处求和开关前后结果不同、机制没查清，不采用；小核收集 2 路，持平。</p></details></figure>
+  <p>两条规矩从这张图来。<b>一，主核上省的时间会挪到小核排队上</b>：query 按行主序省掉主核上的拷贝，可散射等待和专家梯度规约等待一共多了 0.57 秒；一单 16 个 query 让核少算 0.10 秒，散射却多等 0.52 秒。<b>二，刀和长度要配对</b>：q 拆分在 256K 上快，在 128K 上把专家梯度规约挤成露出、反而慢 0.87 秒，在 64K 上持平；它和「在途 4 块」又互斥，叠在一起慢 0.77 秒。所以推荐配置按长度分：32K–128K 带在途 4 块、不带 q 拆分，256K 反过来。</p>
+  <p><b>性能优化也要守住确定性。</b>多路收集和原地散射都动了小核上加法和写回的时序；查下去发现，现行散射「按块序累加」<b>没有硬件保证</b>：带加法的间接写，等待只等源数据读完，不等加法落地，顺序靠的是时序。所以做了压测：现行配置 11 次运行（5 份代码、7 个作业）两两 55 对，再加三种改小核时序的组合各 3 次，<b>共 64 对，24 步四项读数全部逐位</b>。风险在，但没观测到；真要严格可复现，有一个确定性的后备散射（每个子核在本地内存里按程序顺序累加），逐位有保证，慢 1.71 秒，默认关。另一类「卡上不逐位」跟散射无关：去掉一个拷贝、改一处布局以后，编译器的布局传播会改掉上游一个矩阵乘的输出布局，同一个矩阵乘换布局，约一半元素差一个舍入。query 行主序、单层三刀、q 拆分卡上不逐位都是这个原因，不是算法变了（第十节那一关照样要过）。</p>
 
   <h3 id="s11-9">11.9　换成真实挑选：合成的偏保守，容量要放大</h3>
   <p>这个模型没有训过的 indexer，前面的性能读数用的是按真实统计拟合的合成挑选。随后把公开的 Hy4 预览版在真实长文上挑出的 top-k 直接喂给稀疏核，替换合成挑选再测：<b>32K 真实 5.967 秒，合成 6.062 秒</b>，合成偏保守（真实相邻 32 个 query 的并集膨胀 ρ 2.52，合成 2.85）；256K 真实的并集略大（ρ 3.86 对 3.71），而且分布的尾巴更重：某些层一块要 726 段，超过了原来的容量 720 段。容量放到 768 段以后，<b>当前配置（教师只在反向）下 256K 真实挑选 7.181 秒，合成对照 7.085 秒，只慢 1.4%，对同作业稠密 15.316 秒 2.13 倍</b>。</p>
@@ -5842,7 +5890,95 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </details>
 
 
-  <h3 id="s11-10">11.10　三条做法：锁基线、上卡验、向成熟核取经</h3>
+  <h3 id="s11-10">11.10　到 3 倍：微调够不着，要从设计上找</h3>
+  <p>256K 现在 2.18 倍。往 3 倍走，先把账摆出来：</p>
+<figure class="fbox fwide" id="fig-dsa-3x"><svg viewBox="0 0 1400 760" width="100%" role="img" aria-label="256K 到 3 倍的账。稠密一步 15.32 秒，其中约 3.41 秒（MoE、投影、通信、视觉、优化器）稀疏碰不到。3 倍要一步 5.11 秒，减掉这 3.41 秒，留给注意力和稀疏带来的全部额外开销只有约 1.7 秒；现在这部分约 3.6 秒。前向单看：稀疏 2.64 秒，稠密 5.72 秒，只快 2.17 倍；2.64 秒里 1.94 秒在算、0.70 秒在等。前向 3 倍要 1.91 秒，等待全消掉也只到 1.94 秒。等待里最大的一块是权重收集露出 483 毫秒，稠密收同样多的字节只露出 15 毫秒。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">到 3 倍：留给注意力的只有 1.7 秒，现在用了 3.6 秒</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Ⓐ 整步（秒，256K）：灰 ＝ 稀疏碰不到的部分；Ⓑ 前向（秒）：在算 ＋ 在等</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稀疏碰不到（3.41）</text>
+<rect x="187.0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="208" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稠密注意力</text>
+<rect x="312.4" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="333" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">注意力 ＋ 稀疏的额外开销</text>
+<rect x="548.6800000000001" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="569" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">在等</text>
+<rect x="0" y="102" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 整步：3.41 秒先占掉，3 倍只剩 1.7 秒</tspan></text>
+<text class="svgsm" x="284" y="204" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密 15.32 秒</tspan></text>
+<rect x="300" y="186" width="211.42000000000002" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<text class="svgsm" x="405" y="206" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.41</tspan></text>
+<rect x="511.42" y="186" width="738.42" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="880" y="206" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力 11.91</tspan></text>
+<text class="svgsm" x="284" y="262" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稀疏，现在 7.03 秒</tspan></text>
+<rect x="300" y="244" width="211.42000000000002" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<text class="svgsm" x="405" y="264" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.41</tspan></text>
+<rect x="511.42" y="244" width="224.44" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="745" y="264" fill="#174ea6" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力 ＋ 额外开销 3.62 秒</tspan></text>
+<text class="svgsm" x="284" y="320" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3 倍的目标 5.11 秒</tspan></text>
+<rect x="300" y="302" width="211.42000000000002" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<text class="svgsm" x="405" y="322" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.41</tspan></text>
+<rect x="511.42" y="302" width="105.39999999999999" height="30" rx="3" fill="none" stroke="#1e8e3e" stroke-width="2" stroke-dasharray="5,3"/>
+<text class="svgsm" x="626" y="322" fill="#0d652d" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只剩 1.70 秒</tspan></text>
+<rect x="0" y="406" width="1400" height="230" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="406" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="408" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="436" x2="1400" y2="436" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="426" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 前向：只快 2.17 倍；等待全消掉也只到 1.94 秒</tspan></text>
+<text class="svgsm" x="284" y="508" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密前向 5.72 秒</tspan></text>
+<rect x="300" y="490" width="835.125" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1135.125" y="490" width="22.080000000000005" height="30" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="310" y="510" fill="#fff" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在算 5.57</tspan></text>
+<text class="svgsm" x="1167" y="510" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在等 0.15</tspan></text>
+<text class="svgsm" x="284" y="570" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稀疏前向 2.64 秒</tspan></text>
+<rect x="300" y="552" width="290.46000000000004" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="590.46" y="552" width="104.415" height="30" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="310" y="572" fill="#fff" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在算 1.94</tspan></text>
+<text class="svgsm" x="704" y="572" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在等 0.70</tspan></text>
+<line x1="585.825" y1="586" x2="585.825" y2="466" stroke="#1e8e3e" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="5,3"/>
+<text class="svgsm" x="593" y="616" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前向 3 倍要 1.91 秒：在算那段也得再短</tspan></text>
+<rect x="0" y="686" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="686" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="686" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="713" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一刀 0.1 秒的微调够不着要砍的 2 秒；在等的那 0.7 秒里，最大一块是稠密里本来盖得住的权重收集</tspan></text>
+</svg><figcaption><b>上面看灰段后面剩多少：3 倍只给 1.7 秒，现在用了 3.6；下面看红段：等待全去掉，蓝段还长过绿线。</b><span class="capmore"><br><em>256K 整模型；前向是同作业 profile 的一步。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>本课推导：3 倍 ＝ 15.32 ÷ 3 ＝ 5.11 秒；3.41 秒 ＝ 稠密 profile 一步 15.26 秒减去注意力核 11.84 秒；7.03 − 3.41 ＝ 3.62 秒。这 3.41 秒不是下限：两边同减 1 秒，倍数就是 14.32 ÷ 6.03 ≈ 2.37。</p>
+<p>实测（同作业 profile，取一颗芯片的一个设备、中位步；稀疏这一步 7.12 秒，是 q 拆分之前的配置）：前向按算子名分前反向，在算 ＝ Pallas 核 1.17 ＋ XLA 融合 0.76，在等 ＝ 集合通信 0.58 ＋ 等小核 0.12。前向每设备收 121.7 GB 权重，稠密露出 14.7 毫秒，稀疏 483 毫秒（专家权重 270、注意力的两块投影权重 193、其余）。</p></details></figure>
+  <p>稠密一步里有约 3.41 秒（MoE、投影、通信、视觉塔、优化器）是稀疏碰不到的，3 倍的 5.11 秒先被它占掉，<b>留给注意力和稀疏带来的全部额外开销只有约 1.7 秒，现在是约 3.6 秒</b>。第二轮那几刀每刀 0.05–0.1 秒，加起来也够不着要砍的 2 秒。这 3.41 秒也不是下限，两件事要分清：它本身能优化，而且两边同减时倍数会涨（同减 1 秒就是 2.37 倍），前提是稠密基线一起重测；另一面，在稀疏这一步里它其实比 3.41 秒大：稠密里被每层 138 毫秒的注意力核盖住的权重收集，注意力一变短就露了出来，单前向就多露出约 470 毫秒。</p>
+  <p>前向单看更清楚：稀疏 2.64 秒，稠密 5.72 秒，只快 2.17 倍；2.64 秒里 1.94 秒在算、0.70 秒在等。等待全消掉也只到 1.94 秒，还够不着前向 3 倍要的 1.91 秒，<b>通信和计算都得动</b>。权重收集为什么在这里盖不住，profile 里量到三条：内层循环里，专家权重的收集在用之前零点几到几毫秒才发起，没有跨层预取；小核是一条串行队列，前向 58% 的时间在忙，挑 top-k、收行和权重收集抢同一条队；专家的两块权重分成两次收集，其中一次沿最内维切，在小核上只跑出 212 GB/s。</p>
+<details class="foldfig"><summary><b>设计上已经对了的两处：收 key 不传 query；重排 query 降不了 ρ</b></summary>
+  <p>indexer 跨上下文并行时，是把 key 收齐、每个设备拿自己的 query 去打分，没有让 query 绕设备转一圈：</p>
+<figure class="fbox fwide" id="fig-dsa-kvq"><svg viewBox="0 0 1400 456" width="100%" role="img" aria-label="indexer 跨上下文并行的两种做法。现行：每个设备把本地 16384 个 token 的 indexer key 收齐成整条，key 只有 128 维、所有头共用，每设备 4 MiB，收 15 份共约 60 MiB，一次。另一种：key 不动、把 query 绕着 16 个设备转一圈；query 有 32 个头 × 128 维，每设备 128 MiB，转 15 跳约 1.9 GiB，每跳还得带着当前的 top-2048 候选逐跳合并。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">indexer：收 key，不传 query —— key 比 query 小 32 倍</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每设备要搬的字节（上下文并行 16，每设备 16384 个 token）；条长按 MiB</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">收 key（现行）</text>
+<rect x="159.0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="180" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">传 query 转一圈</text>
+<rect x="0" y="102" width="1400" height="230" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每设备搬多少</tspan></text>
+<text class="svgsm" x="304" y="204" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">收 key：4 MiB × 15 份</tspan></text>
+<rect x="320" y="186" width="27.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="359" y="206" fill="#0d652d" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 60 MiB，收一次</tspan></text>
+<text class="svgsm" x="304" y="274" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">传 query：128 MiB × 15 跳</tspan></text>
+<rect x="320" y="256" width="864.0" height="30" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="334" y="276" fill="#fff" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 1.9 GiB，还要逐跳合并 top-2048</tspan></text>
+<rect x="0" y="382" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="382" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="382" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="409" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">谁小搬谁：indexer 的 key 所有头共用、只有 128 维；主注意力同理，收的是 576 维共用潜变量，不是 32 个头展开的 K、V</tspan></text>
+</svg><figcaption><b>两根条差 32 倍：key 只有 128 维、所有头共用，query 有 32 个头。</b><span class="capmore"><br><em>每设备的字节，本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>本课推导：key 每 token 128 维 BF16，16384 × 128 × 2 B ＝ 4 MiB；query 每 token 32 头 × 128 维，128 MiB；比值 32。传 query 划算的场景是 query 比 key 小（解码时只有一个新 query、或 key 头多的结构）。</p>
+<p>主注意力的潜变量收齐后每层约 300 MB（整条 262144 × 576 × 2 B）；profile 里它基本被盖住：F 层每层露出 0.69 毫秒，S 层 0。</p></details></figure>
+  <p><b>重排 query 降不了 ρ。</b>并集膨胀 ρ 越小，核白算越少；能不能在同一个分片里把挑法相像的 query 排到一起？离线试了几种：相邻块精确交换（扫 3 遍）只从 3.864 降到 3.818（−1.2%）；按 MinHash 或按挑中 key 的中位位置排序反而升到 4.3–11.4。原因是原顺序已经接近最优：跟某一行挑法最像的那一行，在序列上中位距离只有 1 行，98–99.8% 落在 ±16 行内。<b>要降 ρ，只能改挑选本身的局部性，不是排法。</b></p>
+</details>
+
+
+  <h3 id="s11-11">11.11　三条做法：锁基线、上卡验、向成熟核取经</h3>
   <p><b>倍数的分母先锁定。</b>256K 稠密同一份配置复测三次是 15.30–15.34 秒（±0.2% 内）；再补一刀：稠密注意力核旁边有一段每层都跑、早就算完还在空转的小循环，让它算完就停（结果逐位不变），锁在 15.238 秒、有效 MFU 44.96%。分母取稠密能做到的最好，稀疏和稠密放进同一个作业各出一个数再相除：11.5 的倍数都是这么来的（同作业稠密多了一项跟稀疏格对齐的输出头分块）。</p>
   <p><b>核的代码体积一变，静态预测就不可信。</b>给稠密核挑块形状时，按编译产物数静态指令包，预测前向快 13.9%，上卡慢 7.7%；另一项预测慢 3.3%，实测慢 21%。共同点是整颗核的代码变大了（约 3.9 万包 → 5.3–8.0 万包），推断有取指的代价，静态计数看不到。这类改动必须上卡。</p>
   <p><b>向成熟核取经，读它的提交史。</b>把两份公开的 splash 实现逐个提交读一遍，每一处修过的坑、加过的技巧，对到自己的核上写四件事：它怎么做、为什么、我们怎么做、结论。结果最要紧的 5 项全是防坑；后来又照它的同类修复补了一处（小核散射双缓冲假设按序完成，dKV 可能被静默写坏），借了它的多路收集写法（小核收集改 4 路，−0.31 秒）：</p>
@@ -5850,7 +5986,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <table class="t9 mini" id="tab-dsa-splash"><caption>照成熟核的提交史补的五项：全是防坑，不是提速</caption><thead><tr><th>成熟核踩过的坑</th><th>放到这颗核上会怎样</th><th>补法</th></tr></thead><tbody><tr><td>在线 softmax 的初值用了负无穷（环形版修过一次）</td><td>没有 sink 的模型里，一单的第一段没挑这一行：exp(−∞ − (−∞)) ＝ NaN，整行 NaN</td><td>初值加有限下限，出口除零保护</td></tr><tr><td>从没访问过的输出块不会被写</td><td>容量溢出又没开回放时，容量外的输出是没写过的内存</td><td>每块至少写一段；或配置上拦住</td></tr><tr><td>对外返回的统计量被静默丢了梯度</td><td>有人对 lse 求导（比如 z-loss），梯度静默为 0</td><td>统计量显式截断梯度</td></tr><tr><td>合法性检查太慢被关掉</td><td>下标升序、不重复的前提被违反时，并集静默算错</td><td>便宜的静态检查报具体错，贵的进调试开关</td></tr><tr><td>测试只在作者那边</td><td>改核不会被拦</td><td>解释模式的单测矩阵进主仓库</td></tr></tbody></table>
   <details class="figsrc"><summary>出处与口径</summary><p>本课归纳：两份公开实现（jax 里的 splash、tokamax 的 splash 2.0）逐个提交读过，每项写四件事：它怎么做、为什么（对应的提交或实测）、我们怎么做、结论（必须／可以／不适用）。必须的这 5 项已实现、CPU 上验过，卡上待验；可以采用的 7 项（如统计量按车道复制存、以 2 为底的指数）按预期收益排了队。</p></details>
 
-<details class="foldfig"><summary><b>考考自己</b>：同事说：我写的稀疏核单测比稠密快 1.6 倍，接进 32K 的模型整步一定快。你先问什么？</summary><p>一，32K 的注意力占稠密一步多少（优化前那一版 1.55 秒，全省掉也就这么多），稀疏新增的 indexer、账本、等小核要多少；二，省下的主核时间原来是不是正盖着别的通信（11.5、第五节）；三，分母锁定了没有、是不是同一个作业里量的整步。这次 32K 整步还慢，256K 带蒸馏快 2.16 倍。</p></details>
+<details class="foldfig"><summary><b>考考自己</b>：同事说：我写的稀疏核单测比稠密快 1.6 倍，接进 32K 的模型整步一定快。你先问什么？</summary><p>一，32K 的注意力占稠密一步多少（优化前那一版 1.55 秒，全省掉也就这么多），稀疏新增的 indexer、账本、等小核要多少；二，省下的主核时间原来是不是正盖着别的通信（11.5、第五节）；三，分母锁定了没有、是不是同一个作业里量的整步。这次 32K 整步还慢，256K 带蒸馏快 2.18 倍。</p></details>
   <p class="bridge">写新核也逃不开这一讲的主线：省下的计算要落在关键路径上。最后一节，把这一路的办法收成一张清单。</p>
 </div></section>
 <section id="s十二"><div class="wrap"><div class="stn"><span class="badge">第 十二 节</span><h2>拿回去用</h2></div>
