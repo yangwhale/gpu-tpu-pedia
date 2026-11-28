@@ -102,8 +102,8 @@ def fig_gauge():
 def fig_head():
     """11-16 负责人定：一张图里只放同一次测量。三根柱全取 golden 第 1 步 rank0 第 0 个 microbatch 那一批
     （对齐记录 case01-exact-head-dgrad.json）；原来的交叉熵、真 FP32 两根来自另一组张量，挪进出处。"""
-    f = Fig(W, "同一批数据（第 1 步、一个 microbatch），输出头反向沿「所有 logits 一起动」方向对 FP64 的相对误差，对数刻度："
-               "GPU BF16 张量核 4.4e-4，TPU 生产配置 2.6e-5，约十七分之一；TPU 精确档 1.2e-6。")
+    f = Fig(W, "同一批数据（第 1 步、一个微批），输出头反向沿「所有 logits 一起动」方向对 FP64 的相对误差，对数刻度："
+               "GPU BF16 张量核 4.4e-4，TPU 生产配置 2.6e-5，约十七分之一；TPU 精确档 1.2e-6。这是整个输出头反向、单个微批的一次测量，跟前后图里的 6.5e-4（另一批、只算那次矩阵乘）不是同一次测量。")
     y0 = f.header("输出头反向那一次长求和：三种算法各离 FP64 多远",
                   "柱长 ＝ 沿「所有 logits 一起动」方向的相对误差（对数刻度，一格 ＝ 十倍，越短越准），参照 FP64；三根是同一批数据",
                   [(RD, "GPU 张量核"), (BL, "TPU"), (GR, "精确档")])
@@ -112,7 +112,7 @@ def fig_head():
             ("TPU 输出头反向，精确档", "精确配置（矩阵乘用最高精度），当「准」的刻度", abs(N.HEADX_TPU_EXACT), GR)]
     SP = 88
     PH = 60 + len(rows) * SP
-    py = f.panel(0, y0, W, PH, "第 1 步，单个 microbatch 回放、各自对 FP64（实测）", OR)
+    py = f.panel(0, y0, W, PH, "第 1 步，单个微批回放、各自对 FP64（实测）", OR)
     bx, bw, emin, emax = 380, 840, 1e-6, 1e-3
     # ⭐ R3：对数柱的原点藏着（1e-6），柱长看着只差一截其实差十几倍 → 每个十倍一根竖格线、顶上标数
     for e in range(-6, -2):
@@ -125,13 +125,13 @@ def fig_head():
         f.t(24, y + 40, sub, GY, size=13)
         L = max((math.log10(v) - math.log10(emin)) / (math.log10(emax) - math.log10(emin)) * bw, 4)
         f.box(bx, y + 4, L, 28, c, c, 4)
-        f.t(bx + L + 8, y + 24, "%.1e" % v, c, True, 15)
+        f.t(bx + L + 8, y + 24, ("%.1e" % v).replace("e-0", "e-"), c, True, 15)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "同一批数据上，GPU 的误差约是 TPU 的 %d 倍：偏的是 GPU 那一次 12 万长的 BF16 求和 —— 朝零偏了一点（归因成张量核截断是推断）" % round(N.HEADX_RATIO), [
         "代价：要先证明量的就是训练里实际用到的那几个张量（这里核对过，和抓下来的逐位相同）；精确参照还得真关 TF32。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：三根柱都是 golden 第 1 步、第 0 号卡第 0 个 microbatch；参照是各自的 logits 在 FP64 里算 softmax 减 onehot、再乘 BF16 输出层权重。TPU 两根是同一批输入的输出头回放（另一台 v5p 回放同一批读 %s）。" % N.HEAD_TPU_S1_T,
+               "📌 实测：三根柱都是 golden 第 1 步、第 0 号卡第 0 个微批；参照是各自的 logits 在 FP64 里算 softmax 减 onehot、再乘 BF16 输出层权重。TPU 两根是同一批输入的输出头回放（另一台 v5p 回放同一批读 %s）。" % N.HEAD_TPU_S1_T,
                "📌 另一组抓下来的生产张量（第 1 步）把 GPU 拆成两段：交叉熵反向 %s，矩阵乘 %s，所以偏差在矩阵乘；同一组张量上 dgrad 换 FP32、真关 TF32 是 %s，没关 TF32 的那一版 %s，比 BF16 还差 —— 一度被当成「精确」参照（第十节坑表）。第 100 步 GPU 矩阵乘 −6.10e-4，TPU −7.4e-5。"
                % (N.CE_BWD_S1_T, N.HEAD_BF16_S1_T, N.HEAD_EXACT_S1_T, N.tx(N.HEAD_TF32_S1, "%.2e")),
                "📌 求和越长偏得越多（K 从 16,384 到整张词表）另成一张图，在本节折叠里。")

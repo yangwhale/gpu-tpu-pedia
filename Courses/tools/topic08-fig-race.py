@@ -37,7 +37,7 @@ def lane(f, x, y, w_read, w_write, col, fill, lab, lab_x=None):
 
 def fig_race():
     f = Fig(W, "左右两块，横轴都是时间。两块都画了两笔带加法的写，块甲和块乙都要往累加器里同一个位置加一笔，每笔先读源、再写进累加器。"
-               "左块只等读：块甲的源一读完，wait 就返回，内核马上发块乙；块乙的写比块甲先落地，两笔加法颠倒。"
+               "左块只等读：块甲的源一读完，等待就返回，内核马上发块乙；块乙的写比块甲先落地，两笔加法颠倒。"
                "右块每块之后发一次小拷贝并等它写完，这一等把之前发出的写都围住，块乙永远在块甲落地之后才开始。"
                "底下用累加器原值 1、块甲加 2 的 24 次方、块乙加负 2 的 24 次方这组数：按顺序在 FP32 里得 0，颠倒得 1。FP32 只有 24 位有效位，1 碰上 2 的 24 次方会被吞掉。"
                "单卡微基准：不加栅栏 75 次里 3732 个元素读到旧值，加栅栏 0 个；修法每步约多 3 到 6 毫秒。")
@@ -52,7 +52,7 @@ def fig_race():
     l1 = lane(f, X0, py + 46, 110, 330, BL, "#e8f0fe", "块甲")
     wx = X0 + 110
     f.line(wx, py + 36, wx, py + 150, RD, 1.6, dash="6 4", arrow=False)
-    f.t(wx + 6, py + 40, "wait 返回：只说明源读完了", RD, True, 12.5)
+    f.t(wx + 6, py + 40, "等待返回：只说明源读完了", RD, True, 12.5)
     l2 = lane(f, wx + 16, py + 98, 90, 150, OR, "#fef7e0", "块乙", lab_x=X0)
     assert l2 < l1                              # 画面上块 2 确实先落地
     ay = py + 196
@@ -65,7 +65,7 @@ def fig_race():
         f.t(x, ay + 5, n, "#fff", True, 13.5, "middle")
     f.t((l1 + l2) / 2, ay + 40, "先乙后甲：颠倒了", RD, True, 14, "middle")
     f.t(X0 - 66, py + 274, "累加器原值 1，块甲加 2²⁴，块乙加 −2²⁴", INK, True, 14)
-    f.t(X0 - 66, py + 302, "按甲、乙的顺序 → %d　　颠倒 → %d" % (IN_ORDER, SWAPPED), RD, True, 14)
+    f.t(X0 - 66, py + 302, "按甲、乙的顺序 → %d；颠倒 → %d" % (IN_ORDER, SWAPPED), RD, True, 14)
     f.t(X0 - 66, py + 330, "FP32 只有 24 位有效位，1 碰上 2²⁴ 会被吞掉（第七节的吞小项）", INK, size=13)
     f.t(X0 - 66, py + 354, "大多数时候写来得及落地，偶尔来不及：%d 次复跑 %d 次分开" % (N.RACE_RUNS, N.RACE_SPLIT), GY, size=13)
     f._pan = None
@@ -92,11 +92,11 @@ def fig_race():
     f.t((b1 + b2) / 2, ay2 + 40, "永远先甲后乙", GR, True, 14, "middle")
     f.t(RX + X0 - 66, py2 + 274, "累加器原值 1，块甲加 2²⁴，块乙加 −2²⁴", INK, True, 14)
     f.t(RX + X0 - 66, py2 + 302, "永远按甲、乙的顺序 → %d" % IN_ORDER, GR, True, 14)
-    f.t(RX + X0 - 66, py2 + 330, "不改算术，只多等一下：每步约 ＋%d–%d ms" % N.RACE_FENCE_MS, GY, size=13)
-    f.t(RX + X0 - 66, py2 + 354, N.RACE_FENCE_PCT_T, GY, size=13)
+    f.t(RX + X0 - 66, py2 + 330, "不改算术：每步约 ＋%d–%d ms，约占步时 0.1%%" % N.RACE_FENCE_MS, GY, size=13)
+    f.t(RX + X0 - 66, py2 + 354, "（另一作业量到 %s）" % N.RACE_FENCE_OTHER_PCT_T, GY, size=13)
     f._pan = None
 
-    yb = f.band(y0 + PH + 20, "ok", "wait 返回不等于写已落地；多等一次「写完」，之前发出的写就都到了", [
+    yb = f.band(y0 + PH + 20, "ok", "等待返回不等于写已落地；多等一次「写完」，之前发出的写就都到了", [
         "",
     ])
     yb = f.src(yb + 10,

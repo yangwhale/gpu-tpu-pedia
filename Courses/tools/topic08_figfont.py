@@ -23,3 +23,23 @@ if not getattr(_D, "_T08_FLOOR", None):
         return _orig_wpx(s, max(size, FLOOR))
 
     _D._sz, _D.wpx, _D._T08_FLOOR = _sz, wpx, FLOOR
+
+# 11-28 夜（R13 图小事）：小数一律 e 记法写成 e-4，不写 e-04；只在专题八局部改 Fig.t 的出字，不碰共用基元
+import re as _re
+if not getattr(_D, "_T08_EXP", None):
+    _orig_t = _D.Fig.t
+
+    def _t(self, x, y, s, *a, **k):
+        if isinstance(s, str):
+            s = _re.sub(r"(\d)e([-+])0(\d)", r"\1e\2\3", s)
+        return _orig_t(self, x, y, s, *a, **k)
+
+    _D.Fig.t, _D._T08_EXP = _t, True
+    _orig_init = _D.Fig.__init__
+
+    def _init(self, w, aria):
+        if isinstance(aria, str):
+            aria = _re.sub(r"(\d)e([-+])0(\d)", r"\1e\2\3", aria)
+        return _orig_init(self, w, aria)
+
+    _D.Fig.__init__ = _init
