@@ -1217,3 +1217,21 @@ assert abs(sum(v for _k, v in DSA_BUD_TC) - DSA_BUD["tc"]) <= 3
 assert max(DSA_BUD["tc"], DSA_BUD["sc0"], DSA_BUD["sc1"]) == 5044 and DSA_BUD["target"] - 5044 == 56
 assert round(15.31 / 3, 2) == 5.10 and round(15.31 / 5.044, 2) == 3.04
 assert abs(DSA_BUD["tc"] + DSA_BUD["wait"] + 50 - DSA_BUD["now"]) <= 5
+# ── 12.8（11-28 补）：dKV 散射在途加载 2 → 4 槽 ──
+DSA_SCAT_SC = ((861, 778), (461, 422))     # 每步 dKV 散射的小核时间（两核，ms）：2 槽 → 4 槽
+DSA_SCAT_BW = {"seq": 3.17, "sadd": 2.33, "prod": 1.24, "now": 1.32}   # 两核 TB/s：顺序搬运峰值、间接 scatter-add 峰值、生产核同配置（16 行／2 槽）、现状按字节
+DSA_SCAT_UTIL = round(DSA_SCAT_BW["now"] / DSA_SCAT_BW["sadd"] * 100)
+assert DSA_SCAT_UTIL == 57
+DSA_SCAT_REPRO = (2.55, 2.56)              # 回放形状合成输入跑生产核 vs profile 实测（ms／次）
+DSA_SCAT_FIT = (("描述符加载延迟", 42), ("部分行字节", 39), ("累加缓冲读写", 10), ("子 tile 遍历", 10))
+DSA_SCAT_UNIT = {2: 2.52, 3: 1.43, 4: 1.34}  # 640 宽每次调用 ms
+assert round((1 - DSA_SCAT_UNIT[4] / DSA_SCAT_UNIT[2]) * 100) == 47
+DSA_SCAT_STEP = (6.518, 6.326, 6.318)      # 256K 同作业：2 槽、3 槽、4 槽（秒）
+assert round(DSA_SCAT_STEP[0] - DSA_SCAT_STEP[2], 3) == 0.200 and round((1 - 6.318 / 6.518) * 100, 1) == 3.1
+DSA_SCAT_DENSE = 15.325                    # 这一作业没带稠密格；同一常驻上最近一格稠密
+assert round(DSA_SCAT_DENSE / 6.518, 2) == 2.35 and round(DSA_SCAT_DENSE / 6.318, 2) == 2.43 and round(15.306 / 6.318, 2) == 2.42
+DSA_SCAT_WAIT = (1348, 1126)               # 主核等异步完成的合计（ms／步）
+DSA_SCAT_SAVED_SC = sum(DSA_SCAT_SC[0]) - sum(DSA_SCAT_SC[1])
+assert DSA_SCAT_SAVED_SC == 756
+DSA_SCAT_PATH = (("小核时间省（两核合计）", 756), ("单核墙钟（两核并行）", 370), ("其中原在关键路径上", 220), ("主核抢 HBM 变慢（推断）", -21), ("一步实际省", 200))
+assert DSA_SCAT_WAIT[0] - DSA_SCAT_WAIT[1] == 222

@@ -386,6 +386,96 @@ def fig_budget():
     f.save("fig8b-dsa-budget.svg", yb + 14)
 
 
+def fig_slots():
+    B, U = N.DSA_SCAT_BW, N.DSA_SCAT_UNIT
+    f = Fig(W, "dKV 散射是小核上最大的一项。左：先量带宽锚点，两核纯搬运的顺序峰值 3.17 TB/s、间接 scatter-add 峰值 2.33 TB/s，生产核同配置 1.24 TB/s；"
+               "现状按字节算 1.32 TB/s，是 scatter-add 峰值的 57%。中：拟合把一次调用 2.56 毫秒拆开，描述符加载延迟 42%、部分行字节 39%、累加缓冲读写约 10%、子 tile 遍历约 10%。"
+               "右：每个向量子核只有 2 个在途加载槽时，每条加载的延迟都露在外面；提前到 4 槽，延迟被后面的加载盖住，每次调用 2.52 → 1.34 毫秒，加法顺序和写栅栏不变，输出逐位相同。")
+    y0 = f.header("dKV 散射：在途加载 2 → 4 槽，一次调用快 47%",
+                  "先量带宽锚点和利用率，再拆账，最后才动手；单卡单测，640 宽，回放形状的合成输入（生产核跑它 2.55 毫秒，profile 实测 2.56）",
+                  [(GY2, "峰值锚点"), (BL, "生产核"), (OR, "加载在等"), (PU, "加进累加区")])
+    PH = 330
+    W1, W2 = 430, 380
+    py = f.panel(0, y0, W1, PH, "Ⓐ 带宽锚点（两核，TB/s）", BL)
+    rows = (("顺序搬运峰值", B["seq"], GY2), ("scatter-add 峰值", B["sadd"], GY2), ("现状（按字节）", B["now"], BL), ("同配置：16 行／2 槽", B["prod"], BL))
+    X0, SC = 170, 62.0
+    for i, (lab, v, col) in enumerate(rows):
+        yy = py + 30 + i * 56
+        f.t(X0 - 12, yy + 20, lab, INK, True, 13, "end")
+        f.box(X0, yy + 4, v * SC, 24, col, col, 3)
+        f.t(X0 + v * SC + 8, yy + 21, "%.2f" % v, col if col != GY2 else GY, True, 13)
+    f.t(24, py + PH - 52, "利用率 ＝ 1.32 ÷ 2.33 ＝ %d%%：" % N.DSA_SCAT_UTIL, BL, True, 13.5)
+    f.t(24, py + PH - 28 - 0, "已顶到同深度的上限，空间在加深在途", BL, False, 13)
+    f._pan = None
+    RX = W1 + 20
+    py2 = f.panel(RX, y0, W2, PH, "Ⓑ 一次调用 2.56 毫秒由什么组成", OR)
+    cols = (OR, BL, "#669df6", "#aecbfa")
+    yy = py2 + 30
+    for j, (nm, pc) in enumerate(N.DSA_SCAT_FIT):
+        f.box(RX + 24, yy, pc * 4.4, 30, cols[j], cols[j], 3)
+        f.t(RX + 24 + pc * 4.4 + 10, yy + 21, "%d%%　%s" % (pc, nm), INK, True, 13)
+        yy += 48
+    f.t(RX + 24, py2 + PH - 52, "每个范围多半只有一条描述符：", GY, False, 13)
+    f.t(RX + 24, py2 + PH - 28, "2 槽时每条加载的延迟都露在外面", OR, True, 13)
+    f._pan = None
+    RX2 = RX + W2 + 20
+    W3 = W - RX2
+    py3 = f.panel(RX2, y0, W3, PH, "Ⓒ 每个子核的流水（示意）", GR)
+    UU = 30.0
+    for r, (lab, k, ms) in enumerate((("2 槽", 2, U[2]), ("4 槽", 4, U[4]))):
+        yy = py3 + 40 + r * 120
+        f.t(RX2 + 20, yy + 18, lab, INK, True, 14)
+        x = RX2 + 70
+        for i in range(4):
+            if k == 2:
+                lx = x + i * 3.0 * UU
+            else:
+                lx = x + i * 1.2 * UU
+            f.box(lx, yy, 2.0 * UU, 20, "#fde1cd", OR, 3, sw=1)
+            ax = lx + 2.0 * UU if k == 2 else x + 2.0 * UU + i * 1.2 * UU
+            f.box(ax, yy + 26, 1.0 * UU, 20, PU, PU, 3)
+        f.t(RX2 + 70, yy + 72, "每次调用 %.2f 毫秒" % ms, GR if k == 4 else GY, True, 13.5)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "只把加载提前，加法顺序和写栅栏不变：输出和 2 槽逐位相同；3 槽和 4 槽差不多，4 槽已顶到本地缓冲的容量", [])
+    yb = f.src(yb + 10,
+               "实测（单卡，一个设备的两颗小核）：纯搬运锚点由单独的带宽小程序测，规模照生产；顺序 HBM→共享内存→HBM 每描述符 32 行／4 槽 3.17 TB/s，间接 scatter-add 进共享内存 32 行／4 槽 2.33 TB/s，"
+               "生产核的配置（16 行／2 槽）1.24 TB/s。现状：每次调用 HBM 字节 3.38 GB（由真实挑选回放统计）÷ 2.56 毫秒 ＝ 1.32 TB/s。",
+               "拟合：对 28 种构造输入做最小二乘，时间 ≈ 每条描述符固定开销 ＋ 每字节 ＋ 每个被碰子 tile，平均误差 2.8%；每个范围的固定开销约为 0。"
+               "加深在途：加载最多超前「槽数 − 1」条，可越过块尾的排空和写栅栏，加法仍按原顺序发；每个槽各有自己的加载和加法信号量。640 宽 2／3／4 槽每次 2.52／1.43／1.34 毫秒，输出与 2 槽逐元素逐位相同。")
+    f.save("fig8b-dsa-slots.svg", yb + 14)
+
+
+def fig_shift():
+    P = N.DSA_SCAT_PATH
+    f = Fig(W, "小核上省了 756 毫秒（两核合计），一步只省 200 毫秒。两颗小核并行，单核墙钟约省 370 毫秒；其中约 220 毫秒原本在关键路径上，"
+               "约 150 毫秒本来就藏在主核计算底下；主核因为抢 HBM 慢了约 21 毫秒（推断）。256K 一步 6.518 → 6.318 秒，主核等待合计 1348 → 1126 毫秒；新瓶颈换成了和稀疏核无关的几项。")
+    y0 = f.header("小核省 756 毫秒，一步只省 200：只有关键路径上的那一截兑现",
+                  "每根条是上一根里还剩多少（毫秒）",
+                  [(PU, "小核时间"), (BL, "关键路径"), (RD, "抵消"), (GR, "一步实际省")])
+    PH = 50 + 58 * len(P)
+    py = f.panel(0, y0, W, PH, "从小核省下的，到一步省下的", BL)
+    X0, SC = 330, 0.95
+    cols = (PU, PU, BL, RD, GR)
+    for i, ((lab, v), col) in enumerate(zip(P, cols)):
+        yy = py + 30 + i * 58
+        f.t(X0 - 14, yy + 21, lab, INK, True, 14, "end")
+        if v < 0:
+            f.box(X0 + 200 * SC, yy + 4, -v * SC * 4, 26, RD, RD, 3)
+            f.t(X0 + 200 * SC - v * SC * 4 + 10, yy + 22, "%d　（条长放大 4 倍）" % v, RD, True, 13.5)
+        else:
+            f.box(X0, yy + 4, v * SC, 26, col, col, 3)
+            f.t(X0 + v * SC + 10, yy + 22, "%d" % v, col, True, 14)
+    f.t(X0 + 220 * SC + 90, py + 30 + 2 * 58 + 22, "另约 150 本来就藏在主核计算底下", GY, False, 13)
+    f._pan = None
+    yb = f.band(py + PH + 20, "warn", "阿姆达尔定律加关键路径转移：省下的只有卡在关键路径上的那一截兑现；关键路径一换，下一刀就要换目标", [])
+    yb = f.src(yb + 10,
+               "实测（256K，同作业，第 12–21 步中位）：2 槽 6.518 秒、3 槽 6.326 秒、4 槽 6.318 秒（−3.1%），loss、梯度范数、indexer loss 24 步逐位。"
+               "profile：dKV 散射的小核时间每步 861／778 → 461／422 毫秒；主核等异步完成合计 1348 → 1126 毫秒。",
+               "推断：单核墙钟按两核各自省下的 400／356 毫秒取约 370；主核抢 HBM 变慢约 21 毫秒是由 222 毫秒等待减少与 200 毫秒步时减少之差推出，没单独验证。"
+               "等待减少的大头：S 层反向散射 −60、F 层反向 128 宽散射 −41、排在散射后面的注意力权重重收 −33、S 层反向行收集 −29 毫秒。")
+    f.save("fig8b-dsa-shift.svg", yb + 14)
+
+
 if __name__ == "__main__":
     fig_uni()
     fig_order()
@@ -394,3 +484,5 @@ if __name__ == "__main__":
     fig_flat()
     fig_pot()
     fig_budget()
+    fig_slots()
+    fig_shift()
