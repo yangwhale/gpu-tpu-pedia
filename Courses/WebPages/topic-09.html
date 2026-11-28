@@ -892,7 +892,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（主核、小核）、<b>专题五</b>（FSDP、all-gather）、<b>专题七</b>（MFU、读一条通信）、<b>专题八</b>（尺子）</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>一次课，主线约 119 分钟</b>（讲稿一字不落念完约 111 分钟，其余留给互动）</span>
+    <span class="chip">⏱ <b>一次课，主线约 120 分钟</b>（讲稿一字不落念完约 112 分钟，其余留给互动）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -5991,7 +5991,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </div></section>
 <section id="s十二"><div class="wrap"><div class="stn"><span class="badge">第 十二 节</span><h2>稀疏核进了整模型：排先后、守正确、调度的边界</h2></div>
   <p class="station">旁线续 · 公开 Hy4 的稀疏注意力（DSA）· 四个长度一套配置之后</p>
-  <p class="lead">第十一节收在 256K 2.18 倍。之后又走了一段：<b>四个长度统一成一套配置，32K 0.95 倍、64K 1.19 倍、128K 1.62 倍、256K 2.35 倍</b>（真实挑选回放、全层蒸馏、同作业对稠密）。这一段攒下了写核与排程的三条通用规矩：要排先后用真实依赖；梯度别靠浮点相等定位；异步写要等写完。再往后是两条边界：把两层循环拍平为什么反而慢，小核的先进先出队列让调度能挪动多少；最后是冲 3 倍的预算，以及它指出的第一刀：dKV 散射加深在途加载，256K 再快 3.1%。</p>
+  <p class="lead">第十一节收在 256K 2.18 倍。之后又走了一段：<b>四个长度统一成一套配置，32K 0.95 倍、64K 1.19 倍、128K 1.62 倍、256K 2.35 倍</b>（真实挑选回放、全层蒸馏、同作业对稠密）。这一段攒下了写核与排程的三条通用规矩：要排先后用真实依赖；梯度别靠浮点相等定位；异步写要等写完。再往后是两条边界：把两层循环拍平为什么反而慢，小核的先进先出队列让调度能挪动多少；最后是冲 3 倍的预算，以及它指出的两刀：dKV 散射加深在途加载、top-k 车道错开一位，256K 合计再快 4.7%，到 2.465 倍。</p>
 
   <h3 id="s12-1">12.1　四个长度一套配置：0.95／1.19／1.62／2.35 倍</h3>
   <p>第十一节的推荐配置按长度分两套。在同一份新代码上重测，256K 那一套在四个长度上都更快（比 32K／64K／128K 原来的推荐快 0.24／0.15／0.19 秒），于是统一成一套：</p>
@@ -6756,6 +6756,337 @@ def after(idx, dep):
 </svg><figcaption><b>从上往下看条一截截变短：两核合计 756，最后只有 200 落到一步上。</b><span class="capmore"><br><em>256K，同作业 profile；21 毫秒那一行是推断。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（256K，同作业，第 12–21 步中位）：2 槽 6.518 秒、3 槽 6.326 秒、4 槽 6.318 秒（−3.1%），loss、梯度范数、indexer loss 24 步逐位。profile：dKV 散射的小核时间每步 861／778 → 461／422 毫秒；主核等异步完成合计 1348 → 1126 毫秒。</p>
 <p>推断：单核墙钟按两核各自省下的 400／356 毫秒取约 370；主核抢 HBM 变慢约 21 毫秒是由 222 毫秒等待减少与 200 毫秒步时减少之差推出，没单独验证。等待减少的大头：S 层反向散射 −60、F 层反向 128 宽散射 −41、排在散射后面的注意力权重重收 −33、S 层反向行收集 −29 毫秒。</p></details></figure>
   <p>两颗核并行，单核墙钟只省约 370 毫秒；其中约 220 毫秒原本在关键路径上，约 150 毫秒本来就藏在主核计算底下；主核因为抢 HBM 又慢了约 21 毫秒（推断，没单独验证）。省下来的小核时间还顺带让排在散射后面的通信早完成，新的瓶颈换成了和稀疏核无关的几项。<b>先量带宽锚点和利用率再动手；把稀疏核自己的核做快，小核腾出空来，通信也跟着藏进去。</b></p>
+
+  <h3 id="s12-9">12.9　再一刀：top-k 车道错开一位</h3>
+  <p>小核上第二大的稀疏核活是挑 top-k：每个 query 从 262,144 个 key 里挑 2048 个。算法两级：第一级把每行切成 8 个列块、每块 32,768 列，每个列块用直方图法（把分数当整数位，先按高位数一遍定区间，最多细分 3 级）选出 2048 个；第二级在 8 × 2048 个候选里再选。两颗小核共 32 条车道，每条把一个列块 128 KB 搬进本地小内存，用向量指令扫；一次调用 8192 行，分 256 波、每波 32 行。第一级每次约 1.83 毫秒、每步 176 次，每颗小核每步约 323 毫秒，有效带宽却只有顺序峰值的 21%，<b>不卡在字节上</b>。</p>
+<figure class="fbox fwide" id="fig-dsa-rot"><svg viewBox="0 0 1400 586" width="100%" role="img" aria-label="top-k 第一级：每个 query 的 262,144 个 key 切 8 个列块，一次调用 8192 行分 256 波发给 32 条车道，每波 32 行。行号 ＝ query × 8 ＋ 列块号，原来第 w 波车道 flat 拿 w × 32 ＋ flat 行，所以车道永远拿同一个列块号；因果下前几个列块几乎都可见、后几个列块很多是空行，整次调用等最忙的车道。左：原映射每条车道一整列同色，错开以后每条车道把所有列块号轮一遍。右：单测，可见 1/4、1/2、3/4 时原映射都是 2.91 毫秒，错开后 1.11、1.69、2.31 毫秒，全可见不变。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">top-k 车道错开一位：时间终于跟着工作量走</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：前 8 条车道 × 前 8 波（示意，可见一半时），格子颜色深 ＝ 这一行要扫满，浅 ＝ 空行；右：第一级每次调用的毫秒数（单测）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">要扫满的行</text>
+<rect x="125.4" y="63" width="14" height="14" rx="3" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="146" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">空行</text>
+<rect x="203.76" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="224" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">原映射</text>
+<rect x="297.8" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="318" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">每波错开一位</text>
+<rect x="0" y="102" width="700" height="360" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="700" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="700" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="700" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 谁拿到哪个列块（示意：前 4 个列块可见）</tspan></text>
+<text class="svgsm" x="40" y="158" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">原映射：车道 flat 拿列块号 flat</tspan></text>
+<rect x="70" y="176" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="192" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="96" y="176" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="107" y="192" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="122" y="176" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="133" y="192" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="148" y="176" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="159" y="192" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="174" y="176" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="185" y="192" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="200" y="176" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="211" y="192" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="226" y="176" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="237" y="192" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="252" y="176" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="192" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="64" y="192" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w0</text>
+<rect x="70" y="202" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="218" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="96" y="202" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="107" y="218" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="122" y="202" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="133" y="218" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="148" y="202" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="159" y="218" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="174" y="202" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="185" y="218" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="200" y="202" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="211" y="218" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="226" y="202" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="237" y="218" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="252" y="202" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="218" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="64" y="218" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w1</text>
+<rect x="70" y="228" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="244" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="96" y="228" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="107" y="244" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="122" y="228" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="133" y="244" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="148" y="228" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="159" y="244" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="174" y="228" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="185" y="244" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="200" y="228" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="211" y="244" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="226" y="228" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="237" y="244" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="252" y="228" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="244" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="64" y="244" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w2</text>
+<rect x="70" y="254" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="270" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="96" y="254" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="107" y="270" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="122" y="254" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="133" y="270" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="148" y="254" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="159" y="270" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="174" y="254" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="185" y="270" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="200" y="254" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="211" y="270" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="226" y="254" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="237" y="270" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="252" y="254" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="270" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="64" y="270" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w3</text>
+<rect x="70" y="280" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="296" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="96" y="280" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="107" y="296" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="122" y="280" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="133" y="296" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="148" y="280" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="159" y="296" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="174" y="280" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="185" y="296" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="200" y="280" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="211" y="296" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="226" y="280" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="237" y="296" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="252" y="280" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="296" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="64" y="296" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w4</text>
+<rect x="70" y="306" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="322" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="96" y="306" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="107" y="322" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="122" y="306" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="133" y="322" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="148" y="306" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="159" y="322" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="174" y="306" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="185" y="322" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="200" y="306" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="211" y="322" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="226" y="306" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="237" y="322" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="252" y="306" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="322" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="64" y="322" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w5</text>
+<rect x="70" y="332" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="348" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="96" y="332" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="107" y="348" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="122" y="332" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="133" y="348" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="148" y="332" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="159" y="348" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="174" y="332" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="185" y="348" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="200" y="332" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="211" y="348" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="226" y="332" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="237" y="348" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="252" y="332" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="348" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="64" y="348" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w6</text>
+<rect x="70" y="358" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="374" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="96" y="358" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="107" y="374" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="122" y="358" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="133" y="374" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="148" y="358" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="159" y="374" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="174" y="358" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="185" y="374" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="200" y="358" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="211" y="374" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="226" y="358" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="237" y="374" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="252" y="358" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="374" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="64" y="374" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w7</text>
+<text class="svgsm" x="70" y="406" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">每列 ＝ 一条车道；格里数字是列块号</text>
+<text class="svgsm" x="70" y="432" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">左边四条车道一直满、右边四条一直空</tspan></text>
+<text class="svgsm" x="370" y="158" fill="#0d652d" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">错开：第 w 波拿 (flat ＋ w) % 32</tspan></text>
+<rect x="400" y="176" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="411" y="192" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="426" y="176" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="437" y="192" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="452" y="176" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="463" y="192" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="478" y="176" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="489" y="192" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="504" y="176" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="515" y="192" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="530" y="176" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="541" y="192" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="556" y="176" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="567" y="192" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="582" y="176" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="593" y="192" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="394" y="192" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w0</text>
+<rect x="400" y="202" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="411" y="218" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="426" y="202" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="437" y="218" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="452" y="202" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="463" y="218" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="478" y="202" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="489" y="218" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="504" y="202" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="515" y="218" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="530" y="202" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="541" y="218" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="556" y="202" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="567" y="218" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="582" y="202" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="593" y="218" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<text class="svgsm" x="394" y="218" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w1</text>
+<rect x="400" y="228" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="411" y="244" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="426" y="228" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="437" y="244" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="452" y="228" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="463" y="244" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="478" y="228" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="489" y="244" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="504" y="228" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="515" y="244" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="530" y="228" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="541" y="244" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="556" y="228" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="567" y="244" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="582" y="228" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="593" y="244" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="394" y="244" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w2</text>
+<rect x="400" y="254" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="411" y="270" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="426" y="254" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="437" y="270" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="452" y="254" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="463" y="270" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="478" y="254" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="489" y="270" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="504" y="254" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="515" y="270" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="530" y="254" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="541" y="270" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="556" y="254" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="567" y="270" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="582" y="254" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="593" y="270" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="394" y="270" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w3</text>
+<rect x="400" y="280" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="411" y="296" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="426" y="280" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="437" y="296" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="452" y="280" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="463" y="296" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="478" y="280" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="489" y="296" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="504" y="280" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="515" y="296" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="530" y="280" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="541" y="296" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="556" y="280" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="567" y="296" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="582" y="280" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="593" y="296" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<text class="svgsm" x="394" y="296" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w4</text>
+<rect x="400" y="306" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="411" y="322" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="426" y="306" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="437" y="322" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="452" y="306" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="463" y="322" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="478" y="306" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="489" y="322" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="504" y="306" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="515" y="322" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="530" y="306" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="541" y="322" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="556" y="306" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="567" y="322" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="582" y="306" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="593" y="322" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<text class="svgsm" x="394" y="322" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w5</text>
+<rect x="400" y="332" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="411" y="348" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="426" y="332" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="437" y="348" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="452" y="332" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="463" y="348" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="478" y="332" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="489" y="348" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="504" y="332" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="515" y="348" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="530" y="332" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="541" y="348" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="556" y="332" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="567" y="348" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="582" y="332" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="593" y="348" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<text class="svgsm" x="394" y="348" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w6</text>
+<rect x="400" y="358" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="411" y="374" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="426" y="358" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="437" y="374" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="452" y="358" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="463" y="374" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="478" y="358" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="489" y="374" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="504" y="358" width="23" height="23" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="515" y="374" fill="#fff" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="530" y="358" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="541" y="374" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="556" y="358" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="567" y="374" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="582" y="358" width="23" height="23" rx="2" fill="#d2e3fc" stroke="#d2e3fc" stroke-width="1.0"/>
+<text class="svgsm" x="593" y="374" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<text class="svgsm" x="394" y="374" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">w7</text>
+<text class="svgsm" x="400" y="406" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">每列 ＝ 一条车道；格里数字是列块号</text>
+<text class="svgsm" x="400" y="432" fill="#0d652d" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每条车道满空各半，一起做完</tspan></text>
+<rect x="724" y="102" width="676" height="360" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="724" y="102" width="676" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="724" y="104" width="676" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="724" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="738" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 第一级每次调用（毫秒）</tspan></text>
+<text class="svgsm" x="822" y="182" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">可见 1/4</tspan></text>
+<rect x="834" y="160" width="406.7" height="20" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1248" y="175" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.90</tspan></text>
+<rect x="834" y="184" width="154.84" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="996" y="199" fill="#0d652d" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.11</tspan></text>
+<text class="svgsm" x="822" y="250" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">可见 1/2</tspan></text>
+<rect x="834" y="228" width="406.7" height="20" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1248" y="243" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.90</tspan></text>
+<rect x="834" y="252" width="236.6" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1078" y="267" fill="#0d652d" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.69</tspan></text>
+<text class="svgsm" x="822" y="318" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">可见 3/4</tspan></text>
+<rect x="834" y="296" width="406.7" height="20" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1248" y="311" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.90</tspan></text>
+<rect x="834" y="320" width="322.84000000000003" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1164" y="335" fill="#0d652d" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.31</tspan></text>
+<text class="svgsm" x="822" y="386" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全可见</tspan></text>
+<rect x="834" y="364" width="407.26" height="20" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1249" y="379" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.91</tspan></text>
+<rect x="834" y="388" width="406.0" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1248" y="403" fill="#0d652d" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.90</tspan></text>
+<text class="svgsm" x="744" y="448" fill="#0d652d" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">错开后 t ≈ 0.52 ＋ 2.39 × 可见比例：接近理想</tspan></text>
+<rect x="0" y="512" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="512" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="512" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="539" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">利用率低未必是字节不够：时间不跟着工作量变，就去查活是怎么分的</tspan></text>
+</svg><figcaption><b>左边比两个格子：原来一列一个颜色，错开以后斜着走；右边看灰条四根一样长，绿条跟着可见比例变短。</b><span class="capmore"><br><em>左边是示意，右边是单卡单测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>实测（单卡单测，一个设备的两颗小核，第一级核时间取自 profiler，3 次中位）：1024 个 query × 262,144 个 key，切成 8 个列块、每块 32,768 列，每行选 top-2048；每条车道把一个列块 128 KB 搬进本地小内存，直方图法（分数当整数位，先按高位数一遍定区间，最多细分 3 级）扫描，只扫可见部分。两种映射的挑选结果逐元素相同。</p>
+<p>生产里第一级每次约 1.83 毫秒、每步 176 次，每颗小核每步约 323 毫秒；有效带宽只占顺序峰值的 21%，不卡在字节上。按生产的全可见时间和平均可见比例 0.5 推算，每颗小核每步约省 115 毫秒；上卡 −107 毫秒。为什么错一格比蛇形（正一次反一次）稳：蛇形只在负载随列块号线性变化时才平衡，错一格让每条车道把所有列块号轮一遍，不依赖分布形状。</p></details></figure>
+  <p>反常在单测里：因果下可见 1/4、1/2、3/4 的时间都是 2.91 毫秒，和全可见一样。<b>时间不随工作量变，说明在等最忙的车道。</b>行号 ＝ query × 8 ＋ 列块号，第 w 波车道 flat 拿 w × 32 ＋ flat 行，于是每条车道永远拿同一个列块号；因果下前几个列块几乎所有 query 都可见、后几个列块很多是空行，前面的车道一直满、后面的一直空。修法是每波错开一位：第 w 波车道 flat 拿 (flat ＋ w) % 32 行，几行代码，挑出的结果一个元素都不变。单测 1/4 → 1.10 毫秒、1/2 → 1.69、3/4 → 2.30，全可见不变；错开后 t ≈ 0.52 ＋ 2.39 × 可见比例，已接近理想。错一格比蛇形（正一次反一次）稳：蛇形只在负载随列块号线性变化时才平衡，错一格让每条车道把所有列块号轮一遍，不依赖分布长什么样。</p>
+  <p><b>上卡（256K，严格同作业）：4 槽 6.316 秒（2.423 倍）→ 加错开 6.209 秒（2.465 倍），−107 毫秒，和推算的每颗小核 115 毫秒对得上；从 12.1 的 6.518 秒算起，两刀合计 −309 毫秒（−4.7%）。256K 已验证。</b>利用率低不一定是带宽问题，也可能是分活不均：负载均衡也是小核上的核要看的一项，先找「时间不随工作量变」这种反常。下一刀是不可见的列块不搬，上限约 46 毫秒。</p>
 <details class="foldfig"><summary><b>考考自己</b>：同事说：一步里主核还有 1.36 秒在等，全藏住就能从 6.45 秒到 5.1 秒，3 倍稳了。你怎么看？</summary><p>先按车道摆账：主核计算本身 5.04 秒，全藏住也只到 5.04，余量约 60 毫秒；小核的活只能在本层段里藏，下限 5.23 秒，已经超了。再问那 1.36 秒能挪多少：多数露出的通信前面计算够，可提早就要在小核队列里插队，被插的若在关键路径上只是换地方等（12.6）。所以要削主核计算本身（逐元素、换布局拷贝约 1.8 秒），再改稀疏核那条依赖链。</p></details>
   <p class="bridge">稀疏核这条旁线到这里收住：省下的计算要落在关键路径上，先后要用真实依赖排。最后一节，把这一路的办法收成一张清单。</p>
 </div></section>

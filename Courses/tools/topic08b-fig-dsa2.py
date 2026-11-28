@@ -476,6 +476,53 @@ def fig_shift():
     f.save("fig8b-dsa-shift.svg", yb + 14)
 
 
+def fig_rot():
+    T = N.DSA_TOPK_T
+    f = Fig(W, "top-k 第一级：每个 query 的 262,144 个 key 切 8 个列块，一次调用 8192 行分 256 波发给 32 条车道，每波 32 行。行号 ＝ query × 8 ＋ 列块号，"
+               "原来第 w 波车道 flat 拿 w × 32 ＋ flat 行，所以车道永远拿同一个列块号；因果下前几个列块几乎都可见、后几个列块很多是空行，整次调用等最忙的车道。"
+               "左：原映射每条车道一整列同色，错开以后每条车道把所有列块号轮一遍。右：单测，可见 1/4、1/2、3/4 时原映射都是 2.91 毫秒，错开后 1.11、1.69、2.31 毫秒，全可见不变。")
+    y0 = f.header("top-k 车道错开一位：时间终于跟着工作量走",
+                  "左：前 8 条车道 × 前 8 波（示意，可见一半时），格子颜色深 ＝ 这一行要扫满，浅 ＝ 空行；右：第一级每次调用的毫秒数（单测）",
+                  [(BL, "要扫满的行"), ("#d2e3fc", "空行"), (GY2, "原映射"), (GR, "每波错开一位")])
+    PH = 360
+    LW = 700
+    py = f.panel(0, y0, LW, PH, "Ⓐ 谁拿到哪个列块（示意：前 4 个列块可见）", BL)
+    CS = 26
+    for g, (title, rot, gx) in enumerate((("原映射：车道 flat 拿列块号 flat", 0, 40), ("错开：第 w 波拿 (flat ＋ w) % 32", 1, 370))):
+        f.t(gx, py + 26, title, GR if rot else RD, True, 13)
+        for w in range(8):
+            for ln in range(8):
+                sl = (ln + w * rot) % 8
+                col = BL if sl < 4 else "#d2e3fc"
+                f.box(gx + 30 + ln * CS, py + 44 + w * CS, CS - 3, CS - 3, col, col, 2)
+                f.t(gx + 30 + ln * CS + (CS - 3) / 2.0, py + 44 + w * CS + 16, str(sl), "#fff" if sl < 4 else BL, True, 11, "middle")
+            f.t(gx + 24, py + 44 + w * CS + 16, "w%d" % w, GY, False, 11, "end")
+        f.t(gx + 30, py + 44 + 8 * CS + 22, "每列 ＝ 一条车道；格里数字是列块号", GY, False, 12)
+        f.t(gx + 30, py + 44 + 8 * CS + 48, ("左边四条车道一直满、右边四条一直空" if not rot else "每条车道满空各半，一起做完"), RD if not rot else GR, True, 13)
+    f._pan = None
+    RX = LW + 24
+    RWd = W - RX
+    py2 = f.panel(RX, y0, RWd, PH, "Ⓑ 第一级每次调用（毫秒）", GR)
+    X0, SC = RX + 110, 140.0
+    for i, (k, lab) in enumerate((("1/4", "可见 1/4"), ("1/2", "可见 1/2"), ("3/4", "可见 3/4"), ("1", "全可见"))):
+        yy = py2 + 24 + i * 68
+        f.t(X0 - 12, yy + 26, lab, INK, True, 13.5, "end")
+        a, b = T[k]
+        f.box(X0, yy + 4, a * SC, 20, GY2, GY2, 3)
+        f.t(X0 + a * SC + 8, yy + 19, "%.2f" % a, GY, True, 12.5)
+        f.box(X0, yy + 28, b * SC, 20, GR, GR, 3)
+        f.t(X0 + b * SC + 8, yy + 43, "%.2f" % b, GR, True, 12.5)
+    f.t(RX + 20, py2 + PH - 44, "错开后 t ≈ 0.52 ＋ 2.39 × 可见比例：接近理想", GR, True, 13)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "利用率低未必是字节不够：时间不跟着工作量变，就去查活是怎么分的", [])
+    yb = f.src(yb + 10,
+               "实测（单卡单测，一个设备的两颗小核，第一级核时间取自 profiler，3 次中位）：1024 个 query × 262,144 个 key，切成 8 个列块、每块 32,768 列，每行选 top-2048；"
+               "每条车道把一个列块 128 KB 搬进本地小内存，直方图法（分数当整数位，先按高位数一遍定区间，最多细分 3 级）扫描，只扫可见部分。两种映射的挑选结果逐元素相同。",
+               "生产里第一级每次约 1.83 毫秒、每步 176 次，每颗小核每步约 323 毫秒；有效带宽只占顺序峰值的 21%，不卡在字节上。"
+               "按生产的全可见时间和平均可见比例 0.5 推算，每颗小核每步约省 115 毫秒；上卡 −107 毫秒。为什么错一格比蛇形（正一次反一次）稳：蛇形只在负载随列块号线性变化时才平衡，错一格让每条车道把所有列块号轮一遍，不依赖分布形状。")
+    f.save("fig8b-dsa-rot.svg", yb + 14)
+
+
 if __name__ == "__main__":
     fig_uni()
     fig_order()
@@ -486,3 +533,4 @@ if __name__ == "__main__":
     fig_budget()
     fig_slots()
     fig_shift()
+    fig_rot()

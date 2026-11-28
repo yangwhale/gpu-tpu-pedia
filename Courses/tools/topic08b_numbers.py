@@ -1235,3 +1235,15 @@ DSA_SCAT_SAVED_SC = sum(DSA_SCAT_SC[0]) - sum(DSA_SCAT_SC[1])
 assert DSA_SCAT_SAVED_SC == 756
 DSA_SCAT_PATH = (("小核时间省（两核合计）", 756), ("单核墙钟（两核并行）", 370), ("其中原在关键路径上", 220), ("主核抢 HBM 变慢（推断）", -21), ("一步实际省", 200))
 assert DSA_SCAT_WAIT[0] - DSA_SCAT_WAIT[1] == 222
+# ── 12.9（11-28 补）：top-k 第一级车道错开 ──
+DSA_TOPK_T = {"1/4": (2.905, 1.106), "1/2": (2.905, 1.690), "3/4": (2.905, 2.306), "1": (2.909, 2.900)}   # 第一级每次调用 ms：原映射 → 每波错开一位（单测）
+DSA_TOPK_FIT = (0.52, 2.39)                # 错开后 t ≈ 0.52 + 2.39 f（ms）
+assert all(abs(DSA_TOPK_FIT[0] + DSA_TOPK_FIT[1] * f - DSA_TOPK_T[k][1]) < 0.06 for k, f in (("1/4", .25), ("1/2", .5), ("3/4", .75), ("1", 1.0)))
+DSA_TOPK_PROD = (1.83, 176, 323, 21)       # 生产第一级每次 ms、每步次数、每颗 SC 每步 ms、有效带宽占顺序峰值 %
+assert abs(1.833 * 176 - 322.6) < 0.1
+DSA_TOPK_STEP = (6.316, 6.209)             # 256K 严格同作业：4 槽、4 槽 ＋ 错开（秒）
+DSA_TOPK_X = (2.423, 2.465)
+assert abs(15.305 / 6.316 - 2.423) < 0.001 and abs(15.305 / 6.209 - 2.465) < 0.001
+assert round((DSA_TOPK_STEP[0] - DSA_TOPK_STEP[1]) * 1000) == 107 and round((6.518 - 6.209) * 1000) == 309 and round((1 - 6.209 / 6.518) * 100, 1) == 4.7
+DSA_TOPK_EST = 115                         # 推算每颗 SC 每步省（0.65 ms × 176）
+assert round((1.833 - (0.52 + 1.31 * 0.5)) * 176) == 116
