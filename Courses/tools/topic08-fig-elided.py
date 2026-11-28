@@ -304,7 +304,7 @@ def fig_verify():
     tcells = [("C", "对齐配置", GY2, "6 份 %s" % N.TV_T["C"], ""), ("attn", "＋补 A · 注意力输入", PU, "均值 %s" % N.TV_ATTN_T, "p %s" % N.TV_ATTN_P),
               ("all", "＋补 A · 两处", PU, "均值 %s" % N.TV_ALL_T, "p %s" % N.TV_ALL_P)]
     panel(LW + GAP, W - LW - GAP, "TPU 一头：补上，尾巴下不下去", BL, tcells, T, "tpu")
-    yb = f.band(y0 + PH + 20, "warn", "清单是候选，不是结论：A 两头都没坐实，B 在 GPU 一头已排除；C 后来在 TPU 一头补过，也不是", [
+    yb = f.band(y0 + PH + 20, "warn", "清单是候选，不是结论：A 两头都没坐实，B 在 GPU 一头已排除；前向几处后来在 TPU 一头补过，也不是", [
         "注意力输入那处 GPU 单开像有一点，可合开就没了，按格数校正 p 0.084，对齐记录推断是偶然；TPU 补上也跟对齐配置分不开。后来前向几处、注意力内核四处也验了，都不是；剩累加顺序没查，这条线暂停。",
     ])
     yb = f.src(yb + 10,
