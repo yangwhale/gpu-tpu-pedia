@@ -735,11 +735,16 @@ table.t9.mini caption { caption-side:top; text-align:left; font-weight:700; colo
 table.t9.mini tr.epsrow td { background:#e6f4ea }
 p.bridge { color:var(--gray); border-left:3px solid var(--line); padding-left:12px }
 </style><style>
-.foundbox{border:2px solid var(--blue);border-radius:12px;padding:10px 18px 6px;margin:18px 0 6px;background:#fff}
+.foundbox{border:2px solid var(--blue);border-radius:12px;padding:10px 18px 6px;margin:18px 0 6px;background:#fff;
+  margin-left:50%;transform:translateX(-50%);width:min(1400px,calc(100vw - 32px));box-sizing:border-box}   /* R18：放到图宽，1366 下一屏 */
+.foundbox details.fmore{display:inline}
+.foundbox details.fmore > summary{display:inline;list-style:none;cursor:pointer;color:var(--blue);font-weight:700;padding:0 4px}
+.foundbox details.fmore > summary::-webkit-details-marker{display:none}
+.foundbox details.fmore[open] > summary{color:var(--gray)}
 .foundbox .ft{font-size:21px;font-weight:700;color:var(--blue)}
 .foundbox .fsub{color:var(--gray);margin:2px 0 4px;font-size:14.5px;line-height:1.6}
 table.ftab{width:100%;font-size:14px;margin:2px 0 4px}
-table.ftab td{padding-top:1px;padding-bottom:1px;line-height:1.4}
+table.ftab td{padding-top:1px;padding-bottom:1px;line-height:1.4;vertical-align:baseline}
 table.ftab th{padding-top:2px;padding-bottom:2px}
 table.ftab td.fimp{color:var(--ink);font-size:13.5px}
 table.ftab td:last-child{white-space:nowrap}
@@ -902,8 +907,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <em>不可能一位不差。能要求的是：TPU 跟 GPU 的差，不比 GPU 自己跟自己的差大。</em>
   </div>
   <p style="max-width:820px;color:var(--gray)">
-    先把地基铺平，再学两类指标和一把噪声尺子，弄清浮点和硬件在哪儿舍入，然后跟着一次真实的排查走到底：
-    TPU 的 loss 三百步以后平均比 GPU 低约 1.7e-4（逐步相对差的平均），查到最后，答案在一个谁都没怀疑的地方；再跟第二个案例：两种数学等价的并行方式对不上，这回又是谁的差？</p>
+    先铺平地基，学会两类指标和一把噪声尺子，弄清硬件在哪儿舍入，再跟两次真实的排查走到底：
+    TPU 的 loss 平均比 GPU 低约 1.7e-4，算错了吗？两种数学等价的并行对不上，又是谁的差？</p>
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）；浮点格式 §5.1 现讲</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
@@ -932,34 +937,33 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <div class="wrap" id="found">
 <div class="foundbox">
   <div class="ft">开场：真正查清的 18 处</div>
-  <p class="fsub">后两次迁移，两边为对上改了七十来处（改动台账 119 行，去掉诊断开关、工具和只核对不改的），编译器省掉的舍入一份程序就有 272 处，多数盖不过 GPU 自己的噪声。下面 18 处是三次迁移加混元 4 的一个长上下文配置里真正查清的（最后两行出自那个长上下文配置）；点「在哪讲」跳过去。</p>
-  <p class="fnote">R：离 FP64 的距离之比（<a href="#s4-2">§4.2</a>）；r：曲线上的差 ÷ GPU 自己的噪声上限，过 2 判不过（<a href="#s3-3">§3.3</a>）；格：末位差几格（<a href="#s5-5">§5.5</a> 折叠）。</p>
   <table class="t9 ftab"><thead><tr><th>查出来的现象</th><th>影响多大</th><th>在哪讲</th></tr></thead><tbody>
 <tr class="fgrp"><td colspan="3"><b>写的，不是生效的</b>　<span>3 处</span></td></tr>
-<tr><td>权重衰减：GPU 框架模板里两个默认值分了家，优化器写 0.1、调度器写 0.033，调度器每步覆盖</td><td class="fimp">0.1 一步都没用上，实际 0.033，差 3 倍；GPU↔TPU 曲线上看不出</td><td><a href="#s2-3">§2.3</a></td></tr>
-<tr><td>「存下路由、反向不重选」，配错一种重算策略就被悄悄忽略</td><td class="fimp">平均 2.4% 的 token（最多 3.05%）按另一套路由算梯度；参数范数 r 4.56，存下路由后 2.27</td><td><a href="#s2-3">§2.3 折叠</a></td></tr>
-<tr><td>TF32 开关说的不算：只关 PyTorch 的，另一条路照样走 TF32；设环境变量全关了，开关读回来反倒是「开」</td><td class="fimp">FP32 矩阵乘离 FP64（64 位双精度，当靶心用）：只关 PyTorch 开关时那条仍是 2.94e-4，设 <code>NVIDIA_TF32_OVERRIDE=0</code> 全关才到 1.15e-6；GPU↔TPU 曲线上看不出</td><td><a href="#s5-5">§5.5 折叠</a></td></tr>
+<tr><td>权重衰减：GPU 框架模板里两个默认值分了家，优化器写 0.1、调度器写 0.033，调度器每步覆盖</td><td class="fimp">实际生效 0.033，0.1 一步没用上<details class="fmore"><summary>…</summary>：差 3 倍；GPU↔TPU 曲线上看不出</details></td><td><a href="#s2-3">§2.3</a></td></tr>
+<tr><td>「存下路由、反向不重选」，配错一种重算策略就被悄悄忽略</td><td class="fimp">平均 2.4% 的 token 按另一套路由算梯度<details class="fmore"><summary>…</summary>：最多 3.05%；参数范数 r 4.56，存下路由后 2.27</details></td><td><a href="#s2-3">§2.3 折叠</a></td></tr>
+<tr><td>TF32 开关说的不算：只关 PyTorch 的，另一条路照样走 TF32；设环境变量全关了，开关读回来反倒是「开」</td><td class="fimp">离 FP64：只关 PyTorch 的 2.94e-4，全关 1.15e-6<details class="fmore"><summary>…</summary>：FP32 矩阵乘离 FP64（64 位双精度，当靶心用）的距离；全关是设 <code>NVIDIA_TF32_OVERRIDE=0</code>；GPU↔TPU 曲线上看不出</details></td><td><a href="#s5-5">§5.5 折叠</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>在哪儿舍、怎么舍</b>　<span>6 处</span></td></tr>
-<tr><td>GPU 张量核每 16 个乘积抹一次零</td><td class="fimp">同一次求和越长越偏：合成输入长 65,536 时朝零偏 3.1e-4（相对）</td><td><a href="#s5-2">§5.2</a></td></tr>
-<tr><td>4 个设备上验过的程序，换到 8 个设备，一次求和从舍 1 次变成舍 6 次</td><td class="fimp">那批投影离 FP64：TPU 2.35e-3，GPU 1.66e-3，R 1.41；代码一行没改</td><td><a href="#s5-3">§5.3</a></td></tr>
-<tr><td>名义 FP32 的输出头，在 TPU 默认精度下只算一遍 BF16；第 1 步看不出</td><td class="fimp">权重离开格点后 logits 误差是真 FP32 的约 5000 倍（本课复算：1.9e-3 对 3.7e-7，在模拟离格 10 步的权重上测）；前 300 步主 loss r 7.32，换 high 档 1.03</td><td><a href="#s5-5">§5.5</a></td></tr>
-<tr><td>TPU 默认的 exp、log 图快不图准</td><td class="fimp">v5p 上 exp 最多差 105 格、log 62 格（GPU ≤ 2 格）；单算子离 FP64 最多是 GPU 的 8.68 倍；GPU↔TPU 曲线上看不出</td><td><a href="#s5-5">§5.5 折叠</a></td></tr>
+<tr><td>GPU 张量核每 16 个乘积抹一次零</td><td class="fimp">长 65,536 的求和朝零偏 3.1e-4（相对）<details class="fmore"><summary>…</summary>：合成输入；同一次求和越长越偏</details></td><td><a href="#s5-2">§5.2</a></td></tr>
+<tr><td>4 个设备上验过的程序，换到 8 个设备，一次求和从舍 1 次变成舍 6 次</td><td class="fimp">那批投影离 FP64 是 GPU 的 1.41 倍<details class="fmore"><summary>…</summary>：TPU 2.35e-3，GPU 1.66e-3（R 1.41）；代码一行没改</details></td><td><a href="#s5-3">§5.3</a></td></tr>
+<tr><td>名义 FP32 的输出头，在 TPU 默认精度下只算一遍 BF16；第 1 步看不出</td><td class="fimp">前 300 步主 loss r 7.32，换 high 档 1.03<details class="fmore"><summary>…</summary>：权重离开格点后 logits 误差是真 FP32 的约 5000 倍（本课复算：1.9e-3 对 3.7e-7，在模拟离格 10 步的权重上测）</details></td><td><a href="#s5-5">§5.5</a></td></tr>
+<tr><td>TPU 默认的 exp、log 图快不图准</td><td class="fimp">v5p 上 exp 最多差 105 格（GPU ≤ 2 格）<details class="fmore"><summary>…</summary>：log 62 格；单算子离 FP64 最多是 GPU 的 8.68 倍；GPU↔TPU 曲线上看不出</details></td><td><a href="#s5-5">§5.5 折叠</a></td></tr>
 <tr><td>一个 Python 常数（log₂e）跟着 BF16 的 q 一起被舍</td><td class="fimp">注意力 logits 整体放大 1.8e-3</td><td><a href="#s5-5">§5.5 折叠</a></td></tr>
-<tr><td>MTP 头的梯度舍成 BF16 之前，两边乘的系数不同（GPU ×0.1，TPU ×0.1 再除以 token 数）</td><td class="fimp">正确词那一项挤在一个 BF16 格距里，两边舍的方向相反；1000 步 MTP 偏到尺子的 3.02–4.28 倍；诊断已定位（TPU 改在 GPU 的尺度上舍，回到 0.15–0.68 倍）；修法定了、还没收尾</td><td><a href="#mtp-head">§5.5 折叠</a></td></tr>
+<tr><td>MTP 头的梯度舍成 BF16 之前，两边乘的系数不同（GPU ×0.1，TPU ×0.1 再除以 token 数）</td><td class="fimp">1000 步 MTP 偏到尺子的 3.02–4.28 倍<details class="fmore"><summary>…</summary>：正确词那一项挤在一个 BF16 格距里，两边舍的方向相反；诊断已定位（TPU 改在 GPU 的尺度上舍，回到 0.15–0.68 倍）；修法定了、还没收尾</details></td><td><a href="#mtp-head">§5.5 折叠</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>编译器替你省掉的舍入</b>　<span>2 处</span></td></tr>
-<tr><td>RMSNorm scale 那次「舍成 BF16」：4K 程序里在，32K 程序里 8 个全被删</td><td class="fimp">没补时 1000 步主 loss r 7.8，不过；二分时只补这一处降到尺子的 0.54 倍，补别处的都还在 28 倍左右</td><td><a href="#s5-4">§5.4</a></td></tr>
-<tr><td>三份梯度相加，两边舍的次数不一样</td><td class="fimp">主 loss 判待定（r 1.55）：第 551–1000 步对 GPU 16 份均值偏 ＋9.4e-6，照 GPU 写法全补上还剩 ＋6.9e-6；被省是推断，残余没定责</td><td><a href="#s9-1">§9.1</a></td></tr>
+<tr><td>RMSNorm scale 那次「舍成 BF16」：4K 程序里在，32K 程序里 8 个全被删</td><td class="fimp">1000 步主 loss r 7.8，不过<details class="fmore"><summary>…</summary>：二分时只补这一处降到尺子的 0.54 倍，补别处的都还在 28 倍左右</details></td><td><a href="#s5-4">§5.4</a></td></tr>
+<tr><td>三份梯度相加，两边舍的次数不一样</td><td class="fimp">主 loss 待定（r 1.55），残余没定责<details class="fmore"><summary>…</summary>：第 551–1000 步对 GPU 16 份均值偏 ＋9.4e-6，照 GPU 写法全补上还剩 ＋6.9e-6；被省是推断</details></td><td><a href="#s9-1">§9.1</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>一个专家的梯度大得离谱</b>　<span>2 处</span></td></tr>
-<tr><td>第 1 步，一个专家的梯度差得最远：TPU 的专家矩阵乘算错了吗？</td><td class="fimp">第 1 步 TPU 对 GPU 的 rel_L2：比到的 50 个张量合起来 1.28e-3，一个专家的梯度 0.102，是它的约 80 倍；是不是算错，<a href="#s4-3">§4.3</a> 揭晓</td><td><a href="#s4-3">§4.3</a></td></tr>
-<tr><td>视觉塔自己不选专家，q、k 的梯度照样越线</td><td class="fimp">R 1.21–1.53，越过 1.2；原因跟上一行是同一件事（<a href="#s4-3">§4.3</a> 折叠）</td><td><a href="#vit-flip">§4.3 折叠</a></td></tr>
+<tr><td>第 1 步，一个专家的梯度差得最远：TPU 的专家矩阵乘算错了吗？</td><td class="fimp">差距是全部张量合起来的约 80 倍<details class="fmore"><summary>…</summary>：第 1 步 TPU 对 GPU 的 rel_L2，比到的 50 个张量合起来 1.28e-3，这个专家的梯度 0.102；是不是算错，<a href="#s4-3">§4.3</a> 揭晓</details></td><td><a href="#s4-3">§4.3</a></td></tr>
+<tr><td>视觉塔自己不选专家，q、k 的梯度照样越线</td><td class="fimp">R 1.21–1.53，越过 1.2<details class="fmore"><summary>…</summary>：原因跟上一行是同一件事（<a href="#s4-3">§4.3</a> 折叠）</details></td><td><a href="#vit-flip">§4.3 折叠</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>两个案例，一个编译器 bug</b>　<span>3 处</span></td></tr>
-<tr><td>TPU 的主 loss 三百步以后平均比 GPU 低约 1.7e-4：TPU 算错了吗？</td><td class="fimp">第 301–1000 步对一份 GPU 基线的带符号均值 −1.66e-4（相对）；第 1000 步参数范数多涨 2.1e-2（绝对差，参数范数约 3042）。答案在一个谁都没怀疑的地方</td><td><a href="#s七">第七节</a></td></tr>
-<tr><td>DDP 和 FSDP 数学等价，曲线却超出噪声</td><td class="fimp">词嵌入梯度离 FP64：纯数据并行 1.51e-2，GPU 4.17e-3，R 3.62；全出在 39 个词上</td><td><a href="#s八">第八节</a></td></tr>
+<tr><td>TPU 的主 loss 三百步以后平均比 GPU 低约 1.7e-4：TPU 算错了吗？</td><td class="fimp">第 301–1000 步带符号均值 −1.66e-4（相对）<details class="fmore"><summary>…</summary>：对一份 GPU 基线；第 1000 步参数范数多涨 2.1e-2（绝对差，参数范数约 3042）。答案在一个谁都没怀疑的地方</details></td><td><a href="#s七">第七节</a></td></tr>
+<tr><td>DDP 和 FSDP 数学等价，曲线却超出噪声</td><td class="fimp">词嵌入梯度离 FP64 是 GPU 的 3.62 倍<details class="fmore"><summary>…</summary>：纯数据并行 1.51e-2，GPU 4.17e-3（R 3.62）；全出在 39 个词上</details></td><td><a href="#s八">第八节</a></td></tr>
 <tr><td>一个 FP32 开关打开，一块梯度凭空没了</td><td class="fimp">r 冲到 611</td><td><a href="#s8-2">§8.2</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>TPU 程序自己出的错：参照不稳，后面的比较都不作数</b>　<span>2 处</span></td></tr>
-<tr><td>同一份程序、同样的输入，复跑 92 次有 2 次在某一步分开：TPU 复跑不是逐位的吗？</td><td class="fimp">分开那一步梯度范数只差相对 4e-7，没报错、曲线看不出；根子在一个自写内核只等「读完」、不等「写完」；修好的代价：每步慢约 0.1%</td><td><a href="#s10-3">§10.3</a></td></tr>
-<tr><td>总梯度范数只差 9e-6，一层路由的梯度却少了约 5%：梯度是怎么丢的？</td><td class="fimp">反向靠「两个数相等」找位置，编译器重算出的那份末位变了（推断），约 5% 的位置对不上，那层路由权重梯度只剩 0.948 倍；开关修好，代价：每步慢约 2%</td><td><a href="#s10-4">§10.4</a></td></tr>
+<tr><td>同一份程序、同样的输入，复跑 92 次有 2 次在某一步分开：TPU 复跑不是逐位的吗？</td><td class="fimp">梯度范数只差相对 4e-7，曲线看不出<details class="fmore"><summary>…</summary>：分开那一步；没报错；根子在一个自写内核只等「读完」、不等「写完」；修好的代价：每步慢约 0.1%</details></td><td><a href="#s10-3">§10.3</a></td></tr>
+<tr><td>总梯度范数只差 9e-6，一层路由的梯度却少了约 5%：梯度是怎么丢的？</td><td class="fimp">那层路由权重的梯度只剩 0.948 倍<details class="fmore"><summary>…</summary>：反向靠「两个数相等」找位置，编译器重算出的那份末位变了（推断），约 5% 的位置对不上；开关修好，代价：每步慢约 2%</details></td><td><a href="#s10-4">§10.4</a></td></tr>
   </tbody></table>
+  <p class="fnote">后两次迁移，两边为对上改了七十来处（改动台账 119 行，去掉诊断开关、工具和只核对不改的），编译器省掉的舍入一份程序就有 272 处，多数盖不过 GPU 自己的噪声。下面 18 处是三次迁移加混元 4 的一个长上下文配置里真正查清的（最后两行出自那个长上下文配置）；点「在哪讲」跳过去。「…」点开看细数。R：离 FP64 的距离之比（<a href="#s4-2">§4.2</a>）；r：曲线上的差 ÷ GPU 自己的噪声上限，过 2 判不过（<a href="#s3-3">§3.3</a>）；格：末位差几格（<a href="#s5-5">§5.5</a> 折叠）。</p>
 </div>
 </div>
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>什么叫对齐</h2></div>
@@ -1158,7 +1162,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </details>
 
   <h3 id="s1-4">1.4　这一讲跟着走的那一次</h3>
-  <p>混元 3 截前 4 层，GPU B200×8 搬到 TPU v5p（8 颗芯片）。地基全部逐位，第 1 步 loss 只差 2.5e-6；可是三百步以后，TPU 的 loss 平均比 GPU 低约 1.7e-4，参数范数也多涨一截。方法是通用的；具体的数只对这个设置（截 4 层、1000 步、学习率 1e-5 不变）成立。</p>
+  <p>混元 3 截前 4 层，GPU B200×8 搬到 TPU v5p（8 颗芯片）。地基全部逐位，第 1 步 loss 只差 2.5e-6；可是三百步以后，TPU 的 loss 平均比 GPU 低约 1.7e-4（逐步相对差的平均），参数范数也多涨一截。方法是通用的；具体的数只对这个设置（截 4 层、1000 步、学习率 1e-5 不变）成立。</p>
   <details class="foldfig"><summary><b>这一讲用到的几组运行</b>：① 到 ⑥ 是哪几份 GPU 运行、各用在哪，用到时回这儿查</summary>
   <table class="t9"><thead><tr><th>这一讲用到的几组运行</th><th>多少</th><th>用在哪</th></tr></thead><tbody>
   <tr><td>① GPU 默认设置</td><td>10 份</td><td>第 1 步那几级（L0–L3）的参照；第一节的尺子、<a href="#s3-3">§3.3</a> 的基线贴边；<a href="#s7-5">§7.5</a> 的零点是另跑的同设置 4 份（带探针）的均值</td></tr>
@@ -3410,7 +3414,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>窗口的两条细则</b>：只有一份原始数据；每个统计量是整窗一个数</summary>
   <p>两个窗口读的是同一条 dₜ 序列，只是求平均的范围不同；每个统计量是整个窗口算出的<b>一个数</b>，不是逐步的滑动平均。窗口写哪段，事先写进协议。</p></details>
   <details class="foldfig" id="s3-curves"><summary><b>三类曲线谁更灵、各自的盲区</b>：loss、梯度范数、参数范数；第二次迁移故意埋错的证据</summary>
-  <p>loss 是结果，范数是总量。混元 3 那次，三个被比的量里<b>参数范数最先冲出去</b>：它是个累加器，只换顺序的差这步正、下步负，按步数的平方根散开；丢了精度的差有固定方向，按步数长。跑得够久，再小的系统偏差也会冲出噪声带：</p>
+  <p>loss 是结果，范数是总量。混元 3 那次，三个被比的量里<b>参数范数最先冲出去</b>：它是个累加器，只换顺序的差这步正、下步负，按步数的平方根散开；丢了精度的差有固定方向，按步数长。下面的示意模拟里，只要偏差一直朝一边，跑得够久，再小也会冲出噪声带（长跑上没验证过）：</p>
 <figure class="fbox fwide" id="fig-integrator"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="两块。左块：横轴是训练步数 0 到 1000，纵轴是累加起来的差。十二条灰色细线是只有随机噪声的累加，像醉汉走路，散开的宽度按步数的平方根长，灰色阴影是正负两倍平方根的噪声带。虚线 400 步是平均意义上偏差追上带边的地方，单条蓝线早一点晚一点出带都正常。蓝线每步多一个只有噪声十分之一大的固定偏差，前几百步埋在带里，四五百步以后冲出去，越走越远。右块：两支一样长的箭头指向不同方向，长度就是参数范数，所以范数分不出它们；下面两根条，一组多涨一点、一组少涨一点，平方和加起来不变。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">参数范数是个累加器：噪声按根号长，偏差按步数长</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：示意模拟（固定种子），每步一个随机增量；蓝线每步另多一个固定的小偏，只有噪声的十分之一。右：范数只看长度，看不见方向</text>
@@ -13618,9 +13622,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   ③ 超线的都已对 FP64 定责。<b>第③条不替代第②条</b>：噪声判不过的，定责只说明原因，第②条仍记不满足，接不接受由验收方决定。</div>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/d727f0a8323c0d6fddd7c46ddf9ec2d8fef39a1f/docs/reference/principles.md">代码：签字原则（「什么时候能签字」一节）</a></p>
   <div class="note"><span class="t">这门课带走的三句话</span>
-  <b>一、拿 GPU 自己的重跑当尺子</b>：TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差，当参照的那一份也要查。<br>
+  <b>一、拿 GPU 自己的重跑当尺子</b>：TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了就查到底是谁的差，当参照的那份也要查。<br>
   <b>二、超了就对 FP64 定责</b>：离真值远了 1.2 倍以上才是丢了精度，找到多舍的那一步；没变远就只是换了加法顺序，不修。<br>
-  <b>三、换了条件就要重验</b>：设备数、梯度累积、步数、芯片、运行库，换一样，之前的验证就不作数；精度验证在生产的设备数上做，改完代码先离线编译看一眼。</div>
+  <b>三、换了条件就要重验</b>：设备数、梯度累积、步数、芯片、运行库，换一样，之前的验证就不作数；精度验证在生产的设备数上做，<span style="white-space:nowrap">改完代码</span>先离线编译看一眼。</div>
+
+  <p>这门课只回答两边训的是不是同一个模型；对最终效果的影响我们没测过：下游评测没测，几十万步的长训、带衰减的学习率调度也没跑过（<a href="#s10-6">§10.6</a> 练习「经理问能不能上线」）。</p>
 
   <h3 id="s10-6">10.6　拿回去用：清单、速查卡、排查表、练习</h3>
   <p>这一节留给要在自己的模型上做一次对齐的人。前四个折叠按用的顺序排；后面是延伸阅读和出处台账。</p>
