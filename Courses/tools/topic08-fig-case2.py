@@ -258,11 +258,11 @@ def fig_swap():
                "细线是 4 个状态、12 个 batch 的范围，结论都一样。")
     y0 = f.header("同一个起点，各算一步：GPU 每一步都少走一点　——　<tspan font-weight=\"700\">TPU 几乎正好</tspan>",
                   "柱长 ＝ 这一步沿「TPU − GPU 权重差」方向，比同一步全 FP32 精确算的那一步少走了漂移本身的百分之几（往左 ＝ 少走）；细线 ＝ 12 个 batch 的范围",
-                  [(BL, "TPU"), (GR, "GPU，只换FP32 dgrad"), (RD, "GPU")])
+                  [(BL, "TPU"), (GR, "GPU，只换 FP32 dgrad"), (RD, "GPU")])
     PH = 300
     py = f.panel(0, y0, W, PH, "同一状态、同一批数据（实测，全体参数）", BL)
     X0, SC = 900, 1600                      # 0 点在 X0；每 1% 1600 px → 0.5% ＝ 800 px
-    cols = {"TPU 生产程序": BL, "GPU 只换FP32 dgrad": GR, "GPU 生产程序": RD}
+    cols = {"TPU 生产程序": BL, "GPU 只换 FP32 dgrad": GR, "GPU 生产程序": RD}
     f.line(X0, py + 20, X0, py + 260, INK, 1.6, arrow=False)
     f.t(X0 + 8, py + 16, "精确值", INK, True, 13)
     for i, (lab, v, (lo, hi)) in enumerate(N.SWAP):
@@ -306,7 +306,7 @@ def fig_exact():
                "灰色是 GPU 四次运行自己的散布。")
     y0 = f.header("精确轨迹站在 TPU 一边　——　<tspan font-weight=\"700\">可它自己也还差一步才到真精确</tspan>",
                   "零点 ＝ 4 次默认 GPU 运行的平均（不重算配置）；往右 ＝ 离 GPU 越远；精确轨迹 ＝ BF16 权重、全程 FP32（真关 TF32），可它的输出头长求和是 FP32 一次累加，中后期自己会偏，改成分段才到真精确",
-                  [(GR, "GPU 只换FP32 dgrad"), (PU, "精确轨迹"), (BL, "TPU"), (GY2, "GPU 自己的散布（灰底）")])
+                  [(GR, "GPU 只换 FP32 dgrad"), (PU, "精确轨迹"), (BL, "TPU"), (GY2, "GPU 自己的散布（灰底）")])
     PH = 122
     y = y0
     for title, pts, vmax, ref, fmt in EXACT_ROWS:

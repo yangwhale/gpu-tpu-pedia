@@ -248,6 +248,7 @@ def fig_ihcroot():
     # 11-28：全课不提标准差（numbers 11-15 注）；灰底改成跟下一张 fig8-twoway 同一口径：GPU 16 份留一法窗口均值的最高值
     f.box(BX0, py2 + 14, BX(N.FC_GPU_HI) - BX0, 5 * 40 + 10, "#eceff1", "#eceff1", 0)
     f.t(BX0 + 4, py2 + 5 * 40 + 40, "灰底：GPU 16 份每份对其余 15 份，最高 " + N.tx(N.FC_GPU_HI, "%.1e", plus=True), GY, size=12)
+    f.t(BX0 + 4, py2 + 5 * 40 + 60, "绿条旁两颗空心小点：两份运行各自的值；绿条是两份的平均", GY, size=12)   # 11-28 编辑 M（逐图评审 R13）
     for i, (lab, v, col, each) in enumerate(bars):
         y = py2 + 22 + i * 40
         f.t(RX + 14, y + 19, lab, col if col != GY2 else GY, True, 13)

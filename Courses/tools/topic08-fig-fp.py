@@ -632,6 +632,9 @@ def fig_normscale():
     _abs = []
     for lab, v, r in rows:
         if v is None:
+            # 11-28 编辑 M：组标题被网格竖线穿过 —— 垫一条白底
+            _w = sum(13.5 if ord(ch) > 0x2000 else 7.8 for ch in lab) + 8
+            f.box(px + 12, y, _w, 20, "#fff", "none", 3)
             f.t(px + 16, y + 14, lab, GY, True, 13)
             y += 22
             continue
