@@ -104,7 +104,7 @@ def fig_head():
     （对齐记录 case01-exact-head-dgrad.json）；原来的交叉熵、真 FP32 两根来自另一组张量，挪进出处。"""
     f = Fig(W, "同一批数据（第 1 步、一个 microbatch），输出头反向沿「所有 logits 一起动」方向对 FP64 的相对误差，对数刻度："
                "GPU BF16 张量核 4.4e-4，TPU 生产配置 2.6e-5，约十七分之一；TPU 精确档 1.2e-6。")
-    y0 = f.header("少掉的那一点，在 GPU 输出头反向那一次长求和里",
+    y0 = f.header("输出头反向那一次长求和：三种算法各离 FP64 多远",
                   "柱长 ＝ 沿「所有 logits 一起动」方向的相对误差（对数刻度，一格 ＝ 十倍，越短越准），参照 FP64；三根是同一批数据",
                   [(RD, "GPU 张量核"), (BL, "TPU"), (GR, "精确档")])
     rows = [("GPU 输出头反向，BF16", "dh ＝ dlogits · W，沿词表 12 万项求和", abs(N.HEADX_GPU), RD),
