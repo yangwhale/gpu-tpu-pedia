@@ -5393,7 +5393,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <details class="foldfig"><summary><b>考考自己</b>：尾段 loss 的带符号均值 r ＝ 1.6，MARE r ＝ 0.9，最大单步 r ＝ 0.7，怎么判？</summary><p>三个量里最差的决定结论：1.6 落在 1–2 倍之间，判待定。待定不能直接签：先加参照重判；再看纯噪声按同一口径能到多少（<a href="#s3-4">§3.4</a>）—— 这里只看尾段 loss 一条，1000 步、16 份时纯噪声在这一条上最高 1.23，1.6 已经超了，往下一级去定责；拿整次比较的 1.82 来比就比松了。</p></details>
   <div class="note"><span class="t">手里只有一个「平均差多少」时，先做三件不花钱的事</span>
   ① 核口径：是不是窗口内逐步<b>相对</b>差的<b>带符号</b>均值；第 1 步单独看；窗口避开两条轨迹还没分开的头一段，学习率有预热的也避开预热。② 看第 1 步 loss 的相对差：明显大过前向舍入（本例 2.5e-6），先查地基（第二节）。③ 拿手里已有的几份 GPU，同一窗口、同一口径两两算一遍：TPU 的差是它的几倍，整个窗口是不是一直同号。</div>
-  <p class="bridge">这一节留下的问题：偏在哪一层、哪个张量？</p>
+  <p class="bridge">这一节留下的问题：这个差是 TPU 的，还是 GPU 的？</p>
 </div></section>
 
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>指标（二）：张量</h2></div>
@@ -10007,7 +10007,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <video src="media/topic08-chain.mp4?v=fd32bfc1" autoplay loop muted playsinline data-pauses="1.70,4.30,6.90,9.50,12.10,24.10"
        aria-label="五环一条链：每一步少推一点，几百步积出来。每一环是下一环的原因；底下的时钟是训练步数。① GPU 输出层 dgrad：12 万长的求和朝零少了一点（第 1 步以截断为主；中途另有吞小项，那部分是推断），每一步少推约 6.5e-4（沿所有 logits 一起动的方向，第 1 步实测；第 100 步 6.1e-4），每一步都少推、量级一样。② 主干权重沿这个方向每一步少走一点：整步沿漂移方向少走 0.36%（全体参数，同一状态实测），第 0 层最先歪，第 0 层里大头在注意力的输出投影。③ 所有 logits 一起偏一截（lse 差，TPU 减 GPU）；softmax 看不见它。第 25 步 −0.0016，第 50 步 −0.016，第 100 步 −0.078，第 300 步 −0.218。④ 冷门词那几行压多压少跟着 logit 整体水平走（梯度很小，Adam 的归一化保护失效：92% 的元素根号 v 小于 ε）；没出现过的词那几行平方和多涨 17.1（第 300 步实测）。⑤ 参数范数多涨，第 300 步 4.6e-3；按组拆输出层占 87%（另测一对，合计 4.4e-3）；loss 偏低（去掉那股力后参数范数还剩三成；loss 的机制未验证）。时钟走起来：①② 每一步都一样，③④⑤ 一步步积起来。第 300 步：每步只差一点、同一个方向，积成看得见的漂移。灰色是 GPU 两次之间；时钟上白色的是探针实测的那几步。五环都标实测。"></video>
 <figcaption><b>同一个小差每一步都一样，积到第 300 步就成了看得见的漂移。</b>
-  <span class="sub">（可一步一步看。第 3 环每 25 步一个实测点（12 个），点间连直线；第 4 环只有第 300 步一个实测值，走到第 300 步才出现；⑤ 是逐步实测。）</span></figcaption></figure>
+  <span class="sub">（可一步一步看。第 3 环每 25 步一个实测点（12 个），点间连直线；第 4 环只有第 300 步一个实测值，走到第 300 步才出现；⑤ 是逐步实测。各环标的「实测」指数字；第 1 环里「吞小项」那半是推断。）</span></figcaption></figure>
 <details class="foldfig"><summary><b>考考自己</b>：冷门词那些行的梯度大小两边几乎一样（√v̂ 只差 0–4%），为什么 TPU 上它们被压得少？（从初值算起 GPU 缩了 66.3、TPU 缩了 49.2；扣掉两边一样的权重衰减那一份 31.8，GPU 多缩 34.5、TPU 只多缩约 17，少一半。）</summary><p>Adam 的更新量大小两边差不多，差在方向：更新和这一行权重之间的夹角两边不一样，从第 25 步起就分开了。这些行梯度很小，Adam 按大小归一化的保护失效，更新几乎跟梯度成正比，方向上一点系统差原样进了更新，一步步积成范数差。</p></details>
 <details class="foldfig"><summary><b>考考自己</b>：为什么「GPU 把 dgrad 换成 FP32」和「精确轨迹」都要跑满 1000 步，不能只看第 1 步？</summary><p>第 1 步那股力只差约 6.5e-4（相对），单看一步、对 GPU 噪声比根本看不出；它是每一步同向地少一点，要累积几百步才显出 loss、lse 和参数范数的差。比的是轨迹，所以要跑满。</p></details>
   <p class="bridge">这一节留下的问题：同一份代码只换并行方式，数学上等价，曲线却对不上 —— 这回又是谁的差？</p>
@@ -10986,7 +10986,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </div></section>
 
 <section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>一条查不完的尾巴</h2></div>
-  <p class="lead">这一节讲第二次迁移里查得最久的一件：一条主 loss 的尾巴，排除了一圈、找到了主因、补上以后还剩一截。剩下那截到现在没查完；这一节带走的是查它时用的一招：编一次、扫一遍。</p>
+  <p class="lead">这一节讲第二次迁移里查得最久的一件：一条主 loss 的尾巴，排除了一圈、找到了主因、补上以后还剩一截。剩下那截到现在没查完；这一节带走的是查它时用的一招：编一次、扫一遍，清单只是候选，两头上卡验证才算数。它挡不挡签字：现行对齐配置下这条主 loss 判过（0.98）；第二次迁移还没签字，卡在别的几项（<a href="#s9-7">§9.7</a> 折叠）。</p>
   <h3 id="s9-1">9.1　一条主 loss 的尾巴</h3>
   <h4>尾巴和两头验证</h4>
   <p>第二次迁移换成现行对齐配置之前，小尺寸的主 loss 判了待定（1.55 倍）：八份 TPU 全部比 GPU 高，第 50–100 步有个小鼓包，中间贴着零，第 550 步以后一路往上爬。八份同一个方向，不像噪声；同一份权重上两边前向几乎没差，所以是训练里一步步攒出来的。</p>
@@ -12046,6 +12046,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 实测（v7x）：第一笔 ＋8.697e-3（GPU 精确改分段累加 ＋8.55e-3）；第二笔 −6.836e-3（TPU 只把 dlogits 舍成 BF16、其余全精确）；第三笔由差额得出，约两个 FP32 记录刻度。v5p 那组：＋7.97e-3、−6.10e-3、＋4.9e-4，同样合到 ＋2.35e-3。GPU 真精确只多舍这一次 dlogits 少漂 6.74e-3。</p></details></figure>
   <p>早先有一版拆账把 ④ 当成了精确值，而 ④ 自己也偏，那一版作废。</p>
   <p>为什么验收要分两关？像打靶：噪声尺子是同一把枪连打几发，看弹孔散得多开；它看不出整团弹孔偏离了靶心。golden 自己偏，就是靶心画歪了。所以第一关对着重画的靶心（⑤）判过不过，第二关写清旧靶心（生产 golden ②）歪在哪、歪多少。</p>
+  <p><b>这算不算挪球门？</b>对没改过的生产 golden ②，TPU 仍然不过（参数范数带符号均值约 24 倍噪声），第二关写的就是这一截。⑤ 定为正式基线时，TPU 对它的结果已经看过，所以它站不站得住，只靠不依赖 TPU 的证据：GPU 那次长求和对 FP64 每步少推（第 1 步 6.5e-4，<a href="#s7-4">§7.4</a>）；只用 GPU 也闭合 —— GPU 精确轨迹加分块、再把流进输出头反向的梯度舍成 BF16，跟 ⑤ 的参数范数差在噪声内；⑤ 跟 ② 只差这一处，段长 1024 在跑 ⑤ 之前就定了。</p>
 <figure class="fbox fwide" id="fig-twolayer"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="定案后的验收协议。上一层：第一关，必须过。TPU 被测对修好的 golden ⑤ 的一份比，⑤ 是 GPU 生产程序只把输出头 dgrad 改成分段累加；尺子是 ⑤ 自己同设置重跑 10 份、两两 45 对。v5p 和 v7x 当前配置每一项都在噪声内，最差 0.85 倍。旁边只报不判：TPU 只改执行参数的 9 份扰动运行，8 份不超过 0.85 倍，1 份（v7x 只改注意力分块）梯度范数待定，按 GPU 尺子判就是待定，不拿 TPU 自己的散布解释。下一层：第二关，已解释差异。TPU 对 GPU 生产 golden ② 仍差参数范数 +0.0209（全部）、第 301–1000 步 loss −1.37e-4（主要）来自 GPU 输出头 dgrad 长求和的偏差。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">golden 自己有偏差时：分两关验收（定案版）</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上 ＝ 必须过的那一关；下 ＝ 只写清楚、不判过不过的那一关；箭头 ＝ 谁对谁比</text>
@@ -12099,7 +12100,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 实测：第二关对 ②：参数范数 ＋2.09e-2，loss −1.37e-4（v5p）；v7x −1.07e-4（直接算）。定案前的旧协议：对精确轨迹、尺子 ③ 10 对，v5p 参数范数 3.45 倍。</p></details></figure>
 
   <h3 id="s9-5">9.5　今天的结论</h3>
-  <div class="note"><span class="t">结论：对齐了，1000 步这一级最差是噪声上限的 0.85 倍</span>
+  <div class="note"><span class="t">结论：1000 步这一级全过，最差是噪声上限的 0.85 倍；第 1 步整步梯度这一项按签字原则不满足</span>
   第一关的基线定为修好的 golden（⑤）：GPU 生产程序只把输出头那次求和改成升 FP32 再分块；基线取它的一份，尺子是它自己 10 份同设置重跑、两两 45 对。</div>
   <table class="t9"><thead><tr><th>平台 · 配置</th><th>loss 全程</th><th>loss 尾段</th><th>梯度范数</th><th>参数范数</th><th>学习率</th></tr></thead><tbody>
   <tr><td>v5p 当前对齐配置</td><td>0.80 ✅</td><td>0.80 ✅</td><td>0.85 ✅</td><td>0.50 ✅</td><td>逐位 ✅</td></tr>
@@ -12107,7 +12108,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>v5p EP＝8</td><td>0.76 ✅</td><td>0.78 ✅</td><td>0.74 ✅</td><td>0.48 ✅</td><td>逐位 ✅</td></tr>
   <tr><td>v7x EP＝8</td><td>0.77 ✅</td><td>0.81 ✅</td><td>0.68 ✅</td><td>0.35 ✅</td><td>逐位 ✅</td></tr>
   </tbody></table>
-  <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 0.85 倍</b>；按专家切（EP＝8）也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden ② 的差（参数范数 ＋0.0209，loss −1.37e-4（v5p；这里是验收用的整层重算配置、对 GPU 生产 5 份均值，所以跟第七节对一份基线的 −1.66e-4 不一样；<a href="#s9-2">§9.2</a> 折叠的 −1.34e-4 是开关打开前那一版 TPU）），在第二关写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
+  <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 0.85 倍</b>；按专家切（EP＝8）也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden ② 的差（参数范数 ＋0.0209，loss −1.37e-4（v5p；这里是验收用的整层重算配置、对 GPU 生产 5 份均值，所以跟第七节对一份基线的 −1.66e-4 不一样；<a href="#s9-2">§9.2</a> 折叠的 −1.34e-4 是开关打开前那一版 TPU）），在第二关写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。第 1 步整步的梯度和优化器状态用噪声判不过：机理查到了、不累积，可一部分张量 R 还没压到 1.2 以内；按签字原则这一项不满足，接不接受交验收方决定（下面「第 1 步的张量换过尺子」折叠末条）。</p>
   <details class="foldfig"><summary><b>换一份当基线会怎样</b>：「全过」是对事先定下的那一份说的</summary>
   <p>基线事先定为 ⑤ 的第一份。事后把十份逐份都当一次基线、尺子不变重判：单条检查的 r 在十份基线之间最多差 0.47，四条取最差以后最多差 0.33；v5p 两个配置、v7x 按专家切十份基线全过，v7x 当前配置有 3 份基线落进待定（最差 1.11），没有不过。这正是 <a href="#s3-3">§3.3</a> 说的代价：基线自己也是一个样本，能挪一个 N 以内。所以报结论时写清「对哪一份基线」。</p></details>
   <details class="foldfig"><summary><b>TPU 不是挑出来的好样本</b>：9 份只改执行参数的扰动运行</summary>
@@ -12135,7 +12136,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>整步超出并集的部分对 FP64 定责</b>（只用来分清谁离精确更远，不当门槛）：把每个张量的误差按梯度大小加权合起来，整网 R 1.20（v5p）／ 1.21（v7x）。投影、共享专家、稠密 MLP 的梯度 R 0.45–0.96，TPU 更接近精确；路由专家与路由权重 0.76–1.32（v5p；v7x 最高 1.44），两边差不多远，来自路由近平局；一维 norm 权重、输出层、词嵌入的梯度大多是 TPU 更远，最高 2.2（v7x 2.7）。</li>
     <li><b>后面那一处的机制</b>（逐一用诊断改动验证过）：TPU 框架把这几类 FP32 参数先转成 BF16 再用，梯度在每个设备、每份小批上先舍成 BF16 存下来（落地），再累加回 FP32；GPU 框架把权重梯度直接累加进 FP32。三个地方：RMSNorm 把 scale 舍到 BF16（JAX 在反向对梯度也舍一次）；输出层先把权重转成 BF16 再乘，权重梯度也以 BF16 输出；词嵌入整张表先转 BF16 再取行，反向把梯度加回各行（scatter-add）也在 BF16 里。逐处改掉后 R（v5p，按组）：RMSNorm 的 scale 1.35 → 0.58；输出层 1.60 → 0.91；embedding 1.21 → 0.87；三处一起，整网 1.20 → 0.67，第 1 步 loss 一位不变。</li>
     <li><b>对应的开关</b>：三个，默认关，前向不变（第 1 步 loss 一位不变），步时 v5p ＋0.79%、v7x ＋1.6%（100 步对比）。它只管这一处，路由翻转那一份不受影响；v7x 上整网 R 1.21 → 0.72。打开以后 1000 步对 ⑤ 复核过：v5p 全过（loss 全程 0.88、尾段 0.91、梯度范数 0.79、参数范数 0.60、路由偏置曲线 0.85）；v7x loss 全程 0.78、尾段 0.73、参数范数 0.53、路由偏置曲线 0.68 过，梯度范数待定，最大单步 1.05 倍（带符号均值 0.10 倍、MARE 0.97 倍）。<b>没有加进正式对齐配置</b>，是可选开关：1000 步这一级不需要它，只有想让第 1 步这三类梯度不比 GPU 离 FP64 远时才开。</li>
-    <li><b>签字清单里「第 1 步的噪声检查全部过」这一项</b>：按签字原则不满足；超线处的机理都已查到、实测不累积，但其中一部分张量 R 还没压到 1.2 以内，没达到定责线；接不接受由使用方决定。</li>
+    <li><b>签字清单里「第 1 步的噪声检查全部过」这一项</b>：按签字原则不满足；超线处的机理都已查到、实测不累积，但其中一部分张量 R 还没压到 1.2 以内，没达到定责线；接不接受由验收方决定。</li>
   </ul></details>
   <details class="foldfig"><summary><b>想两边对得更紧，要动哪些开关</b>：TPU 一侧必需两项、推荐两项，GPU 一侧一处，各有代价</summary>
   <ul>
@@ -13297,7 +13298,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </details>
   <p>修法只在那三样同时成立时生效；golden 用修后的代码重跑逐位不变、程序指纹也不变 —— 修 bug 的改动自己先过了「数学不变」那一行。</p>
   <p>指纹变了，再按下面这张流程分流。这里拿 TPU 自己的执行噪声当尺子，跟 <a href="#s4-3">§4.3</a>「被测不给自己定门槛」不打架：验收问「在不在 GPU 的噪声里」，尺子只能取 GPU；回归问「跟上次比变没变」，可以拿 TPU 只改执行方式的散布当参照（<a href="#s3-4">§3.4</a> 折叠）。</p>
-<figure class="fbox fwide" id="fig-regress"><svg viewBox="0 0 1400 586" width="100%" role="img" aria-label="每天的流程。训练代码的每个改动都要写一栏数值影响声明，然后跑一轮回归，对上一次全部通过的 TPU 运行比。逐位相同就通过，指针前移。不逐位就看声明：写了数学不变的，退回；执行级的改动或升级依赖，用 TPU 自己的执行噪声（TPU 28 对）判；数学级的改动，要对修好的 golden ⑤ 不变差（基线是验收事先定下的那一份，尺子是它自己 10 份两两 45 对；2026-11-15 由起点那份 golden ① 换过来），必要时回到验收的某一级重做。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-regress"><svg viewBox="0 0 1400 586" width="100%" role="img" aria-label="每天的流程。训练代码的每个改动都要写一栏数值影响声明，然后跑一轮回归，对上一次全部通过的 TPU 运行比。逐位相同就通过，指针前移。不逐位就看声明：写了数学不变的，退回；执行级的改动，用 TPU 自己的执行噪声（TPU 28 对）判；升级依赖先在新版本上建基准、重标这份噪声，重标之前判不了；数学级的改动，要对修好的 golden ⑤ 不变差（基线是验收事先定下的那一份，尺子是它自己 10 份两两 45 对；2026-11-15 由起点那份 golden ① 换过来），必要时回到验收的某一级重做。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">日常回归：先要求逐位，不逐位再按声明分流</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">方块 ＝ 一个环节；菱形 ＝ 一个判断；参照不是 GPU，是上一次全部通过的 TPU 运行（LKG）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -13331,7 +13332,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1230" y="224" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">没写声明的也按这条处理</text>
 <rect x="1080" y="262" width="300" height="66" rx="10" fill="#fff" stroke="#e8710a" stroke-width="2"/>
 <text class="svgsm" x="1230" y="290" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">执行级 / 升级依赖</tspan></text>
-<text class="svgsm" x="1230" y="314" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">容差门：TPU 执行噪声（TPU 28 对）</text>
+<text class="svgsm" x="1230" y="314" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">容差门：TPU 执行噪声；升级依赖先重标</text>
 <rect x="1080" y="352" width="300" height="76" rx="10" fill="#fff" stroke="#9334e6" stroke-width="2"/>
 <text class="svgsm" x="1230" y="380" fill="#681da8" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">数学级</tspan></text>
 <text class="svgsm" x="1230" y="404" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">对齐门：对修好的 golden 不变差</text>
@@ -13358,7 +13359,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>「会改数值」那一行的细节</b></summary>
   <p>写明是<b>执行级</b>（只改舍入位置，比如融合、分块变了）还是<b>数学级</b>（公式、精度、算法变了），以及会影响哪些检查；执行级用 TPU 执行噪声判，数学级对修好的 golden ⑤（GPU 生产＋分段累加）不能变差：基线是验收事先定下的那一份，尺子是它自己 10 份两两 45 对。这道门原先挂在起点那份 GPU golden（<a href="#s9-2">§9.2</a> 的①）上，是两关验收定下来之前设的，2026-11-15 换成了 ⑤；本课没有引用过按旧那份算出的数学级读数，所以没有要重算的数。自己搭回归时，也对验收用的那份基线判。</p>
   <p><b>声明「会改数值」，不等于真会变，照样先看逐位</b>：路由打分那个开关（<a href="#s10-4">§10.4</a> 坑表「反向靠浮点相等找位置」）改成默认打开时，混元 3 截 4 层的两档回归对上一代全部逐位，指针直接前移、不用批准。可同一个开关在发现它的那份配置上（v7x 128 个设备），前向末位会变、每步贵约 2% —— 又一次印证「开关没效果」只对测它的那份配置成立。</p></details>
-  <p><b>指纹一样只说明程序没改；这份程序复跑逐不逐位，要另外验。</b>XLA 把一步训练编成一份程序，累加的先后在编译期就定死，所以同一份产物、同输入、同切分复跑，必须逐位（单切片上实测成立，定为规矩；官方文档里没有这样的书面保证，我们没查到；多切片没测）。硬件也有带加法的 DMA：自写内核用它、又不等写完成，先后就由时序定了。所以不逐位只有三种来源：输入或环境其实不同、自写内核里的异步竞争、硬件出错；差 1e-7 也要查到底。</p>  <p>混元 4 的一个长上下文配置（不在三次迁移里）碰上了第二种：同一份产物复跑 92 次，2 次在某一步分开，梯度范数只差相对 4e-7，没报错、曲线看不出。根子是一个自写的 SparseCore 内核往同一个累加位置连发两笔加法，只等第一笔「读完源」就发第二笔：</p>
+  <p><b>指纹一样只说明程序没改；这份程序复跑逐不逐位，要另外验。</b>XLA 把一步训练编成一份程序，累加的先后在编译期就定死，所以同一份产物、同输入、同切分复跑，必须逐位（单切片上实测成立，定为规矩；官方文档里没有这样的书面保证，我们没查到；多切片没测）。硬件也有带加法的 DMA：自写内核用它、又不等写完成，先后就由时序定了。所以不逐位只有三种来源：输入或环境其实不同、自写内核里的异步竞争、硬件出错；差 1e-7 也要查到底。这也是签字的前提（签字条件第一条，<a href="#s10-5">§10.5</a> 签字卡）。</p>  <p>混元 4 的一个长上下文配置（不在三次迁移里）碰上了第二种：同一份产物复跑 92 次，2 次在某一步分开，梯度范数只差相对 4e-7，没报错、曲线看不出。根子是一个自写的 SparseCore 内核往同一个累加位置连发两笔加法，只等第一笔「读完源」就发第二笔：</p>
 <figure class="fbox fwide" id="fig-race"><svg viewBox="0 0 1400 568" width="100%" role="img" aria-label="左右两块，横轴都是时间。两块都画了两笔带加法的写，块 1 和块 2 都要往累加器里同一个位置加一笔，每笔先读源、再写进累加器。左块只等读：块 1 的源一读完，wait 就返回，内核马上发块 2；块 2 的写比块 1 先落地，两笔加法颠倒。右块每块之后发一次 4 KiB 的本地拷贝并等它写完，这一等把之前发出的写都围住，块 2 永远在块 1 落地之后才开始。底下用起点 1、块 1 加 2 的 24 次方、块 2 减 2 的 24 次方这组数：按顺序在 FP32 里得 0，颠倒得 1。单卡微基准：不加栅栏 75 次里 3732 个元素读到旧值，加栅栏 0 个；修法每步约多 3 到 6 毫秒。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">复跑偶尔差一位：内核只等「读完」，没等「写完」</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">两笔加法都落在累加器的同一个位置上，先后一换，FP32 舍入就不同；横轴是时间，没有刻度（每笔写要多久没测过）</text>
@@ -13597,7 +13598,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul></details>
 
   <h3 id="s10-5">10.5　回到开头</h3>
-  <p><b>TPU 没算错。</b>TPU 的 loss 低约 1.7e-4，按噪声尺子是真偏差；查到最后，大头偏在 GPU 的 golden：<b>一次 12 万长的求和，每一步都朝零少算了一点</b>。改成分块累加、拿它当基线，v5p、v7x 每一项都在噪声内（最差 0.85 倍）。第二个案例里，两种数学等价的并行对不上，查到最后是一次加法的组织方式。</p>
+  <p><b>TPU 没算错。</b>TPU 的 loss 低约 1.7e-4，按噪声尺子是真偏差；查到最后，大头偏在 GPU 的 golden：<b>一次 12 万长的求和，每一步都朝零少算了一点</b>。改成分块累加、拿它当基线，v5p、v7x 1000 步每一项都在噪声内（最差 0.85 倍）；第 1 步整步梯度用噪声判不过、机理查到，按签字原则这一项不满足，交验收方决定（<a href="#s9-5">§9.5</a>）。第二个案例里，两种数学等价的并行对不上，查到最后是一次加法的组织方式。</p>
+  <div class="note"><span class="t">签字卡：三条都满足，才能说「对齐了」</span>
+  ① 地基逐位、两边可复现：L0 全部逐位；TPU 同一份程序复跑逐位（<a href="#s10-3">§10.3</a>）。<br>
+  ② 用噪声判的检查全过、没有方向性偏移；待定不能直接签，先加参照重判。<br>
+  ③ 超线的都已对 FP64 定责。<b>第③条不替代第②条</b>：噪声判不过的，定责只说明原因，第②条仍记不满足，接不接受由验收方决定。</div>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/d727f0a8323c0d6fddd7c46ddf9ec2d8fef39a1f/docs/reference/principles.md">代码：签字原则（「什么时候能签字」一节）</a></p>
   <div class="note"><span class="t">这门课带走的三句话</span>
   <b>一、拿 GPU 自己的重跑当尺子</b>：TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差，当参照的那一份也要查。<br>
   <b>二、超了就对 FP64 定责</b>：离真值远了 1.2 倍以上才是丢了精度，找到多舍的那一步；没变远就只是换了加法顺序，不修。<br>
@@ -13703,7 +13709,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
     <li>你的「FP32 参照」对 FP64 的 rel_L2 是 3e-4，GPU 的 BF16 程序是 6.5e-4。能拿它当参照吗？
       <br><em>答：不能。<a href="#s5-5">§5.5</a> 实测：真关 TF32 的 FP32 矩阵乘对 FP64 是 1.15e-6，走 TF32 时 2.94e-4；本课清单留了余量，线取 1e-5。3e-4 说明它多半走了 TF32。先真关 TF32（环境变量），启动时实测一遍再用。</em></li>
     <li>定案前，迁移验收第一关 3.45 倍不过，loss 待定。经理问能不能上线，你怎么答？（再想想：定案以后怎么答。）
-      <br><em>答：先说协议结论：第一关不过，不能签字。定案以后：第一关全过（最差 0.85 倍），对 GPU 生产 golden 的差全部写成已解释差异（GPU 输出头 dgrad 的长求和），剩下几格各有机制；下游评测没测，带条件上线还缺下游评测和更长的运行。一般地给四行：已解释的部分（几成是 GPU golden 自己的偏差）；没解释的部分和下一步；下游没测；要带条件上线，还缺哪些证据、止损线设在哪（样子比如：上线后保留 GPU 并跑，loss 尾段 r 超过 2 或下游评测掉过线就回退；具体数按业务定）。能不能上线是业务判断，拿这四行去定。</em></li>
+      <br><em>答：先说协议结论：第一关不过，不能签字。定案以后：第一关全过（最差 0.85 倍），对 GPU 生产 golden 的差全部写成已解释差异（GPU 输出头 dgrad 的长求和）；第 1 步整步梯度噪声判不过、机理查到，按签字原则这一项不满足，交验收方决定；下游评测没测，带条件上线还缺下游评测和更长的运行。一般地给四行：已解释的部分（几成是 GPU golden 自己的偏差）；没解释的部分和下一步；下游没测；要带条件上线，还缺哪些证据、止损线设在哪（样子比如：上线后保留 GPU 并跑，loss 尾段 r 超过 2 或下游评测掉过线就回退；具体数按业务定）。能不能上线是业务判断，拿这四行去定。</em></li>
     <li>换一个词表 25 万的模型，输出层 dgrad 那次长求和的朝零偏差，会比 12 万时更大还是更小？
       <br><em>答：多半更大：求和越长，截掉的总量越多（抹零每一单只会让绝对值变小）；词表越大，失去 Adam 归一化保护的冷门行也越多（推断）。<a href="#s7-4">§7.4</a> 真实输出头上，K 从 16,384 到 120,832，偏差从 6.9e-5 涨到 6.5e-4，比线性还快；外推到 25 万是推断，没测过；合成输入在 12 万处偏差反而降，可能是库换了算法，所以「更大」不保证。要么在 GPU 上把这一次 dgrad 改成分段累加（升 FP32 不分段也偏，<a href="#s7-5">§7.5</a>），要么至少在第一关前，拿训练中途的状态先测它沿关键方向对 FP64 的偏差。</em></li>
     <li>一项辅助 loss 每行约 1e-4，从约 7 的 log-sum-exp 里减出来。TPU 记下的比 GPU 低 1e-3（相对），GPU 重跑几乎不散，判「不过」。先查什么？
