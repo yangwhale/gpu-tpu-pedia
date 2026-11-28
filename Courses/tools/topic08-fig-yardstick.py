@@ -275,7 +275,7 @@ def fig_twoaxis():
                 f.t(X(x) - 12 if y > 1.2 else X(x) + 10, Y(y) + 5 if y > 1.2 else Y(y) - 8,
                     ("词嵌入梯度 %.1f 倍" % y) if y > 1.2 else "词嵌入", RD, True, 13, "end" if y > 1.2 else None)
         f.t(ax1 - 8, ay1 - 30, "超出噪声 %d／160" % nover, INK, True, 13, "end")
-        f.t(ax1 - 8, ay1 - 10, ("离真值变远：%d" % nfar) if nfar else "离真值变远：0 → 换了顺序", RD if nfar else GR, True, 13, "end")
+        f.t(ax1 - 8, ay1 - 10, "离真值变远 %d／160" % nfar, RD if nfar else GR, True, 13, "end")
         f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "超出噪声不等于出错：离真值没变远，就是换了顺序；变远了，才是丢了精度", [
         "换 v7x，画出的张量九成超出 GPU 的噪声，可一个都没离真值更远；纯数据并行、关省舍入，飞得远的都是词嵌入梯度 —— 查哪里，一眼就知道。",

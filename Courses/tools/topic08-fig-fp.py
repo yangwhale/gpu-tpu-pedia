@@ -569,7 +569,7 @@ def fig_excess():
 def fig_normscale():
     f = Fig(W, "左：RMSNorm 乘的那组缩放系数 scale，初值 1.0。GPU 乘的是舍成 BF16 的副本，头 150 多步一直是 1.0；TPU 在 32K 的程序里这次舍入被编译器删了，乘的是 FP32 原值，"
                "每步偏开约 6.4e-6，第 50、100、150 步偏离中位数 3.2e-4、6.5e-4、9.5e-4；第 200 步起才开始有元素跨过 BF16 的舍入边界。"
-               "右：32K 上在第 2 级之上逐个加开关，主 loss 窗口带符号均值是 GPU 噪声尺子 N 的几倍（对数横轴）：不加约 54 倍，加投影 FP32 累加、精确超越函数、精确 Adam 都还是 53–54 倍，"
+               "右：32K 上在已开的基础开关之上逐个加开关，主 loss 窗口带符号均值是 GPU 噪声尺子 N 的几倍（对数横轴）：不加约 54 倍，加投影 FP32 累加、精确超越函数、精确 Adam 都还是 53–54 倍，"
                "四处舍入一起回到 1.97 倍；120 步短跑再拆，只加 RMSNorm scale 是 0.54 倍，加其余三处之一都约 28 倍。")
     y0 = f.header("4K 上「没用」的开关，32K 上<tspan font-weight=\"700\">只补它一处就回到尺子以内</tspan>",
                   "第三次迁移：RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），用「转 BF16 再转回」写。右：32K 上逐个加开关二分；左：两边乘的 scale 离 1.0 多远",
@@ -624,7 +624,7 @@ def fig_normscale():
     for v in (1, 2, 10, 50):
         f.line(X(v), py2 + 10, X(v), py2 + PH - 88, LINE2 if v not in (1, 2) else GY2, 1, arrow=False)
         f.t(X(v), py2 + PH - 58, "%g" % v, GY, size=13, anchor="middle")
-    rows = ([("上组：300 步运行，看第 51–300 步", None, None)] + N.M3_BIS_R300
+    rows = ([("上组：看第 51–300 步（300 步运行；「不加」那条取 1000 步运行的同一窗口）", None, None)] + N.M3_BIS_R300
             + [("下组：120 步短跑，看第 51–120 步（四处拆开）", None, None)] + N.M3_BIS_R120)
     y = py2 + 14
     _abs = []
@@ -635,7 +635,7 @@ def fig_normscale():
             continue
         if lab.startswith("只加 RMSNorm"):
             f.box(px + 12, y - 2, W - px - 24, 24, "#fff3e0", OR, 4, sw=1.6)
-        f.t(px + 26, y + 14, lab.replace("（见底注）", "（下组拆开）"), OR if lab.startswith("只加 RMSNorm") else INK, True, 13)
+        f.t(px + 26, y + 14, lab.replace("（见底注）", "（下组拆开）").replace("（第 2 级，1000 步运行）", "（只开基础开关）"), OR if lab.startswith("只加 RMSNorm") else INK, True, 13)
         c = RD if r > 2 else (GR if r <= 1 else OR)
         f.box(X(0.3), y + 2, max(X(r) - X(0.3), 3), 16, c, c, 2)
         vt = "%s 倍" % (("%.1f" % r) if r >= 10 else ("%.2f" % r))   # 2026-11-16：括号里的绝对值收进出处（讲师只念倍数）

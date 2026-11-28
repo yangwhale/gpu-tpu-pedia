@@ -32,7 +32,7 @@ def fig_elided():
     y0 = f.header("代码里写了往返 convert，就是「这里该舍」的声明　——　<tspan font-weight=\"700\">可编译器没舍</tspan>",
                   "第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；一处往返（多路残差分支输入，退回没补时的写法），从代码一层层看下去",
                   [(OR, "写了舍、被省掉"), (GR, "补上以后真舍"), (BL, "FP32")])
-    PH = 300
+    PH = 226
     py = f.panel(0, y0, W, PH, "一处往返：声明了，但被省掉", OR)
     CW = 440
     cols = [20, 20 + CW + 20, 20 + 2 * (CW + 20)]
@@ -49,8 +49,7 @@ def fig_elided():
         f.t(x + i * 148 + 60, py + 125, lab, col, True, 14, "middle")
         if i < 2:
             f.line(x + i * 148 + 120, py + 120, x + i * 148 + 146, py + 120, GY, 1.4)
-    f.t(x, py + 180, "往返不改数学，写它只有一个意思：", INK, size=13)
-    f.t(x, py + 202, "「这里要舍」", OR, True, 14)
+    # 11-28：删掉跟正文、讲义重复的三句（「这里要舍」「同一个值」「规律」），图上只留三层、两条 convert、0 和 256
     # ② HLO
     x = cols[1]
     f.box(x, py + 76, CW - 10, 86, "none", GY2, 8, sw=1.2, dash="5 4")
@@ -71,8 +70,6 @@ def fig_elided():
     f.t(x + 320, py + 88, "补上 reduce_precision", GR, True, 13, "middle")
     f.t(x + 320, py + 138, "%d" % N.EL_IHC_FIXED, GR, True, 44, "middle", big=True)
     f.t(x + 320, py + 162, "条打包", GY, size=13, anchor="middle")
-    f.t(x, py + 200, "同一个值：均方那颗用没舍的，归一化那颗读舍过的", INK, size=13)
-    f.t(20, py + 248, "规律：往返留在一颗融合里就不舍；写回内存、喂给矩阵乘的才真舍。", GY, size=13.5)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "声明了，被省掉：HLO 里在，芯片指令里没有", [])
     yb = f.src(yb + 10,
@@ -118,8 +115,10 @@ def fig_elsweep():
         if note:
             _bar_notes.append("%s：%s" % (lab, note))
     # 剩下的范围：三根橙条括起来
-    f.path("M %d %d h -6 v %d h 6" % (LB - 4, py2 + 24, 3 * 44 - 6), OR, 2, arrow=False)
-    f.t(B1 + 70, py2 + 22 + 44 + 20, "先查的范围：%d 处" % N.EL_LEFT, OR, True, 14)
+    # 11-28：括号挪到三根橙条右端、标签紧贴括号（原先括号在最左、标签在最右，隔了一千多像素）
+    BRX = BXv(max(v for _l, v, c, _n in bars if c == OR)) + 44
+    f.path("M %d %d h 6 v %d h -6" % (BRX, py2 + 24, 3 * 44 - 6), OR, 2, arrow=False)
+    f.t(BRX + 14, py2 + 22 + 44 + 20, "先查的范围：%d 处" % N.EL_LEFT, OR, True, 14)
     # 已补上的 chips
     yc = py2 + 22 + 5 * 44 + 4
     f.t(LB, yc + 18, "已补上 %d 处，不计入：" % N.EL_COVERED, GR, True, 13)
@@ -252,13 +251,13 @@ def fig_sites():
 
 def fig_verify():
     """fig8-verify 回答：扫出来的候选，上卡两头验了以后怎样？—— 左：GPU 上照 TPU 改（dW、注意力输入、MoE 输入、两处一起）；
-    右：TPU 上在对齐配置之上补注意力输入、注意力加 MoE 输入。两头都没把残余造出来或消下去：A 两头排除，B 在 GPU 一头排除；后来前向几处（TPU 补）、注意力内核四处（GPU 改）也排除，剩累加顺序没查，这条线暂停。
+    右：TPU 上在对齐配置之上补注意力输入、注意力加 MoE 输入。两头都没把残余造出来或消下去：A 两头都没坐实，B 在 GPU 一头排除；后来前向几处（TPU 补）、注意力内核四处（GPU 改）也排除，剩累加顺序没查，这条线暂停。
     数据：topic08_numbers 的 GV、GV_RUNS、TV、TV_RUNS（研究线已合入的两份结果文件；实测）；判读来自对齐记录（注意力输入单开那次是偶然：推断）。
     ⛔ 刻意没画：前向几处（TPU 补上 4 份，+5.5e-6，p 0.42，也不是）、注意力内核四处（GPU 改，复现不出）—— 只写在出处里。"""
     R, T = N.GV_RUNS, N.TV_RUNS
     f = Fig(W, "上卡两头验证。左块 GPU 一头：在 GPU 上把候选照 TPU 改，看 GPU 自己长不长出尾巴。注意力输入那处单开 ＋3.0e-6，p 0.021；"
                "跟 MoE 输入那处一起开只剩 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73。右块 TPU 一头：在对齐配置之上补上，看尾巴下不下去。"
-               "对齐配置 6 份 ＋6.9e-6；补注意力输入那处 ＋6.1e-6，p 0.67；注意力加 MoE 输入 ＋5.3e-6，p 0.37，都分不开。A 两头都排除，B 在 GPU 一头排除；C 前向几处后来在 TPU 上补了，也不是。注意力输入那处单开 p 0.021 不算：两处合开就没了，TPU 一头补上也不动。")
+               "对齐配置 6 份 ＋6.9e-6；补注意力输入那处 ＋6.1e-6，p 0.67；注意力加 MoE 输入 ＋5.3e-6，p 0.37，都分不开。A 两头都没坐实，B 在 GPU 一头就排除了；C 前向几处后来在 TPU 上补了，也不是。注意力输入那处单开 p 0.021 不算：两处合开就没了，TPU 一头补上也不动。")
     y0 = f.header("两头验证：A、B 两类都没坐实",
                   "第二次迁移，小尺寸，第 551–1000 步主 loss 偏差，每点一份运行，横线是均值",
                   [(GY2, "参照格"), (PU, "改了一处（A ＝ 分支输入的梯度合流，B ＝ 每微批 dW）")])
@@ -305,7 +304,7 @@ def fig_verify():
     tcells = [("C", "对齐配置", GY2, "6 份 %s" % N.TV_T["C"], ""), ("attn", "＋补 A · 注意力输入", PU, "均值 %s" % N.TV_ATTN_T, "p %s" % N.TV_ATTN_P),
               ("all", "＋补 A · 两处", PU, "均值 %s" % N.TV_ALL_T, "p %s" % N.TV_ALL_P)]
     panel(LW + GAP, W - LW - GAP, "TPU 一头：补上，尾巴下不下去", BL, tcells, T, "tpu")
-    yb = f.band(y0 + PH + 20, "warn", "清单是候选，不是结论：A 两头都排除，B 在 GPU 一头排除", [
+    yb = f.band(y0 + PH + 20, "warn", "清单是候选，不是结论：A 两头都没坐实，B 在 GPU 一头已排除", [
         "注意力输入那处 GPU 单开像有一点，可合开就没了，按格数校正 p 0.084，对齐记录推断是偶然；TPU 补上也跟对齐配置分不开。后来前向几处、注意力内核四处也验了，都不是；剩累加顺序没查，这条线暂停。",
     ])
     yb = f.src(yb + 10,

@@ -81,7 +81,10 @@ def fig_gauge():
         f.box(X(s_) - 3, Y(v_) - 3, 6, 6, BL, BL, 3)
     for s_ in (100, 300, 975):
         k_ = ST.index(s_)
-        f.t(X(s_) - 6, Y(TD[k_]) + 20, "%+.3f" % TD[k_], BL, True, 13, "end" if s_ > 500 else "middle")
+        if s_ == 975:                    # 11-28：最后一个点的标签放在点的正右边（右边没有点），别压在前几个点和线上
+            f.t(X(s_) + 9, Y(TD[k_]) + 5, "%+.3f" % TD[k_], BL, True, 13)
+        else:
+            f.t(X(s_) - 6, Y(TD[k_]) + 20, "%+.3f" % TD[k_], BL, True, 13, "middle")
     f.t(X(975), Y(-0.05), "灰线：GPU 两次之间，第 975 步 %+.3f" % GD[-1], GY, True, 13, "end")
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "这股力第 1 步只差 6.5e-4（相对；第 100 步 6.1e-4；哪一边少推，后面揭晓），同一个方向、每一步都差，几百步积成 logits 整体水平的差", [
@@ -109,7 +112,7 @@ def fig_head():
             ("TPU 输出头反向，精确档", "精确配置（矩阵乘用最高精度），当「准」的刻度", abs(N.HEADX_TPU_EXACT), GR)]
     SP = 88
     PH = 60 + len(rows) * SP
-    py = f.panel(0, y0, W, PH, "第 1 步，同一批数据、各自对 FP64（实测）", OR)
+    py = f.panel(0, y0, W, PH, "第 1 步，单个 microbatch 回放、各自对 FP64（实测）", OR)
     bx, bw, emin, emax = 380, 840, 1e-6, 1e-3
     # ⭐ R3：对数柱的原点藏着（1e-6），柱长看着只差一截其实差十几倍 → 每个十倍一根竖格线、顶上标数
     for e in range(-6, -2):

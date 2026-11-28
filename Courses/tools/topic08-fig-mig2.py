@@ -166,30 +166,31 @@ def fig_minidrift():
         dn = " ".join("%.1f,%.1f" % (X(i + W50), Y(-e)) for i, e in reversed(list(enumerate(env))))
         f.p.append('<polygon points="%s %s" fill="#eceef1" stroke="none"/>' % (up, dn))
         f.line(X0, mid, X0 + XW, mid, INK, 1, arrow=False)
-        tk = 1e-5 if vmax < 3e-5 else 2e-5
+        tk = 1e-5 if vmax < 3e-5 else (2e-5 if vmax < 5e-5 else 4e-5)
         for v in (tk, -tk):
             f.t(X0 - 8, Y(v) + 4, ("%+.0e" % v).replace("e-0", "e-"), GY, size=11.5, anchor="end")
         f.t(X0 - 8, mid + 4, "0", GY, size=11.5, anchor="end")
         for r in groll:
             f.p.append('<polyline points="%s" fill="none" stroke="#9aa0a6" stroke-width="0.8" stroke-opacity="0.7"/>' % " ".join("%.1f,%.1f" % (X(i + W50), Y(v)) for i, v in enumerate(r) if i % 3 == 0))
         troll = [_roll(r) for r in tp]
+        assert max(abs(v) for r in troll + groll for v in r) <= vmax, key   # 不许顶出面板被削平
         for r in troll:
             f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="1" stroke-opacity="0.55"/>' % (" ".join("%.1f,%.1f" % (X(i + W50), Y(v)) for i, v in enumerate(r) if i % 2 == 0), col))
         mean = [sum(r[i] for r in troll) / len(troll) for i in range(len(troll[0]))]
         f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="3.2"/>' % (" ".join("%.1f,%.1f" % (X(i + W50), Y(v)) for i, v in enumerate(mean)), col))
         return py, Y, mid
-    PH = 250
-    py, Y, mid = strip(y0, PH, "主loss", 2.0e-5, "主 loss：TPU 减 GPU（相对差）", RD)
+    PH = 280      # 11-28：量程放到能装下最高那条细线（8 份里 3 条曾顶出上沿被削平）
+    py, Y, mid = strip(y0, PH, "主loss", 3.6e-5, "主 loss：TPU 减 GPU（相对差）", RD)
     for st in (1, 250, 500, 750, 1000):
         f.t(X(st), py + PH - 36, "第 %d 步" % st, GY, size=12, anchor="middle")
     f.t(X(60), Y(5.2e-6) - 10, "小鼓包", GY, True, 12.5)
-    f.t(X(260), Y(-6e-6), "第 100–550 步在 0 附近，正负相抵", GY, True, 12.5)
+    f.t(X(260), Y(-1.15e-5), "第 100–550 步在 0 附近，正负相抵", GY, True, 12.5)
     f.t(X(560), Y(1.75e-5) - 4, "第 550 步起一路往上，最后 25 步平均 %s" % N.MD_LAST_T, OR, True, 13)
     f._pan = None
     y1 = py + PH - 30 + 14
-    PH2 = 210
-    py2, Y2, mid2 = strip(y1, PH2, "MTP", 5.0e-5, "同一批运行的 MTP loss：反着走（纵轴量程是上图的 2.5 倍）", BL)
-    f.t(X(470), Y2(3.4e-5), "第 751–1000 步 %s，8 份全部偏低（MTP 的尺子宽 4 倍，判档能过）" % N.MD_MTP_LATE_T, BL, True, 12.5)
+    PH2 = 240
+    py2, Y2, mid2 = strip(y1, PH2, "MTP", 7.2e-5, "同一批运行的 MTP loss：反着走（纵轴量程是上图的 2 倍）", BL)
+    f.t(X(470), Y2(5.9e-5), "第 751–1000 步 %s，8 份全部偏低（MTP 的尺子宽 4 倍，判档能过）" % N.MD_MTP_LATE_T, BL, True, 12.5)
     f._pan = None
     yb = f.band(py2 + PH2 - 30 + 20, "warn", "是训练轨迹慢慢偏开，不是前向的差", [
         "同一份权重上两边前向几乎没差（不到后段的一成）；下面一处处排除。",
@@ -211,13 +212,13 @@ def fig_ihcroot():
     f = Fig(W, "两块。左：多路残差的流在反向里的样子。流在一层里有三处用到，回来三份梯度。GPU：三份各舍 BF16，再一个一个加，每加一次舍一次；"
                "TPU：三份在 FP32 里加完，最后舍一次（推断）。"
                "右：第 551 到 1000 步主 loss 的 TPU 减 GPU。关掉 MTP、关掉索引器蒸馏、两个都关，都还偏高 0.9e-5 到 1.2e-5；对照 1.48e-5；"
-               "两边都去掉多路残差，1.9e-6 和 0.7e-6，落进 GPU 的散布 2.1e-6。所以范围缩到多路残差这一段。")
+               "两边都去掉多路残差，1.9e-6 和 0.7e-6，落进 GPU 16 份每份对其余 15 份的范围（最高 ＋3.2e-6）。所以范围缩到多路残差这一段。")
     y0 = f.header("后段偏高：排除了一圈，范围缩到多路残差这一段",
                   "第二次迁移，小尺寸，v5p，现行对齐配置之前那一代；对比基准是 GPU 现行写法",
                   [(OR, "TPU 偏高"), (GR, "两边都去掉多路残差"), (GY2, "排除的候选")])
     PH = 360
     LW = 620
-    py = f.panel(0, y0, LW, PH, "Ⓐ 嫌疑人：流的三份梯度怎么加（下一步验证）", BL)
+    py = f.panel(0, y0, LW, PH, "嫌疑人：流的三份梯度怎么加（下一步验证）", BL)
     rows = [("GPU", BL, [("三份各舍 BF16", BL, False), ("逐个相加", BL, False), ("每加一次舍一次", BL, False)], "CPU 上用 GPU 同一段代码逐位核过"),
             ("TPU", OR, [("三份留 FP32", OR, True), ("FP32 里加完", OR, True), ("最后舍一次", OR, True)], "推断：省舍入下中间那几次被合掉（虚线）")]
     for i, (lab, col, steps, note) in enumerate(rows):
@@ -236,7 +237,7 @@ def fig_ihcroot():
     f.t(20, py + PH - 50, "是不是它，靠后面两张图两头各改一处来验。", GY, size=12.5)
     f._pan = None
     RX = LW + 20
-    py2 = f.panel(RX, y0, W - RX, PH, "Ⓑ 第 551–1000 步主 loss，TPU 减 GPU", OR)
+    py2 = f.panel(RX, y0, W - RX, PH, "第 551–1000 步主 loss，TPU 减 GPU", OR)
     bars = [("关掉 MTP", N.MD_ISO["关MTP"], GY2, None), ("关掉索引器蒸馏", N.MD_ISO["关KD"], GY2, None), ("两个都关", N.MD_ISO["都关"], GY2, None),
             ("对照（1 份）", MI["对照"]["tpu_mean"], OR, None),
             ("两边都去掉多路残差（2 份）", MI["两边都去掉多路残差"]["tpu_mean"], GR, MI["两边都去掉多路残差"]["tpu_each"])]
@@ -244,8 +245,9 @@ def fig_ihcroot():
 
     def BX(v):
         return BX0 + max(v, 0) / vmax * (BX1 - BX0)
-    f.box(BX0, py2 + 14, BX(MI_SD) - BX0, 5 * 40 + 10, "#eceff1", "#eceff1", 0)
-    f.t(BX(MI_SD) + 4, py2 + 5 * 40 + 40, "GPU 自己的散布 " + ("%.1e" % MI_SD).replace("e-0", "e-"), GY, size=12)
+    # 11-28：全课不提标准差（numbers 11-15 注）；灰底改成跟下一张 fig8-twoway 同一口径：GPU 16 份留一法窗口均值的最高值
+    f.box(BX0, py2 + 14, BX(N.FC_GPU_HI) - BX0, 5 * 40 + 10, "#eceff1", "#eceff1", 0)
+    f.t(BX0 + 4, py2 + 5 * 40 + 40, "灰底：GPU 16 份每份对其余 15 份，最高 " + N.tx(N.FC_GPU_HI, "%.1e", plus=True), GY, size=12)
     for i, (lab, v, col, each) in enumerate(bars):
         y = py2 + 22 + i * 40
         f.t(RX + 14, y + 19, lab, col if col != GY2 else GY, True, 13)
@@ -342,8 +344,8 @@ def fig_twoway():
     vmin, vmax = -1.0e-5, 1.6e-5
     left = [("对照", "修之前", RD), ("补流梯度舍法", "补流梯度舍法", GR)]
     right = [("GPU 自己", "GPU 自己", GY2), ("GPU 换流梯度舍法", "换流梯度舍法", OR), ("GPU 换收拢处舍法", "换收拢处整段写法", OR)]
-    for pi, (title, colr, cells, side) in enumerate((("Ⓐ TPU 一边：对 GPU 16 份均值", RD, left, "tpu"),
-                                                    ("Ⓑ GPU 一边：每份对其余 15 份均值", OR, right, "gpu"))):
+    for pi, (title, colr, cells, side) in enumerate((("TPU 一边：对 GPU 16 份均值", RD, left, "tpu"),
+                                                    ("GPU 一边：每份对其余 15 份均值", OR, right, "gpu"))):
         x0 = pi * (PWL + GAP)
         py = f.panel(x0, y0, PWL, PH, title, colr)
         YT, YB = py + 30, py + PH - 120
