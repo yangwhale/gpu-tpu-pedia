@@ -115,7 +115,7 @@ def fig_rratio():
         f.line(x0, ly - 6, tx, ty, col, 1.0, arrow=False)
         f.box(tx - 3, ty - 3, 6, 6, col, col, 3)
     # 两个实测点：标签放在靶子外面，用短引线连回点
-    for r, ang, col, lab, ldx, ldy in [(N.R_QKV_BEFORE, 62, RD, "改之前 R ＝ %.3f（TPU %s ／ GPU %s）" % (N.R_QKV_BEFORE, N.sci(N.QKV_ABS_BEFORE), N.sci(N.QKV_ABS_GPU)), 70, -48),
+    for r, ang, col, lab, ldx, ldy in [(N.R_QKV_BEFORE, 62, RD, "改之前 R ＝ %.3f（TPU %s ／ GPU %s）" % (N.R_QKV_BEFORE, N.tx(N.QKV_ABS_BEFORE, "%.3e"), N.sci(N.QKV_ABS_GPU)), 70, -48),
                                        (N.R_QKV_AFTER, 235, GR, "改之后 R ＝ %.3f（TPU %s ／ GPU %s）" % (N.R_QKV_AFTER, N.sci(N.QKV_ABS_AFTER), N.sci(N.QKV_ABS_GPU)), -40, 70)]:
         x, y = cx + r * U * math.cos(math.radians(ang)), cy - r * U * math.sin(math.radians(ang))
         f.line(x, y, x + ldx, y + ldy, col, 1.0, arrow=False)

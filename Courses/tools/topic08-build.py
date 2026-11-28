@@ -452,7 +452,7 @@ R4_CARD = (
     '    <div><b>R ＞ 1.2：这一步多舍了</b><br>丢了精度，去查被测那一边，找到多舍的那一步</div>\n'
     '  </div>\n'
     '  <table class="t9"><thead><tr><th>例子（实测）</th><th>被测离 FP64</th><th>参照离 FP64</th><th>R</th><th>记作</th></tr></thead><tbody>\n'
-    '  <tr class="epsrow"><td>qkv 投影，打开 FP32 累加之前（混元 3，v5p）</td><td>' + N.sci(N.QKV_ABS_BEFORE) + '</td><td>' + N.sci(N.QKV_ABS_GPU) + '</td><td>«R_QKV_BEFORE»</td><td>丢了精度</td></tr>\n'
+    '  <tr class="epsrow"><td>qkv 投影，打开 FP32 累加之前（混元 3，v5p）</td><td>' + N.tx(N.QKV_ABS_BEFORE, "%.3e") + '</td><td>' + N.sci(N.QKV_ABS_GPU) + '</td><td>«R_QKV_BEFORE»</td><td>丢了精度</td></tr>\n'
     '  <tr><td>同上，打开以后</td><td>' + N.sci(N.QKV_ABS_AFTER) + '</td><td>' + N.sci(N.QKV_ABS_GPU) + '</td><td>1.000</td><td>换了顺序</td></tr>\n'
     '  </tbody></table>\n'
     '  </div>\n'
@@ -1299,7 +1299,7 @@ __FIG_INTDRIFT__
   <div class="note"><span class="t">先想一想</span>是 TPU 多推了，还是 GPU 少推了？先押一下，再往下看。</div>
   <p>拿训练里实际用到的张量，同一批数据，在 FP64 里重算一遍，看两边的输出头反向各离 FP64 多远：</p>
 __FIG_HEAD__
-  <p>红柱就是开头那张卡里的 dH：GPU 在张量核上沿 12 万的词表做这次求和，结果系统地朝零截了一点（推断是 §5.2 的抹零），落在「所有 logits 一起升降」这个方向上，第 1 步少推 <b class="kn">«HEAD_S1_E»</b>（相对）。TPU 这次为什么准没查，别读成两家硬件精度的高低。</p>
+  <p>红柱就是开头那张卡里的 dH：GPU 在张量核上沿 12 万的词表做这次求和，结果系统地朝零截了一点（推断是 §5.2 的抹零），落在「所有 logits 一起升降」这个方向上。红柱量的是整个输出头反向；只算其中那次矩阵乘（§7.5 那张图的右格），第 1 步少推 <b class="kn">«HEAD_S1_E»</b>（相对）：口径不同，分母相同。TPU 这次为什么准没查，别读成两家硬件精度的高低。</p>
   <details class="foldfig"><summary><b>这一环哪部分是实测、哪部分是推断；一度判反的那一版</b>（图：求和越长偏得越多）</summary>
 __FIG_HEADK__
   <p>图上红柱写的是 «HEADX_GPU_T»，不是看错：调查线那格的 «HEAD_S1_E» 只算那次矩阵乘（参照是同一份 BF16 dlogits 的 FP64 乘积）；图上三根量的是整个输出头反向（参照由 logits 在 FP64 里重算）。口径不同，分母相同，量级一样。离线重算不是另起炉灶：拿抓下来的张量在同一张 B200 上重做这次矩阵乘，跟训练里那份逐位相同。</p>
@@ -2280,7 +2280,7 @@ FIGS = {
     "__FIG_INTDRIFT__": ("fig-intdrift", "fig8-intdrift.svg", "topic08-fig-case2.py",
         '<b>蓝橙两条一路同涨，绿线长得慢得多。</b><br><em>灰线呈台阶状，是 GPU 一侧参数范数的记录精度有限（台阶约 1.6e-4）。</em>'),
     "__FIG_HEAD__": ("fig-head", "fig8-head.svg", "topic08-fig-case2.py",
-        '<b>红柱是 GPU 的张量核，误差约是 TPU 那根的十七倍（对数刻度，看着只长一截）。</b><br><em>三根柱是同一批数据，参照是各自 logits 在 FP64 里重算的结果；绿柱是 TPU 精确配置，当「准」的刻度。</em>'),
+        '<b>红柱是 GPU 的张量核，误差约是 TPU 那根的十七倍（对数刻度，看着只长一截）。</b><br><em>三根柱是同一批数据，参照是各自 logits 在 FP64 里重算的结果；绿柱是 TPU 精确配置，当「准」的刻度。跟前后的 «HEAD_S1_E» 口径不同：那个只算矩阵乘。</em>'),
     "__FIG_HEADK__": ("fig-headk", "fig8-headk.svg", "topic08-fig-case2.py",
         '<b>求和越长，红线越高。</b><br><em>横纵都是对数刻度；三个点都是实测。</em>'),
     "__FIG_SWAP__": ("fig-swap", "fig8-swap.svg", "topic08-fig-case2.py",

@@ -259,7 +259,7 @@ def fig_twoaxis():
         # ⭐ 通宵第六棒：1.2 原来也写在纵轴左边，跟 1 叠成一团；挪到红虚线左端上方
         f.t(ax0 + 6, Y(1.2) - 6, "1.2", RD, True, 13)
         f.t((ax0 + ax1) / 2, ay1 + 42, "横轴 d ÷ 尺子：对基线的差 ÷ GPU 噪声（对数）", GY, size=13, anchor="middle")
-        f.t(ax0 - 50, ay0 - 10, "纵轴 R：离真值 ÷ 基线与 GPU 较远者（对数）", GY, size=12)
+        f.t(ax0 - 50, ay0 - 10, "纵轴 R：离真值 ÷ 基线与 GPU 中位数较远者（对数）", GY, size=12)
         # 11-16 负责人：三块底色就地写名字，不用回头查图例
         f.t(X(0.32), Y(0.25), "在噪声里", GR, True, 12, "middle")
         f.t(X(40), Y(0.45), "超出噪声，只换了顺序", GY, True, 12, "middle")
@@ -275,6 +275,12 @@ def fig_twoaxis():
                 # 11-28 编辑 M：线下那颗的标签原在点上方，压着 1.2 红虚线；挪到点的右下
                 f.t(X(x) - 12 if y > 1.2 else X(x) + 8, Y(y) + 5 if y > 1.2 else Y(y) + 20,
                     ("词嵌入梯度 %.1f 倍" % y) if y > 1.2 else "词嵌入", RD, True, 13, "end" if y > 1.2 else None)
+        # 11-28 编辑 V：右块第二个「变远」点（第 4 层路由门控 R 1.20）压在红虚线上看不出，就地标名
+        _gate = [(x, y) for x, y, e in a["points"] if y > 1.2 and not e]
+        assert len(_gate) == (1 if k == 2 else 0), (k, _gate)
+        for x, y in _gate:
+            f.box(X(x) - 4, Y(y) - 4, 8, 8, "none", RD, 4, sw=1.6)
+            f.t(X(x) + 9, Y(y) - 9, "路由门控 %.2f" % y, RD, True, 12.5)
         f.t(ax1 - 8, ay1 - 30, "超出噪声 %d／160" % nover, INK, True, 13, "end")
         f.t(ax1 - 8, ay1 - 10, "离真值变远 %d／160" % nfar, RD if nfar else GR, True, 13, "end")
         f._pan = None
