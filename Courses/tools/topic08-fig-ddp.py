@@ -381,7 +381,8 @@ def fig_sweep():
         f.t(X(n), YB + 22, format(n, ","), GY, size=12.5, anchor="middle")
     xg = X(N.C2_GATE)
     f.line(xg, py + 40, xg, YB, INK, 1.4, dash="6 4", arrow=False)
-    f.t(xg - 8, py + 110, "门槛：超过 %s（＝ 行数 ÷ 8）才插排序" % format(N.C2_GATE, ","), INK, True, 14, "end")
+    f.t(xg - 8, py + 110, "运行库 0.0.46 实测：超过 %s（＝ 行数 ÷ 8）后端插了排序" % format(N.C2_GATE, ","), INK, True, 14, "end")
+    f.t(xg - 8, py + 128, "（从编译产物反推，不是规格）", GY, False, 12, "end")
     for key, c, sw in (("bf16_unsorted_excess_off", GY2, 2.0), ("bf16_presorted_excess_on", GR, 2.4), ("bf16_unsorted_excess_on", RD, 3.0)):
         pts = [(X(n), Y(v)) for n, v in zip(N.C2_SWEEP_N, N.C2_SWEEP[key])]
         f.path(pts, c, sw, arrow=False)
