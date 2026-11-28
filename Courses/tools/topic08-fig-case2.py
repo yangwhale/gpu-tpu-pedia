@@ -587,7 +587,7 @@ def fig_onepass():
     for e in (-9, -7, -5, -3):
         f.t(BX(10 ** e), ry + PHR - 44, "1e%d" % e, GY, size=13, anchor="middle")
         f.line(BX(10 ** e), ry + 40, BX(10 ** e), ry + PHR - 58, LINE, 1, arrow=False)
-    f.t(RX + RW - 12, ry + 22, "对数轴：相邻两格差 100 倍", GY, size=12.5, anchor="end")
+    f.t(RX + RW - 12, ry + 22, "对数轴（相邻两格差 100 倍），条长按绝对值；负 ＝ 少推，正 ＝ 多推", GY, size=12.5, anchor="end")
     for i, (nm, vals, col) in enumerate(rows):
         yy = ry + 50 + i * 150
         f.t(RX + 12, yy + 14, nm, col, True, 13.5)

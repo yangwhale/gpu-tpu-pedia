@@ -944,7 +944,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <tr><td>名义 FP32 的输出头，在 TPU 默认精度下只算一遍 BF16；第 1 步看不出</td><td class="fimp">权重离开格点后 logits 误差是真 FP32 的约 5000 倍（本课复算：1.9e-3 对 3.7e-7，在模拟离格 10 步的权重上测）；前 300 步主 loss r 7.32，换 high 档 1.03</td><td><a href="#s5-5">§5.5</a></td></tr>
 <tr><td>TPU 默认的 exp、log 图快不图准</td><td class="fimp">v5p 上 exp 最多差 105 格、log 62 格（GPU ≤ 2 格）；单算子离 FP64 最多是 GPU 的 8.68 倍；GPU↔TPU 曲线上看不出</td><td><a href="#s5-5">§5.5 折叠</a></td></tr>
 <tr><td>一个 Python 常数（log₂e）跟着 BF16 的 q 一起被舍</td><td class="fimp">注意力 logits 整体放大 1.8e-3</td><td><a href="#s5-5">§5.5 折叠</a></td></tr>
-<tr><td>MTP 头的梯度舍成 BF16 之前，两边乘的系数不同（GPU ×0.1，TPU ×0.1 再除以 token 数）</td><td class="fimp">正确词那一项挤在一个 BF16 格距里，两边舍的方向相反；1000 步 MTP 偏到尺子的 3.02–4.28 倍；诊断已定位（TPU 改在 GPU 的尺度上舍，回到 0.15–0.68 倍），修法待定</td><td><a href="#mtp-head">§5.5 折叠</a></td></tr>
+<tr><td>MTP 头的梯度舍成 BF16 之前，两边乘的系数不同（GPU ×0.1，TPU ×0.1 再除以 token 数）</td><td class="fimp">正确词那一项挤在一个 BF16 格距里，两边舍的方向相反；1000 步 MTP 偏到尺子的 3.02–4.28 倍；诊断已定位（TPU 改在 GPU 的尺度上舍，回到 0.15–0.68 倍）；修法定了、还没收尾</td><td><a href="#mtp-head">§5.5 折叠</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>编译器替你省掉的舍入</b>　<span>2 处</span></td></tr>
 <tr><td>RMSNorm scale 那次「舍成 BF16」：4K 程序里在，32K 程序里 8 个全被删</td><td class="fimp">没补时 1000 步主 loss r 7.8，不过；二分时只补这一处降到尺子的 0.54 倍，补别处的都还在 28 倍左右</td><td><a href="#s5-4">§5.4</a></td></tr>
 <tr><td>三份梯度相加，两边舍的次数不一样</td><td class="fimp">主 loss 判待定（r 1.55）：第 551–1000 步对 GPU 16 份均值偏 ＋9.4e-6，照 GPU 写法全补上还剩 ＋6.9e-6；被省是推断，残余没定责</td><td><a href="#s9-1">§9.1</a></td></tr>
@@ -956,8 +956,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <tr><td>DDP 和 FSDP 数学等价，曲线却超出噪声</td><td class="fimp">词嵌入梯度离 FP64：纯数据并行 1.51e-2，GPU 4.17e-3，R 3.62；全出在 39 个词上</td><td><a href="#s八">第八节</a></td></tr>
 <tr><td>一个 FP32 开关打开，一块梯度凭空没了</td><td class="fimp">r 冲到 611</td><td><a href="#s8-2">§8.2</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>参照自己不稳：后面的比较都不作数</b>　<span>2 处</span></td></tr>
-<tr><td>同一份程序复跑，92 次里 2 次在某一步分开：自写内核只等读、不等写</td><td class="fimp">分开那一步梯度范数只差相对 4e-7，没报错、曲线看不出；修好每步约 ＋0.1%</td><td><a href="#s10-3">§10.3</a></td></tr>
-<tr><td>路由取权重的反向靠「两个浮点数相等」找位置；编译器重算出的那份末位不再相同（推断），约 5% 的槽位对不上，梯度丢了</td><td class="fimp">总梯度范数只差 9e-6，一层的路由权重梯度只剩 0.948 倍；开关修好每步贵约 2%</td><td><a href="#s10-4">§10.4</a></td></tr>
+<tr><td>同一份程序、同样的输入，复跑 92 次有 2 次在某一步分开：TPU 复跑不是逐位的吗？</td><td class="fimp">分开那一步梯度范数只差相对 4e-7，没报错、曲线看不出；根子在一个自写内核只等「读完」、不等「写完」；修好的代价：每步慢约 0.1%</td><td><a href="#s10-3">§10.3</a></td></tr>
+<tr><td>总梯度范数只差 9e-6，一层路由的梯度却少了约 5%：梯度是怎么丢的？</td><td class="fimp">反向靠「两个数相等」找位置，编译器重算出的那份末位变了（推断），约 5% 的位置对不上，那层路由权重梯度只剩 0.948 倍；开关修好，代价：每步慢约 2%</td><td><a href="#s10-4">§10.4</a></td></tr>
   </tbody></table>
   <p class="fnote">R：离 FP64 的距离之比（<a href="#s4-2">§4.2</a>）；r：曲线上的差 ÷ GPU 自己的噪声上限，过 2 判不过（<a href="#s3-3">§3.3</a>）；格：末位差几格（<a href="#s5-5">§5.5</a> 折叠）。</p>
 </div>
@@ -7401,13 +7401,13 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p><b>机制：编译器把一次矩阵乘拆成了几段。</b>它可以先收齐 8 片权重、一次乘完；也可以边传边乘（collective matmul）：权重片一片片传过来，到一片乘一段、加进累加器。单颗矩阵乘在矩阵单元里本来就是 FP32 累加、出口舍一次；拆成几段以后，每段结果和累加器都用这次矩阵乘声明的输出类型。这里声明的是 BF16，所以每段都存成 BF16，修法就是把声明改成 FP32（下面）。一次 2816 宽的求和，GPU 舍 1 次，这里舍 6 次：</p>
 <figure class="fbox fwide" id="anim-windowed">
 <video src="media/topic08-windowed.mp4?v=781b553f" autoplay loop muted playsinline data-pauses="3.42,11.42,19.63,23.23"
-       aria-label="设备一到 8 个，一次矩阵乘被拆成几段。同一个往里投的投影，一次求和 2816 个乘积；红块是一次舍到 BF16。顶上一排是 8 片权重。第 1 步　4 个设备：8 片先收齐，一次乘完，最后舍 1 次，跟 GPU 一样。第 2 步　8 个设备：边传边乘，分两轮，每轮两段 704 宽的矩阵乘（片 1＋2、片 3＋4……），每段输出舍一次，加进 BF16 累加器再舍一次；右边的计数涨到舍 6 次。第 3 步　打开投影 FP32 累加：结构不变，中间全留 FP32，只在最后舍 1 次。第 4 步　同一种切法，只是设备数变了。单算子 R：1.41 → 1.00（实测）；离线编译：4 个设备 0 个这种循环，8、16 个设备各 20 个。在 4 个设备上验精度，看不到这件事。"></video>
+       aria-label="设备一到 8 个，一次矩阵乘被拆成几段。同一个往里投的投影，一次求和 2816 个乘积；红块是一次舍到 BF16。顶上一排是 8 片权重。第 1 步　4 个设备：8 片先收齐，一次乘完，最后舍 1 次，跟 GPU 一样。第 2 步　8 个设备：边传边乘，分两轮，每轮两段 704 宽的矩阵乘（片 1＋2、片 3＋4……），每段输出舍一次，加进 BF16 累加器再舍一次；右边的计数涨到舍 6 次。第 3 步　打开投影 FP32 累加：结构不变，中间全留 FP32，只在最后舍 1 次。第 4 步　4 个和 8 个设备同一种切法，只是设备数变了。单算子 R：1.41 → 1.00（实测）；离线编译：4 个设备 0 个这种循环，8、16 个设备各 20 个。在 4 个设备上验精度，看不到这件事。"></video>
 <figcaption><b>同一个往里投的投影：4 个设备先收齐、一次乘完，舍 1 次；8 个设备边传边乘，红块一格格冒出来，舍 6 次；打开投影 FP32 累加，又只舍 1 次。</b>
   <span class="sub">（可一步一步看。循环体结构取自编译产物；片从顶上落下只表示这一段用到哪几片，不画环上谁传给谁。）</span></figcaption></figure>
   <details class="foldfig"><summary><b>舍了 6 次，为什么只有 1.41 倍</b>（课上不讲）</summary>
   <p>实测 R 1.41。部分和小，舍掉的也小；按 6 次各自独立粗算约 1.6 倍，实测更低的原因没查清。</p></details>
-  <p><b>为什么 8 个设备才出现：代码一行没改，只是设备数变了。</b>同一份生产配置为不同设备数离线编译来数（下图右边）：4 个设备一个这种循环都没有，8 个、16 个各二十个。切法没变；这次实测里矩阵大小没起作用（8 个设备上连最小的路由打分矩阵也拆了），拆不拆是编译器按快慢定的（设备少为什么不拆是推断，见图下出处）。</p>
-<figure class="fbox fwide" id="fig-windowed"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="左边三行是同一个往里投的投影（第三次迁移的 q 低秩下投影，求和维 2816）在三种情况下怎么算完。第一行，4 个设备：编译器先把权重整块收齐，再做一次 2816 宽的矩阵乘，FP32 累加到底，最后舍一次，跟 GPU 一样。第二行，8 个设备、生产原样：编译器改成边传边乘，8 片排成 2 轮，每轮两次 704 宽的矩阵乘，每次输出舍成 BF16，再加进 BF16 累加器又舍一次，一共舍 6 次。第三行，8 个设备、打开投影 FP32 累加：结构不变，中间全部留在 FP32，只在最后舍一次。右边：离线编译训练步，数部分和累加器是 BF16 的窗口化循环：4 个设备 0 个，8 个、16 个设备各 20 个（v7x 16 个设备也是 20 个），打开开关后全部变成 FP32。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <p><b>为什么 8 个设备才出现：代码一行没改，只是设备数变了。</b>同一份生产配置为不同设备数离线编译来数（下图右边）：4 个设备一个这种循环都没有，8 个各二十个（16 个设备那条是 32K 那份配置，上下文并行 8 × FSDP 2，也是二十个）。4 个和 8 个设备切法一样；这次实测里矩阵大小没起作用（8 个设备上连最小的路由打分矩阵也拆了），拆不拆是编译器按快慢定的（设备少为什么不拆是推断，见图下出处）。</p>
+<figure class="fbox fwide" id="fig-windowed"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="左边三行是同一个往里投的投影（第三次迁移的 q 低秩下投影，求和维 2816）在三种情况下怎么算完。第一行，4 个设备：编译器先把权重整块收齐，再做一次 2816 宽的矩阵乘，FP32 累加到底，最后舍一次，跟 GPU 一样。第二行，8 个设备、生产原样：编译器改成边传边乘，8 片排成 2 轮，每轮两次 704 宽的矩阵乘，每次输出舍成 BF16，再加进 BF16 累加器又舍一次，一共舍 6 次。第三行，8 个设备、打开投影 FP32 累加：结构不变，中间全部留在 FP32，只在最后舍一次。右边：离线编译训练步，数部分和累加器是 BF16 的窗口化循环：4 个设备 0 个，8 个设备 20 个；16 个设备（32K 那份配置，上下文并行 8 × FSDP 2）也是 20 个（v7x 同），打开开关后全部变成 FP32。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">设备一到 8 个，编译器把一次矩阵乘拆成几段　——　<tspan font-weight="700">一次求和舍 6 次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一个投影、同一种 FSDP 切法；变的只是编译器选「先收齐再乘」还是「边传边乘」。红块 ＝ 一次舍到 BF16</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -7512,9 +7512,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="1100" y="236" width="170.0" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="1278" y="255" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">20 个循环</tspan></text>
 <text class="svgsm" x="968" y="314" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v5p · 16 个设备</tspan></text>
+<text class="svgsm" x="968" y="334" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">32K 配置（CP 8）</text>
 <rect x="1100" y="298" width="170.0" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="1278" y="317" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">20 个循环</tspan></text>
 <text class="svgsm" x="968" y="376" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v7x · 16 个设备</tspan></text>
+<text class="svgsm" x="968" y="396" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">32K 配置（CP 8）</text>
 <rect x="1100" y="360" width="170.0" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="1278" y="379" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">20 个循环</tspan></text>
 <text class="svgsm" x="968" y="438" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">打开开关后</tspan></text>
@@ -7525,7 +7527,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="2" y="552" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="579" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在 4 个设备的小切片上验精度，这件事完全看不到</tspan></text>
 </svg><figcaption><b>数每一行的红块：1 个、6 个、1 个。再看右边，4 个设备那一行是空的。</b><span class="capmore"><br><em>左边三行的结构取自编译产物；右边是离线编译训练步数出来的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 编译产物显示（第三次迁移，8 个设备，运行库 0.0.46）：q 低秩下投影的循环体里，8 片权重沿两个方向的环传过来，排成 2 轮；每轮两次 704（＝ 2 × 352）宽的矩阵乘，输出是 BF16；和 BF16 累加器在一颗融合里转成 FP32 相加，再舍回 BF16。v7x 上这一步直接在 BF16 里加，舍入次数相同。</p>
-<p>📌 实验确认：同一份生产配置在 CPU 上为不同拓扑离线编译训练步。v5p 4 个设备没有窗口化循环，权重整块收齐；8 个、16 个设备各 64 个窗口化循环，其中带部分和相加、累加器 BF16 的 20 个（正好是上一张图里中招的那几种投影的前向和重算），其余是按输出维写各自的列，或权重梯度一侧（本来就是 FP32）。打开投影 FP32 累加后，这 20 个全部变成 FP32。</p>
+<p>📌 实验确认：同一份生产配置在 CPU 上为不同拓扑离线编译训练步（4 个和 8 个设备切法相同；16 个设备是 32K 那份配置，上下文并行 8 × FSDP 2）。v5p 4 个设备没有窗口化循环，权重整块收齐；8 个、16 个设备各 64 个窗口化循环，其中带部分和相加、累加器 BF16 的 20 个（正好是上一张图里中招的那几种投影的前向和重算），其余是按输出维写各自的列，或权重梯度一侧（本来就是 FP32）。打开投影 FP32 累加后，这 20 个全部变成 FP32。</p>
 <p>📌 这次实测里大小没起作用：8 个设备上，连最小的路由打分矩阵也拆了；4 个设备上，连最大的 gate、up 也整块收。这份配置里拆不拆跟着切法和设备数走。为什么设备少不拆是推断：编译器按快慢选，设备少时环上首尾那几次传递的固定开销占比大，拆了省不下时间。更大的规模没有编过，按「会拆」准备。</p>
 <p>📌 混元 3（v5p 8 个设备）是同一个机制：qkv 投影 R 1.235 → 1.000，配置里有 41 个这样的循环。</p>
 <p>⚠️ 部分和小，舍掉的也小；按 6 次各自独立的舍入粗算，R 约 1.6（四份部分和各约最终值方差的 1/4、累加器约 1/2、出口 1），实测 1.41 更低，原因没查清。</p></details></figure>
@@ -9780,7 +9782,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="1179.3846153846155" y1="172" x2="1179.3846153846155" y2="656" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="1287" y="670" fill="#5f6368" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums">1e-3</text>
 <line x1="1287.076923076923" y1="172" x2="1287.076923076923" y2="656" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1388" y="154" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">对数轴：相邻两格差 100 倍</text>
+<text class="svgsm" x="1388" y="154" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">对数轴（相邻两格差 100 倍），条长按绝对值；负 ＝ 少推，正 ＝ 多推</text>
 <text class="svgsm" x="892" y="196" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">张量核一次加到底</tspan></text>
 <rect x="964" y="210" width="313.03897630751794" height="20" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="958" y="225" fill="#5f6368" text-anchor="end" style="font-size:13.1px;font-variant-numeric:tabular-nums">第 1 步</text>
@@ -9817,7 +9819,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="725" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只换 FP32 治好了截断（第 1 步 1.7e-6），一千步却只走到 TPU 的六成；改成分块两样都治，跟 TPU 重合</tspan></text>
 </svg><figcaption><b>橙线（只换 FP32）一千步只到六成，下格一路往下离开；绿线（改成分块）跟蓝线（TPU）重合，下格贴着零。</b><span class="capmore"><br><em>左格是训练轨迹（逐步实测，生产近似配置）；右格离线。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（左）：混元 3 截前 4 层，生产近似配置（整层重算＋路由回放）；逐步参数范数对 GPU 生产 5 份均值。橙线 ＝ GPU 生产只把输出头那次求和换成 FP32 一次加到底（真关 TF32），5 份均值；绿线 ＝ GPU 生产只把那次求和改成分块（升 FP32 再分块；修好的 golden 的基线那份；乘法留在张量核只分块的写法一千步跟它分不开；10 份第 1000 步之间最多差 1.15e-3）；蓝线 ＝ TPU 当前对齐配置；紫色虚线 ＝ 真精确（BF16 权重、全程 FP32、那次求和分块）。灰底 ＝ GPU 生产 5 份各自对均值的最大偏离（第 1000 步约 3.3e-04）。右格绿条是「张量核分块」、左格绿线是「升 FP32 再分块」：两种分块一千步分不开，所以同色。</p>
 <p>📌 实测（右）：训练里实际用到的那几个张量（第 1、100、300 步），一张 B200 上换写法重算这次矩阵乘，沿 w̄ 对 FP64 的相对偏差。</p></details></figure>
-  <p>橙线：GPU 生产只换这一处，第 1000 步参数范数比 GPU 生产多 ＋0.0124，TPU 是 ＋0.0209，只追回六成（59%）。右格是同一次矩阵乘的离线测量：FP32 一次加到底，第 1 步几乎不偏，到第 100 步的状态已经偏到 −2.56e-4，跟张量核同一个量级。</p>
+  <p>橙线：GPU 生产只换这一处，第 1000 步参数范数比 GPU 生产多 ＋0.0124，TPU 是 ＋0.0209，只追回六成（59%）。紫虚线（真精确）比 TPU 还高一截，是两边都把流进输出头反向的梯度存成 BF16 的那一截，两边一样（第九节拆账）；跟 <a href="#s7-4">§7.4</a>「TPU 几乎正好」不是一种比法：那里是同一起点各算一步，这里是一千步累积。右格是同一次矩阵乘的离线测量：FP32 一次加到底，第 1 步几乎不偏，到第 100 步的状态已经偏到 −2.56e-4，跟张量核同一个量级。</p>
   <p><b>为什么：吞小项。</b>训练以后冷门词概率越压越小，沿 w̄ 每个冷门词贡献一个同号的小项；一项不到累加值最小一格的一半，就被整项舍掉，舍掉的都在同一边。FP32 一次加到底躲得开截断，躲不开这个（cuBLAS 怎么累加没有源码可看，这是推断）。</p>
   <p><b>分块两样都治。</b>每 1024 项先加成一块、块结果留 FP32，再把一百多块加起来：块里的和不大，小项丢不掉，截断也只在短段里。GPU 生产只改这一处，第 1000 步 ＋0.0207，跟 TPU 的 ＋0.0209 重合（图上绿线和蓝线）；乘法留在 BF16 张量核、只分块也一样，步时只多 6%。只改 GPU 的标准答案，TPU 一行不动：修的是拿来对比的那份 GPU 参照，不是 GPU 的生产训练。</p>
   <p>图上紫色虚线「真精确」比 TPU 还高一截，不是说 TPU 也偏了：两边的生产程序都把流进输出头反向的梯度存成 BF16，这一截两边一样，不算谁的差（第九节拆账）。对齐比的是两边的生产程序像不像，所以跟 TPU 重合就是对上了。</p>
@@ -9949,7 +9951,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li>参数范数多涨、loss 偏低，几百步积成看得见的漂移。</li>
   </ol>
   <p>方向别读反：第一环说的「少推」是 GPU 少推。这股力往下压所有 logits，GPU 用得少，GPU 的 logits 整体就偏高；照 <a href="#s7-3">§7.3</a>「水平越高，挨的压越大」，GPU 的冷门行压得更狠，参数范数涨得少、loss 偏高。第五环的「多涨、偏低」是拿 TPU 对 GPU 说的：看上去是 TPU 低，其实是 GPU 高。</p>
-  <p>结案：拿那次求和改成分块累加的 GPU 程序当新的标准答案（修好的 golden），GPU 自己再跑 10 份造尺子；TPU 在 v5p、v7x 上 1000 步，每一项都在噪声内，最差 0.85 倍（<a href="#s9-5">§9.5</a>）。</p>
+  <p>结案：拿那次求和改成分块累加的 GPU 程序当新的标准答案（修好的 golden），GPU 自己再跑 10 份造尺子；TPU 在 v5p、v7x 上 1000 步，对事先定下的那份基线，每一项都在噪声内，最差 0.85 倍（<a href="#s9-5">§9.5</a>）。</p>
   <details class="foldfig"><summary><b>五环一条链的静态图</b>：（下面动画讲的是同一件事）</summary>
 <figure class="fbox fwide" id="fig-chain"><svg viewBox="0 0 1400 376" width="100%" role="img" aria-label="一条五环的链。第一环：GPU 输出层 dgrad 沿整张词表做长求和，沿 w̄ 每步少推一点（第 1 步 6.5e-4、第 100 步 6.1e-4），这个量是实测；归因成张量核长求和朝零截掉，是推断。第二环：主干权重沿这个方向每步少走一点，第 0 层注意力的输出投影最先长歪。第三环：隐状态在 w̄ 上的分量不同，所有 logits 一起偏一截，softmax 看不见。第四环：冷门词那几行被压多少跟着 logit 整体水平走，水平越高压得越多；它们梯度很小，Adam 的归一化保护失效，偏差原样累积。第五环：GPU 的冷门行缩得多，TPU 的参数范数显得大，loss 偏低也一起出现。五环的量都有直接测量。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">从一次求和到参数范数：五环一条链</text>
@@ -13359,29 +13361,30 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>「会改数值」那一行的细节</b></summary>
   <p>写明是<b>执行级</b>（只改舍入位置，比如融合、分块变了）还是<b>数学级</b>（公式、精度、算法变了），以及会影响哪些检查；执行级用 TPU 执行噪声判，数学级对修好的 golden ⑤（GPU 生产＋分段累加）不能变差：基线是验收事先定下的那一份，尺子是它自己 10 份两两 45 对。这道门原先挂在起点那份 GPU golden（<a href="#s9-2">§9.2</a> 的①）上，是两关验收定下来之前设的，2026-11-15 换成了 ⑤；本课没有引用过按旧那份算出的数学级读数，所以没有要重算的数。自己搭回归时，也对验收用的那份基线判。</p>
   <p><b>声明「会改数值」，不等于真会变，照样先看逐位</b>：路由打分那个开关（<a href="#s10-4">§10.4</a> 坑表「反向靠浮点相等找位置」）改成默认打开时，混元 3 截 4 层的两档回归对上一代全部逐位，指针直接前移、不用批准。可同一个开关在发现它的那份配置上（v7x 128 个设备），前向末位会变、每步贵约 2% —— 又一次印证「开关没效果」只对测它的那份配置成立。</p></details>
-  <p><b>指纹一样只说明程序没改；这份程序复跑逐不逐位，要另外验。</b>XLA 把一步训练编成一份程序，累加的先后在编译期就定死，所以同一份产物、同输入、同切分复跑，必须逐位（单切片上实测成立，定为规矩；官方文档里没有这样的书面保证，我们没查到；多切片没测）。硬件也有带加法的 DMA：自写内核用它、又不等写完成，先后就由时序定了。所以不逐位只有三种来源：输入或环境其实不同、自写内核里的异步竞争、硬件出错；差 1e-7 也要查到底。这也是签字的前提（签字条件第一条，<a href="#s10-5">§10.5</a> 签字卡）。</p>  <p>混元 4 的一个长上下文配置（不在三次迁移里）碰上了第二种：同一份产物复跑 92 次，2 次在某一步分开，梯度范数只差相对 4e-7，没报错、曲线看不出。根子是一个自写的 SparseCore 内核往同一个累加位置连发两笔加法，只等第一笔「读完源」就发第二笔：</p>
-<figure class="fbox fwide" id="fig-race"><svg viewBox="0 0 1400 568" width="100%" role="img" aria-label="左右两块，横轴都是时间。两块都画了两笔带加法的写，块 1 和块 2 都要往累加器里同一个位置加一笔，每笔先读源、再写进累加器。左块只等读：块 1 的源一读完，wait 就返回，内核马上发块 2；块 2 的写比块 1 先落地，两笔加法颠倒。右块每块之后发一次 4 KiB 的本地拷贝并等它写完，这一等把之前发出的写都围住，块 2 永远在块 1 落地之后才开始。底下用起点 1、块 1 加 2 的 24 次方、块 2 减 2 的 24 次方这组数：按顺序在 FP32 里得 0，颠倒得 1。单卡微基准：不加栅栏 75 次里 3732 个元素读到旧值，加栅栏 0 个；修法每步约多 3 到 6 毫秒。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <p><b>指纹一样只说明程序没改；这份程序复跑逐不逐位，要另外验。</b>XLA 把一步训练编成一份程序，累加的先后在编译期就定死；先后定死，在哪儿舍、舍几次也跟着定死。所以同一份产物、同输入、同切分复跑，本该逐位。不逐位只有三种来源：输入或环境其实不同；自写内核里的异步竞争（内核用了带加法的 DMA —— 一次异步搬运，可以顺手把数加进目的地 —— 却不等写完成，几笔加法的先后就由时序定了）；硬件出错。差 1e-7 也要查到底：参照自己复跑都不稳，后面拿它做的比较都不作数。这也是签字的前提（签字条件第一条，<a href="#s10-5">§10.5</a> 签字卡）。</p>
+  <details class="foldfig"><summary><b>「本该逐位」有多硬</b></summary><p>单切片上实测成立，定为规矩；官方文档里没有这样的书面保证，我们没查到；多切片没测。</p></details>  <p>混元 4 的一个长上下文配置（不在三次迁移里）碰上了第二种：同一份产物复跑 92 次，2 次在某一步分开，梯度范数只差相对 4e-7，没报错、曲线看不出。根子是一个自写的 SparseCore 内核往同一个累加位置连发两笔加法，只等第一笔「读完源」就发第二笔：</p>
+<figure class="fbox fwide" id="fig-race"><svg viewBox="0 0 1400 584" width="100%" role="img" aria-label="左右两块，横轴都是时间。两块都画了两笔带加法的写，块甲和块乙都要往累加器里同一个位置加一笔，每笔先读源、再写进累加器。左块只等读：块甲的源一读完，wait 就返回，内核马上发块乙；块乙的写比块甲先落地，两笔加法颠倒。右块每块之后发一次小拷贝并等它写完，这一等把之前发出的写都围住，块乙永远在块甲落地之后才开始。底下用累加器原值 1、块甲加 2 的 24 次方、块乙加负 2 的 24 次方这组数：按顺序在 FP32 里得 0，颠倒得 1。FP32 只有 24 位有效位，1 碰上 2 的 24 次方会被吞掉。单卡微基准：不加栅栏 75 次里 3732 个元素读到旧值，加栅栏 0 个；修法每步约多 3 到 6 毫秒。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">复跑偶尔差一位：内核只等「读完」，没等「写完」</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">两笔加法都落在累加器的同一个位置上，先后一换，FP32 舍入就不同；横轴是时间，没有刻度（每笔写要多久没测过）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">块 1 的加法</text>
-<rect x="135.48000000000002" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="156" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">块 2 的加法</text>
-<rect x="270.96000000000004" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="291" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">写栅栏：等一次写完</text>
-<rect x="0" y="102" width="680" height="372" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">块甲的加法</text>
+<rect x="125.4" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="146" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">块乙的加法</text>
+<rect x="250.8" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="271" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">写栅栏：等一次写完</text>
+<rect x="0" y="102" width="680" height="388" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="680" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="0" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="680" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 只等读（原来的写法）</tspan></text>
-<text class="svgsm" x="82" y="200" fill="#174ea6" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">块 1</tspan></text>
+<text class="svgsm" x="82" y="200" fill="#174ea6" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">块甲</tspan></text>
 <rect x="96" y="178" width="110" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="151" y="200" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">读源</tspan></text>
 <rect x="206" y="178" width="330" height="34" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0" stroke-dasharray="5 3"/>
 <text class="svgsm" x="371" y="200" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">写进累加器</tspan></text>
 <line x1="206" y1="168" x2="206" y2="282" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 4"/>
 <text class="svgsm" x="212" y="172" fill="#a50e0e" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">wait 返回：只说明源读完了</tspan></text>
-<text class="svgsm" x="82" y="252" fill="#b06000" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">块 2</tspan></text>
+<text class="svgsm" x="82" y="252" fill="#b06000" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">块乙</tspan></text>
 <rect x="222" y="230" width="90" height="34" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="267" y="252" fill="#b06000" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">读源</tspan></text>
 <rect x="312" y="230" width="150" height="34" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.0" stroke-dasharray="5 3"/>
@@ -13391,28 +13394,28 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="536" y1="212" x2="536" y2="314" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2 3"/>
 <line x1="462" y1="264" x2="462" y2="314" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2 3"/>
 <rect x="449" y="315" width="26" height="26" rx="13" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="462" y="333" fill="#fff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="462" y="333" fill="#fff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">乙</tspan></text>
 <rect x="523" y="315" width="26" height="26" rx="13" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="536" y="333" fill="#fff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
-<text class="svgsm" x="499" y="368" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先 2 后 1：颠倒了</tspan></text>
-<text class="svgsm" x="30" y="410" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1 ＋ 2²⁴ − 2²⁴</tspan></text>
-<text class="svgsm" x="200" y="410" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按 1、2 的顺序 → 0 颠倒 → 1</tspan></text>
-<text class="svgsm" x="30" y="438" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">大多数时候写来得及落地，偶尔来不及：92 次复跑 2 次分开</text>
-<text class="svgsm" x="30" y="462" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">那 2 次推断是两笔颠倒，也可能是收尾读到旧值；写栅栏两种都盖住</text>
-<rect x="720" y="102" width="680" height="372" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="536" y="333" fill="#fff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">甲</tspan></text>
+<text class="svgsm" x="499" y="368" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先乙后甲：颠倒了</tspan></text>
+<text class="svgsm" x="30" y="406" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">累加器原值 1，块甲加 2²⁴，块乙加 −2²⁴</tspan></text>
+<text class="svgsm" x="30" y="434" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按甲、乙的顺序 → 0 颠倒 → 1</tspan></text>
+<text class="svgsm" x="30" y="462" fill="#202124" style="font-size:13.1px;font-variant-numeric:tabular-nums">FP32 只有 24 位有效位，1 碰上 2²⁴ 会被吞掉（第七节的吞小项）</text>
+<text class="svgsm" x="30" y="486" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">大多数时候写来得及落地，偶尔来不及：92 次复跑 2 次分开</text>
+<rect x="720" y="102" width="680" height="388" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="720" y="102" width="680" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="720" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="720" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="734" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 每块之后等一次「写完」（写栅栏）</tspan></text>
-<text class="svgsm" x="802" y="200" fill="#174ea6" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">块 1</tspan></text>
+<text class="svgsm" x="802" y="200" fill="#174ea6" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">块甲</tspan></text>
 <rect x="816" y="178" width="100" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="866" y="200" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">读源</tspan></text>
 <rect x="916" y="178" width="180" height="34" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0" stroke-dasharray="5 3"/>
 <text class="svgsm" x="1006" y="200" fill="#174ea6" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">写进累加器</tspan></text>
 <rect x="1102" y="204" width="60" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1132" y="224" fill="#0d652d" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">栅栏</tspan></text>
-<text class="svgsm" x="1102" y="194" fill="#0d652d" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">发 4 KiB 拷贝，等它写完</tspan></text>
-<text class="svgsm" x="802" y="252" fill="#b06000" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">块 2</tspan></text>
+<text class="svgsm" x="1102" y="194" fill="#0d652d" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">发一次小拷贝，等它写完</tspan></text>
+<text class="svgsm" x="802" y="252" fill="#b06000" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">块乙</tspan></text>
 <rect x="1172" y="230" width="60" height="34" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="1202" y="252" fill="#b06000" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">读源</tspan></text>
 <rect x="1232" y="230" width="100" height="34" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.0" stroke-dasharray="5 3"/>
@@ -13422,19 +13425,19 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="1096" y1="212" x2="1096" y2="314" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2 3"/>
 <line x1="1332" y1="264" x2="1332" y2="314" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2 3"/>
 <rect x="1083" y="315" width="26" height="26" rx="13" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1096" y="333" fill="#fff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="1096" y="333" fill="#fff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">甲</tspan></text>
 <rect x="1319" y="315" width="26" height="26" rx="13" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1332" y="333" fill="#fff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
-<text class="svgsm" x="1214" y="368" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">永远先 1 后 2</tspan></text>
-<text class="svgsm" x="750" y="410" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1 ＋ 2²⁴ − 2²⁴</tspan></text>
-<text class="svgsm" x="920" y="410" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">永远 → 0</tspan></text>
-<text class="svgsm" x="750" y="438" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">不改算术，只多等一下：每步约 ＋3–6 ms</text>
-<text class="svgsm" x="750" y="462" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">约 0.1%（另一作业量到 0.17%）</text>
-<rect x="0" y="494" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="494" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="494" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="521" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">wait 返回不等于写已落地；多等一次「写完」，之前发出的写就都到了</tspan></text>
-</svg><figcaption><b>左边块 2 先落地，两笔加法颠倒；右边等一次「写完」再发下一块，永远先 1 后 2。</b><span class="capmore"><br><em>时间轴没有刻度，只画 2 块；1 ＋ 2²⁴ − 2²⁴ 那组数是 FP32 真算的，也是单卡微基准用的那组。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（对齐记录混元 4 案例 19，混元 4 的一个内部配置，开稀疏注意力，TPU v7x 128 个设备）：稀疏注意力反向把 dKV 的部分行用「带加法的间接 DMA」散射回 SparseCore 共享内存里的累加器；JAX 的 SparseCore 下沉代码自己注释写着散射没有写栅栏、wait() 只等读。单卡微基准每行置 1，加 2²⁴ 只等读，再加 −2²⁴：按序得 0、颠倒得 1、其他值是丢写；收尾形态（只等读就读回）不加栅栏 75 次里 3732 个元素读到旧值、加栅栏 0 个；块间颠倒在单卡孤立时序下一次也没碰上（约 1e10 个元素），整模型里靠正对照坐实。</p>
+<text class="svgsm" x="1332" y="333" fill="#fff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">乙</tspan></text>
+<text class="svgsm" x="1214" y="368" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">永远先甲后乙</tspan></text>
+<text class="svgsm" x="750" y="406" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">累加器原值 1，块甲加 2²⁴，块乙加 −2²⁴</tspan></text>
+<text class="svgsm" x="750" y="434" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">永远按甲、乙的顺序 → 0</tspan></text>
+<text class="svgsm" x="750" y="462" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">不改算术，只多等一下：每步约 ＋3–6 ms</text>
+<text class="svgsm" x="750" y="486" fill="#5f6368" style="font-size:13.1px;font-variant-numeric:tabular-nums">约 0.1%（另一作业量到 0.17%）</text>
+<rect x="0" y="510" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="510" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="510" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="537" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">wait 返回不等于写已落地；多等一次「写完」，之前发出的写就都到了</tspan></text>
+</svg><figcaption><b>左边块乙先落地，两笔加法颠倒；右边等一次「写完」再发下一块，永远先甲后乙。</b><span class="capmore"><br><em>时间轴没有刻度，只画 2 块；1 ＋ 2²⁴ − 2²⁴ 那组数是 FP32 真算的，也是单卡微基准用的那组。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（对齐记录混元 4 案例 19，混元 4 的一个内部配置，开稀疏注意力，TPU v7x 128 个设备）：稀疏注意力反向把 dKV 的部分行用「带加法的间接 DMA」散射回 SparseCore 共享内存里的累加器；JAX 的 SparseCore 下沉代码自己注释写着散射没有写栅栏、wait() 只等读。单卡微基准每行置 1，加 2²⁴ 只等读，再加 −2²⁴：按序得 0、颠倒得 1、其他值是丢写；收尾形态（只等读就读回）不加栅栏 75 次里 3732 个元素读到旧值、加栅栏 0 个；块间颠倒在单卡孤立时序下一次也没碰上（约 1e10 个元素），整模型里靠正对照坐实。整模型那 2 次分开推断是两笔颠倒，也可能是收尾读到旧值；写栅栏两种都盖住。</p>
 <p>📌 修法：每个查询块的加法排空后，往一段永远不读回的丢弃行发一次 (8, 128) FP32（4 KiB）本地拷贝并等它写完；SparseCore 上这种写等待会把同一个子核之前发出的流一起围住。不改算术；256K 整模型每步约 ＋3–6 ms（约 0.1%（另一作业量到 0.17%））。</p>
 <p>⚠️ 图里只画 2 块、时间轴不带刻度：真实内核按查询块一块一块发，每笔写多久没有量过。</p></details></figure>
   <div class="note"><span class="t">自写内核的一条规矩</span>
@@ -13447,7 +13450,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>读内核和下沉代码</b>：这一步用「带加法的间接 DMA」往 SparseCore 共享内存里的累加器加，内核在一块的加法「排空」后就发下一块对同一批 key 的加法，可排空只等读；JAX 的 SparseCore 下沉代码自己注释写着：散射没有写栅栏，wait 只等读。</li>
     <li><b>单卡微基准</b>：每行置 1，加 2²⁴（只等读），再加 −2²⁴，按顺序得 0、颠倒得 1、丢写得别的值。收尾那种形态（只等读就把行读回）不加栅栏 75 次里 3732 个元素读到旧值，加栅栏 0 个：写确实会晚于 wait 落地。块间颠倒单卡上一次没碰上（约 1e10 个元素），整模型那几次推断是颠倒、也可能是收尾读到旧值，没分开验证；写栅栏两种都盖住。</li>
     <li><b>正对照</b>：换一种把同一个 key 的加法挤得更密的写法（数学上逐位相同），不加栅栏 10／10 份第 0 步就不同，加了栅栏 8／8 份 24 步逐位。</li>
-    <li><b>修法</b>：写栅栏。每块加完，往一段永远不读回的地方发一次 4 KiB 本地拷贝、等它写完；SparseCore 上这种写等待会把之前发出的写一起围住。不改算术，每步约 ＋3–6 ms（约 0.1%（另一作业量到 0.17%））。<br><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/602ab1a2e4820c47f8d53d2ea8ad1f731b678e73/src/maxtext/kernels/dsa/sparse_mla_sc.py#L2918">MaxText（公开分支 hunyuan4-dsa）：写栅栏开关 FENCE_SCATTER 那段</a>（内核代码：这个分支只有稀疏注意力的内核库，模型接线还没移植，不能直接开开关跑）</li>
+    <li><b>修法</b>：写栅栏。每块加完，往一段永远不读回的地方发一次 4 KiB 本地拷贝、等它写完；SparseCore 上这种写等待会把之前发出的写一起围住。不改算术，每步约 ＋3–6 ms（约 0.1%（另一作业量到 0.17%））。<br><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/602ab1a2e4820c47f8d53d2ea8ad1f731b678e73/src/maxtext/kernels/dsa/sparse_mla_sc.py#L2918">MaxText（公开分支 hunyuan4-dsa）：写栅栏（配置键 dsa_scatter_fence，内核里的 FENCE_SCATTER）那段</a>（这个分支有稀疏注意力的内核、层入口和配置键，还没接到混元 4 的解码器上，不能直接开开关跑）</li>
   </ol>
   <p><b>统计别说过头</b>：加栅栏以后合计 7148 个运行步（份数 × 步数）0 次分叉；可同一批里没修的现行版 22 份 5215 步也是 0 次。按现行版合计发生率（10,011 运行步 4 次），加栅栏的 0 次仍有约 6%的概率只是没碰上。定案靠机理、单卡微基准和正对照，不靠堆步数。</p>
   <p><b>改了程序，怎么验「复跑逐位」</b>：冒烟（每次改程序）至少 3 份 × 100 步、同一份产物，每步指纹全逐位；放行（进推荐配置前）合计至少 4400 个运行步 0 次分叉，跨至少 2 个作业、2 个切片。数怎么来：0 次分叉时，发生率的 95% 上界约 3 ÷ 运行步数；这次竞争早期的发生率约 7e-4，要把上界压到它以下需要约 4300 步，取 4400。换了模型、内核或发生率，照同样的算法重算。（对齐记录里的指纹工具还没合进训练框架的共享分支，这里只讲方法。）</p>
@@ -13492,7 +13495,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="422" y="214" width="36" height="36" rx="18" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="440" y="238" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
 <text class="svgsm" x="440" y="182" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换成噪声尺子</tspan></text>
-<text class="svgsm" x="440" y="204" fill="#202124" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是 N 的 1.53–2.45 倍</tspan></text>
+<text class="svgsm" x="440" y="204" fill="#202124" text-anchor="middle" style="font-size:13.1px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是噪声上限 N 的 1.53–2.45 倍</tspan></text>
 <rect x="722" y="214" width="36" height="36" rx="18" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="740" y="238" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
 <text class="svgsm" x="740" y="182" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按参数分组定位</tspan></text>
@@ -13545,8 +13548,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 走错的四步：「FP32 dgrad」偏 8.08e-4，比 BF16 的 6.51e-4 还大，一度判成换 dgrad 也不动；TPU 那份 FP32 参照里路由专家其实按 BF16 算，翻转是它的下游，撤回；精确轨迹只看一对扰动，像是比借来的尺子窄 18 倍，五份 10 对一量同一量级；FP32 一次累加 12 万也偏，④ 自己少漂 ＋8.70e-3，分段累加后两边精确轨迹重合。</p>
 <p>📌 最终方案里改数值的主要是两处：TPU 的部分和留 FP32、GPU golden 的分段累加；其余几步都是把量法和参照弄对。各数都在出处台账里。</p></details></figure>
   <p>归成前面一路埋下的四条暗线：每个结论先问拿什么比；名字对了不等于生效，读回值、工具输出都要实测核对；换了条件就要重验（设备数、梯度累积、步数、芯片、运行库，§5）；先排除自己（包括当参照的那一份），再怀疑硬件。第二次迁移的坑也都落在这几条里。</p>
-  <p><b>反向里别靠「两个浮点数相等」找位置。</b>混元 4 的一个长上下文配置里，出错的又是当参照的那份 TPU 程序：编译器重算出来的那一份末位跟原来不一样，一层路由打分的梯度只剩正确值的 0.948 倍，总梯度范数却只差 9e-6。</p>
-  <p><b>总范数只差 1e-5，可能是一个张量差了 5%。</b>逐个张量看差的形状：整体缩小是丢了贡献，方向随机才是舍入。</p>
+  <p><b>反向里别靠「两个浮点数相等」找位置。</b>混元 4 的一个长上下文配置里，两份只差一项辅助损失的 TPU 程序对不上，出错的那份正是拿来当参照的：编译器为省显存把算路由打分的那一块重算了一份，末位跟原来不一样，一层路由打分的梯度只剩正确值的 0.948 倍，总梯度范数却只差 9e-6。</p>
+  <div class="note"><span class="t">示意：max 的反向怎么丢梯度</span>
+  ① max 的反向，把梯度给「值等于最大值」的那个位置。<br>
+  ② [3.0, 5.0, 4.0] 里最大是 5.0，梯度给第二个。<br>
+  ③ 反向拿来比较的是重算出的那一份，5.0 的末位变了，跟前向答案谁都不相等，这一份梯度就丢了，不报错。</div>
+  <p><b>总范数只差 9e-6，可能是一个张量差了 5%。</b>逐个张量看差的形状：整体缩小是丢了贡献，方向随机才是舍入。</p>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/d727f0a8323c0d6fddd7c46ddf9ec2d8fef39a1f/models/hunyuan4/cases/18-router-max-jvp-remat-clone.md">代码：对齐记录 · 案例 18「路由 max 的反向在重算克隆下丢梯度」</a></p>
   <details class="foldfig"><summary><b>坑表</b>：24 行，每行一个坑、一条规矩</summary>
   <table class="t9"><thead><tr><th>坑</th><th>长什么样</th><th>判据</th></tr></thead><tbody>
@@ -13598,7 +13605,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul></details>
 
   <h3 id="s10-5">10.5　回到开头</h3>
-  <p><b>TPU 没算错。</b>TPU 的 loss 低约 1.7e-4，按噪声尺子是真偏差；查到最后，大头偏在 GPU 的 golden：<b>一次 12 万长的求和，每一步都朝零少算了一点</b>。改成分块累加、拿它当基线，v5p、v7x 1000 步每一项都在噪声内（最差 0.85 倍）；第 1 步整步梯度用噪声判不过、机理查到，按签字原则这一项不满足，交验收方决定（<a href="#s9-5">§9.5</a>）。第二个案例里，两种数学等价的并行对不上，查到最后是一次加法的组织方式。</p>
+  <p><b>TPU 没算错。</b>TPU 的 loss 低约 1.7e-4，按噪声尺子是真偏差；查到最后，大头偏在 GPU 的 golden：<b>一次 12 万长的求和，每一步都朝零少算了一点</b>。改成分块累加、拿它当基线，v5p、v7x 1000 步每一项都在噪声内（对事先定下的那份基线，最差 0.85 倍）；第 1 步整步梯度用噪声判不过、机理查到，按签字原则这一项不满足，交验收方决定（<a href="#s9-5">§9.5</a>）。第二个案例里，两种数学等价的并行对不上，查到最后是一次加法的组织方式。</p>
   <div class="note"><span class="t">签字卡：三条都满足，才能说「对齐了」</span>
   ① 地基逐位、两边可复现：L0 全部逐位；TPU 同一份程序复跑逐位（<a href="#s10-3">§10.3</a>）。<br>
   ② 用噪声判的检查全过、没有方向性偏移；待定不能直接签，先加参照重判。<br>
@@ -13680,7 +13687,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>第 1 步逐张量梯度普遍是 GPU 噪声的 2–3 倍，没有哪一处突出</td><td>好几处舍入位置跟 GPU 不同</td><td>五格表逐个算子对（<a href="#s5-5">§5.5</a>）；超线的对 FP64 定责</td></tr>
   <tr><td>一个小标量一直超线，它的输入和梯度都没事</td><td>f32 里的病态在放大一格</td><td>用大数的格量差；同样的计算换 CPU（PyTorch）算，看那一格是谁的（<a href="#s5-5">§5.5</a> 折叠）</td></tr>
   <tr><td>含 exp、log、sigmoid 的量，TPU 系统偏一边</td><td>TPU 默认的超越函数精度低、而且有偏</td><td>逐函数对 FP64 数格；换高精度写法后整网再验（<a href="#s5-5">§5.5</a>）</td></tr>
-  <tr><td>TPU 的 loss 长跑同号偏高</td><td>课里碰过的：编译器省掉了一次 GPU 会做的舍入（<a href="#s5-4">§5.4</a> 折叠「第二次迁移的一例」、<a href="#s9-1">§9.1</a> 流梯度，被省是推断）；TPU 多做了一次舍入（<a href="#s10-2">§10.2</a>，运行库 0.0.52 上 RMSNorm 输出舍两次）；只有 MTP 那项偏高的，是 MTP 头的梯度舍成 BF16 前两边乘的系数不同（<a href="#s5-5">§5.5</a> 折叠）。方向相反的：GPU 长求和朝零少算，让 TPU 显得偏低（第七节）</td><td>离线编译扫被省掉的往返（<a href="#s9-1">§9.1</a>）；换运行库先把已知几件重测（<a href="#s10-2">§10.2</a>）；每项 loss 分开判。超越函数见上面「含 exp、log、sigmoid」那行：它让 loss 偏哪边，课里没量</td></tr>
+  <tr><td>TPU 的 loss 长跑同号偏高</td><td>课里碰过的：编译器省掉了一次 GPU 会做的舍入（<a href="#s5-4">§5.4</a> 折叠「第二次迁移的一例」、<a href="#s9-1">§9.1</a> 流梯度，被省是推断）；TPU 多做了一次舍入（<a href="#s10-2">§10.2</a>，运行库 0.0.52 上 RMSNorm 输出舍两次，只在 v5p、且只舍一次的开关关着时）；只有 MTP 那项偏高的，是 MTP 头的梯度舍成 BF16 前两边乘的系数不同（<a href="#s5-5">§5.5</a> 折叠；GPU golden 照 TPU 写法改完后，TPU 反过来偏低）。方向相反的：省舍入也可能让 TPU 偏低（<a href="#s5-4">§5.4</a>，32K 上 RMSNorm scale 被省）；GPU 长求和朝零少算，让 TPU 显得偏低（第七节）</td><td>离线编译扫被省掉的往返（<a href="#s9-1">§9.1</a>）；换运行库先把已知几件重测（<a href="#s10-2">§10.2</a>）；每项 loss 分开判。超越函数见上面「含 exp、log、sigmoid」那行：它让 loss 偏哪边，课里没量</td></tr>
   <tr><td>长跑 loss 次次同号偏一点，只改执行参数也一样</td><td>编译器省掉了一次 GPU 一定会做的舍入</td><td>在那一处显式「舍到 BF16」做 A/B（<a href="#s5-4">§5.4</a>）</td></tr>
   <tr><td>jit 下结果错得远超舍入量级（比如相对误差 0.47），一步一步执行却是对的</td><td>编译器 bug，不是精度问题（对齐记录里的实例：一次多输出融合在 v5p 上把一个输出算丢了，运行库 0.0.46–0.0.52 都有，上游 11-06 起的 nightly 不再这样合并）</td><td>先关掉 jit 一步一步执行，跟 jit 比；再把每道编译工序之后的程序导出来、在 CPU 上执行（那一次每一步都对，说明错在程序翻成 TPU 指令那一步），再比相邻工序找出是哪次融合；绕开的办法是关掉那种融合，或在出事的读取前加 <code>optimization_barrier</code></td></tr>
   <tr><td>已经定位到一处「编译器省掉的舍入」，想知道同类的还有几处</td><td>代码里写了 FP32 → BF16 → FP32 往返、编译器在融合里省掉的地方不止一处</td><td>离线编译整个训练步，扫同一颗融合里的往返 convert，只含往返的 kernel 数 LLO 打包指令；每类对照 GPU 代码，再上卡验证（<a href="#s9-1">§9.1</a>）</td></tr>
