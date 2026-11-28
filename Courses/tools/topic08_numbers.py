@@ -1819,6 +1819,10 @@ RACE_STALE = (75, 3732, 0)                       # 收尾形态微基准：75 �
 RACE_POS = ((10, 10), (8, 8))                    # 正对照：同 key 加法挤更密，不加栅栏 10/10 份第 0 步就不同；加栅栏 8/8 份 24 步逐位（c19:159-160）
 RACE_FENCE_MS = (3, 6)                           # 加写栅栏每步约 +3–6 ms（≤0.1%），256K 整模型中位步时约 6.39–6.40 s（c19:205）
 assert RACE_FENCE_MS[1] / 1e3 / 6.39 <= 0.001
+_rfo = ((6.4075 + 6.4035) / 2, (6.3965 + 6.3924) / 2)   # 另一作业：fence ／ 现行中位步时 s（c19:206「+11 ms，+0.17%」）
+RACE_FENCE_OTHER_PCT_T = "%.2f%%" % ((_rfo[0] - _rfo[1]) / _rfo[1] * 100)
+assert RACE_FENCE_OTHER_PCT_T == "0.17%" and round((_rfo[0] - _rfo[1]) * 1e3) == 11
+RACE_FENCE_PCT_T = "约 0.1%（另一作业量到 " + RACE_FENCE_OTHER_PCT_T + "）"   # 课件统一口径（R2 核查 ⚠️5）
 RACE_FENCE_STEPS = 7148                          # 加栅栏长跑 0 次分叉（c19:222）
 RACE_CUR = (10011, 4)                            # 现行版合计运行步、分叉（c19:221）
 RACE_CUR_QUIET = (22, 5215)                      # 同批现行版对照长跑 22 份 5215 步，也是 0 次（c19:219）
@@ -1857,6 +1861,10 @@ assert RMAX_COST_T == "＋105–124 ms（＋1.9%–2.5%）", RMAX_COST_T
 # 日常回归的新口径（混元 3 有效性检验 models/hunyuan3/regression/effectiveness.md「一页结论」第 2–4 条，第 14–16 行；检出表第 28–34 行）。
 EFF_HARMLESS, EFF_REAL = (1.03, 1.09), (1.12, 1.62)    # 声明「会改数值」后 1000 步容差门：无害改动 ／ 三种真错的读数（倍尺子）
 assert EFF_HARMLESS[1] < EFF_REAL[0] < 2 and EFF_REAL[1] < 2                           # 全落「待定」1–2，分不开
+#   口径（R2 核查 ⚠️6）：无害改动只有 rv3-n1 一格，1.03–1.09 是这一格三条检查的跨度，课件只用最大 1.09；真错是每格三条取最大（eff:36）。
+EFF_TIE = 1.38                                   # rv3-p4「只翻近似平局」1000 步容差门（eff:29），落在真错区间里，单列
+assert EFF_REAL[0] < EFF_TIE < EFF_REAL[1]
+EFF_HARMLESS_MAX_T, EFF_TIE_T = "%.2f" % EFF_HARMLESS[1], "%.2f" % EFF_TIE
 EFF_S1_PROJ, EFF_S1_RMS, EFF_S1_HARMLESS = 2.7, 6.1, 0.13   # 第 1 步梯度范数差（倍 GPU 尺子）：关投影 FP32 累加 ／ 关 RMSNorm 只舍一次 ／ 无害改动上沿（第 15 行）
 EFF_S1_DQ = 0.05                                 # dq 累加改 BF16：第 1 步只差 0.05 倍，分不开（第 16 行）
 EFF_EPS_1K = 81                                  # RMSNorm eps 乘 10：1000 步容差门 81 倍（检出表第 34 行）
