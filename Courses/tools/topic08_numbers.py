@@ -1804,3 +1804,71 @@ FC_GPU_RANGE_T = "%s 到 %s" % (tx(FC_GPU_LO, "%.1e"), tx(FC_GPU_HI, "%.1e", plu
 # 32K 第 2 级 1000 步主 loss，三个窗口（同一私有重算）：第 2–1000 步 −4.38e-5 ÷ N 5.62e-6 ＝ 7.8；第 51–300 步 53.6；第 301–1000 步 ＋1.08e-5 ÷ 7.20e-6 ＝ 1.5
 M3_L2_WIN = {"2:1000": (-4.38e-5, 5.62e-6), "51:300": (-1.983e-4, 3.70e-6), "301:1000": (1.08e-5, 7.20e-6)}
 assert ["%.1f" % (abs(v) / n) for v, n in M3_L2_WIN.values()] == ["7.8", "53.6", "1.5"]
+
+# ── 2026-11-28 夜 · 第十节「TPU 自己跟自己」两件（对齐记录 2026-11-28 主线逐条核过；实测）──
+# 案例 19（同一份程序复跑偶发不逐位：稀疏注意力反向的 SparseCore 散射只等读、不等写）。
+#   出处：models/hunyuan4/cases/19-dsa-sc-scatter-add-dma-race.md 第 30–43 行（现象）、129–138（单卡微基准）、
+#   155–160（正对照）、166–205（修法与代价）、211–238（长跑统计）；docs/guide/06-debugging.md 第 145–194 行（规则与门槛）。
+#   配置：混元 4 的一个内部配置（公开版案例原文措辞），开稀疏注意力，256K ／ 64K，TPU v7x 128 个设备。
+RACE_RUNS, RACE_SPLIT = 92, 2                    # 同一份产物 24 步复跑 92 次，2 次在某一步分开（c19:34）
+RACE_GN = (9.1164389, 9.1164427)                 # 256K 第 16 步裁剪前梯度范数，两份（c19:40）
+RACE_GN_REL = (RACE_GN[1] - RACE_GN[0]) / RACE_GN[0]
+assert abs(RACE_GN_REL - 4e-7) < 0.3e-7, RACE_GN_REL                                   # 原文「相对 4e-7」
+RACE_GN_REL_T = "4e-7"
+RACE_STALE = (75, 3732, 0)                       # 收尾形态微基准：75 次，不加栅栏读到旧值的元素 3732、加栅栏 0（c19:138）
+RACE_POS = ((10, 10), (8, 8))                    # 正对照：同 key 加法挤更密，不加栅栏 10/10 份第 0 步就不同；加栅栏 8/8 份 24 步逐位（c19:159-160）
+RACE_FENCE_MS = (3, 6)                           # 加写栅栏每步约 +3–6 ms（≤0.1%），256K 整模型中位步时约 6.39–6.40 s（c19:205）
+assert RACE_FENCE_MS[1] / 1e3 / 6.39 <= 0.001
+RACE_FENCE_STEPS = 7148                          # 加栅栏长跑 0 次分叉（c19:222）
+RACE_CUR = (10011, 4)                            # 现行版合计运行步、分叉（c19:221）
+RACE_CUR_QUIET = (22, 5215)                      # 同批现行版对照长跑 22 份 5215 步，也是 0 次（c19:219）
+RACE_P = RACE_CUR[1] / RACE_CUR[0]
+assert abs(RACE_P - 4.0e-4) < 0.05e-4, RACE_P
+RACE_LUCK = (1 - RACE_P) ** RACE_FENCE_STEPS     # 加栅栏的 0 次只是没碰上的概率（独立、恒定发生率）
+assert abs(RACE_LUCK - 0.06) < 0.005, RACE_LUCK                                        # 原文「约 6%」
+RACE_LUCK_T = "约 6%"
+# 验收门槛（06:185-188）：T1 冒烟 ≥3 份 × 100 步全逐位；T2 放行合计 ≥4400 运行步 0 次分叉、跨 ≥2 个作业 ≥2 个切片。
+#   依据：0 次分叉时发生率的 95% 上界约 3 / n；早期发生率 3 / 4418 ≈ 7e-4，压到它以下要约 4300 步，取 4400。
+GATE_T1 = (3, 100)
+GATE_T2 = 4400
+assert abs(3 / 4418 - 7e-4) < 0.3e-4 and 4250 < 3 / 7e-4 < 4400 and 3 / GATE_T2 < 7e-4
+assert abs(1 - (1 - 0.01) ** (GATE_T1[0] * GATE_T1[1]) - 0.95) < 0.005                 # 06:187「300 运行步对 1% 的竞争至少碰上一次约 95%」
+
+# 案例 18（重算克隆末位不同，路由打分 max 的反向丢梯度）。
+#   出处：models/hunyuan4/cases/18-router-max-jvp-remat-clone.md 第 5、18 行（结论）、36–45（起点表与「总范数看不出来」）、
+#   91–128（JAX max 反向规则、克隆）、136（0.94798 倍）、198–203（开关代价）、271–305（自查与防范）。
+#   配置：混元 4 的一个内部配置（公开版案例原文措辞，开稀疏注意力的 32K），TPU v7x 128 个设备，第 0 步。
+RMAX_REL = 2.34e-4                               # 两份程序第 0 步主干梯度相对 L2
+RMAX_HEALTHY = 1.1e-7                            # 同批健康参照 ≤1.1e-7
+assert 1e3 <= RMAX_REL / RMAX_HEALTHY < 1e4                                            # 「大三个数量级」
+RMAX_GN = 9.0e-6                                 # 裁剪前总梯度范数相对差
+RMAX_SCALE = 0.94798                             # 出事那层路由打分权重的梯度 ≈ 0.948 × 正确值 ＋ 1.7% 残差
+RMAX_SCALE_T, RMAX_RESID_T = "0.948", "1.7%"
+assert "%.3f" % RMAX_SCALE == RMAX_SCALE_T and abs((1 - RMAX_SCALE) - 0.05) < 0.003   # 「约 5% 的槽位」是按 0.948 反推（c18:310）
+RMAX_COST = {"32K": (4.756, 4.861), "64K": (4.931, 5.055), "128K": (5.432, 5.553), "256K": (6.383, 6.506)}   # 开关前后每步 s（c18:200-203）
+_rc = [(b - a) * 1e3 for a, b in RMAX_COST.values()]
+_rp = [(b - a) / a * 100 for a, b in RMAX_COST.values()]
+assert [round(v) for v in _rc] == [105, 124, 121, 123] and ["%.1f" % v for v in _rp] == ["2.2", "2.5", "2.2", "1.9"], (_rc, _rp)
+RMAX_COST_T = "＋%d–%d ms（＋%.1f%%–%.1f%%）" % (round(min(_rc)), round(max(_rc)), min(_rp), max(_rp))
+assert RMAX_COST_T == "＋105–124 ms（＋1.9%–2.5%）", RMAX_COST_T
+# 开关改成默认打开后补跑的回归（对齐记录 models/hunyuan3/regression/README.md 第 20 行）：
+#   混元 3 截 4 层 T0／T1 对上一代全部逐位，指针前移、不用批准。开关在案例 18 那份配置上前向末位会变（c18:29）。
+
+# 日常回归的新口径（混元 3 有效性检验 models/hunyuan3/regression/effectiveness.md「一页结论」第 2–4 条，第 14–16 行；检出表第 28–34 行）。
+EFF_HARMLESS, EFF_REAL = (1.03, 1.09), (1.12, 1.62)    # 声明「会改数值」后 1000 步容差门：无害改动 ／ 三种真错的读数（倍尺子）
+assert EFF_HARMLESS[1] < EFF_REAL[0] < 2 and EFF_REAL[1] < 2                           # 全落「待定」1–2，分不开
+EFF_S1_PROJ, EFF_S1_RMS, EFF_S1_HARMLESS = 2.7, 6.1, 0.13   # 第 1 步梯度范数差（倍 GPU 尺子）：关投影 FP32 累加 ／ 关 RMSNorm 只舍一次 ／ 无害改动上沿（第 15 行）
+EFF_S1_DQ = 0.05                                 # dq 累加改 BF16：第 1 步只差 0.05 倍，分不开（第 16 行）
+EFF_EPS_1K = 81                                  # RMSNorm eps 乘 10：1000 步容差门 81 倍（检出表第 34 行）
+assert EFF_S1_PROJ > 2 and EFF_S1_RMS > 2 and EFF_S1_HARMLESS < 1 and EFF_S1_DQ < EFF_S1_HARMLESS and EFF_EPS_1K > 2
+# 正文 «名字» 只认标量：下面是落进课件的写法（原始值见上）
+EFF_HARMLESS_T, EFF_REAL_T = "%.2f–%.2f" % EFF_HARMLESS, "%.2f–%.2f" % EFF_REAL
+RACE_GN0_T, RACE_GN1_T = "%.7f" % RACE_GN[0], "%.7f" % RACE_GN[1]
+assert (RACE_GN0_T, RACE_GN1_T) == ("9.1164389", "9.1164427")
+RACE_STALE_N, RACE_STALE_EL, RACE_STALE_FENCED = RACE_STALE
+RACE_POS_OFF_T = "%d／%d" % RACE_POS[0]
+RACE_POS_ON_T = "%d／%d" % RACE_POS[1]
+RACE_FENCE_MS_T = "%d–%d" % RACE_FENCE_MS
+RACE_CUR_STEPS, RACE_CUR_HITS = RACE_CUR
+RACE_QUIET_RUNS, RACE_QUIET_STEPS = RACE_CUR_QUIET
+GATE_T1_RUNS, GATE_T1_STEPS = GATE_T1

@@ -211,7 +211,7 @@ def fig_regress():
                   "方块 ＝ 一个环节；菱形 ＝ 一个判断；参照不是 GPU，是上一次全部通过的 TPU 运行（LKG）",
                   [(GR, "通过"), (RD, "退回"), (OR, "用 TPU 噪声判"), (PU, "回到对齐验收")])
     PH = 360
-    py = f.panel(0, y0, W, PH, "TPU 同一程序重跑逐位相同，所以「数学不变」的改动应当一位不变", BL)
+    py = f.panel(0, y0, W, PH, "TPU 同一程序复跑本该逐位，所以「数学不变」的改动应当一位不变", BL)
 
     def node(x, y, w, h, t1, t2, col, fill="#fff"):
         f.box(x, y, w, h, fill, col, 10, sw=2)
